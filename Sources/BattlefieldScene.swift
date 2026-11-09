@@ -45,9 +45,9 @@ final class BattlefieldScene: SKScene {
 
     private var round: RoundState = .title
     private var pressedKeys: Set<UInt16> = []
-    private var position = GroundPoint(0, 0)
+    private var tankPosition = GroundPoint(0, 0)
     private var heading: Double = 0
-    private var speed: Double = 0
+    private var driveSpeed: Double = 0
     private var score = 0
     private var wave = 1
     private var lives = 3
@@ -167,9 +167,9 @@ final class BattlefieldScene: SKScene {
         score = 0
         wave = 1
         lives = 3
-        speed = 0
+        driveSpeed = 0
         heading = 0
-        position = GroundPoint(0, 0)
+        tankPosition = GroundPoint(0, 0)
         gameClock = 0
         cannonCooldown = 0
         shieldDuration = 0
@@ -208,19 +208,19 @@ final class BattlefieldScene: SKScene {
         let demand = usingTreads ? (leftTread + rightTread) / 2.0 : mainForward
         let turn = usingTreads ? (leftTread - rightTread) / 2.0 : mainTurn
 
-        speed += (demand * 16.5 - speed) * min(1, dt * 4.0)
+        driveSpeed += (demand * 16.5 - driveSpeed) * min(1, dt * 4.0)
         heading = wrapAngle(heading + turn * 1.65 * dt * (usingTreads ? 1.1 : 1))
-        if abs(speed) > 0.01 {
-            let proposed = position + facing(heading) * (speed * dt)
-            if !blocked(proposed, radius: 1.6) { position = proposed }
-            else { speed *= -0.12 }
+        if abs(driveSpeed) > 0.01 {
+            let proposed = tankPosition + facing(heading) * (driveSpeed * dt)
+            if !blocked(proposed, radius: 1.6) { tankPosition = proposed }
+            else { driveSpeed *= -0.12 }
         }
         if key(49) && cannonCooldown <= 0 && !shells.contains(where: { !$0.hostile }) {
             firePlayer()
         }
 
         for idx in enemies.indices {
-            let diff = position - enemies[idx].center
+            let diff = tankPosition - enemies[idx].center
             let distance = max(0.001, diff.length)
             enemies[idx].reload -= dt
             enemies[idx].phase += dt
@@ -235,7 +235,7 @@ final class BattlefieldScene: SKScene {
                 enemies[idx].heading = wrapAngle(aim + wobble)
                 if distance > (type == .hunter ? 13 : 18) {
                     let proposed = enemies[idx].center + facing(enemies[idx].heading) * (movement * dt)
-                    if !blocked(proposed, radius: 2.7) && proposed.distance(to: position) > 5 {
+                    if !blocked(proposed, radius: 2.7) && proposed.distance(to: tankPosition) > 5 {
                         enemies[idx].center = proposed
                     }
                 }
@@ -263,8 +263,8 @@ final class BattlefieldScene: SKScene {
                 continue
             }
             if shell.hostile {
-                if shell.center.distance(to: position) < 2.0 {
-                    burst(at: WorldPoint(position, height: 1.15), count: 24)
+                if shell.center.distance(to: tankPosition) < 2.0 {
+                    burst(at: WorldPoint(tankPosition, height: 1.15), count: 24)
                     if shieldDuration <= 0 && invulnerability <= 0 { takeDamage() }
                     else { sound("impact.wav") }
                     continue
@@ -332,7 +332,7 @@ final class BattlefieldScene: SKScene {
     private func firePlayer() {
         cannonCooldown = 0.33
         let direction = facing(heading)
-        shells.append(Shell(center: position + direction * 2.5,
+        shells.append(Shell(center: tankPosition + direction * 2.5,
                             direction: direction, hostile: false, timeLeft: 1.55))
         pulse = 0.13
         sound("shot.wav")
@@ -348,7 +348,7 @@ final class BattlefieldScene: SKScene {
     private func takeDamage() {
         lives -= 1
         invulnerability = 2.8
-        speed = -6.0
+        driveSpeed = -6.0
         pulse = 0.5
         sound("damage.wav")
         if lives <= 0 {
@@ -383,10 +383,10 @@ final class BattlefieldScene: SKScene {
         for n in 0..<count {
             let angle = heading + (n == 0 ? Double.random(in: -0.20...0.20) : Double.random(in: -3.0...3.0))
             let dist = Double.random(in: 35...88)
-            var target = position + facing(angle) * dist
+            var target = tankPosition + facing(angle) * dist
             var tries = 0
             while blocked(target, radius: 4) && tries < 20 {
-                target = position + facing(Double.random(in: -3.1...3.1)) * Double.random(in: 30...110)
+                target = tankPosition + facing(Double.random(in: -3.1...3.1)) * Double.random(in: 30...110)
                 tries += 1
             }
             let kind: FoeType = (wave >= 3 && n % 4 == 2) ? .hunter : ((wave >= 2 && n % 6 == 5) ? .saucer : .tank)
@@ -458,7 +458,7 @@ final class BattlefieldScene: SKScene {
         let w = Double(size.width)
         let h = Double(size.height)
         guard w > 100 && h > 100 else { return }
-        let camera = CameraProjection(position: position, yaw: heading,
+        let camera = CameraProjection(position: tankPosition, yaw: heading,
                                       viewportWidth: w, viewportHeight: h)
         renderMountains(camera)
         renderGround(camera)
@@ -513,8 +513,8 @@ final class BattlefieldScene: SKScene {
         let path = CGMutablePath()
         // A subtle near-field reference grid in Modern; the original's empty plane in Classic.
         if displayMode == .modern {
-            let baseX = floor(position.x / 12) * 12
-            let baseZ = floor(position.z / 12) * 12
+            let baseX = floor(tankPosition.x / 12) * 12
+            let baseZ = floor(tankPosition.z / 12) * 12
             for k in -13...13 {
                 let x = baseX + Double(k) * 12
                 line(path, WorldPoint(x, 0, baseZ - 155), WorldPoint(x, 0, baseZ + 155), c)
@@ -529,7 +529,7 @@ final class BattlefieldScene: SKScene {
         let structurePath = CGMutablePath()
         for o in obstacles {
             // Culling far outside the visible scene.
-            let offset = o.center - position
+            let offset = o.center - tankPosition
             if offset.length > 190 { continue }
             if o.kind == .pyramid { drawPyramid(o, on: structurePath, camera: c) }
             else { drawBlock(o, on: structurePath, camera: c) }
@@ -538,7 +538,7 @@ final class BattlefieldScene: SKScene {
 
         let enemyPath = CGMutablePath()
         for enemy in enemies {
-            if enemy.center.distance(to: position) > 170 { continue }
+            if enemy.center.distance(to: tankPosition) > 170 { continue }
             if enemy.kind == .saucer { drawSaucer(enemy, on: enemyPath, camera: c) }
             else { drawTank(enemy, on: enemyPath, camera: c) }
         }
@@ -678,8 +678,8 @@ final class BattlefieldScene: SKScene {
         segment(rp, point(radarX, radarY),
                 point(radarX+sin(sweepAngle)*radarRadius, radarY+cos(sweepAngle)*radarRadius))
         for foe in enemies {
-            let dx = foe.center.x-position.x
-            let dz = foe.center.z-position.z
+            let dx = foe.center.x-tankPosition.x
+            let dz = foe.center.z-tankPosition.z
             let right = dx*cos(heading)-dz*sin(heading)
             let fwd = dx*sin(heading)+dz*cos(heading)
             let distance = hypot(right, fwd)
@@ -720,7 +720,7 @@ final class BattlefieldScene: SKScene {
         warning.position = point(w*0.52, h-131)
         warning.fontSize = 12
         let targetsInRange = enemies.contains { foe in
-            let relative = foe.center - position
+            let relative = foe.center - tankPosition
             return relative.length < 68 && abs(wrapAngle(atan2(relative.x, relative.z) - heading)) < 0.14
         }
         warning.text = targetsInRange ? "ENEMY IN SIGHTS" : (pendingWave > 0 ? "AREA SECURE" : "")
