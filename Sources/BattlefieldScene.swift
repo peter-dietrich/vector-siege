@@ -993,6 +993,81 @@ final class BattlefieldScene: SKScene {
             polygon([v(x, 0.20, -2.8), v(x, 0.2, 2.7),
                      v(x, 0.75, 2.2), v(x, 0.75, -2.2)])
         }
+
+        // Classic keeps the original simple arcade tank. Modern alone adds
+        // hull armor, detailed treads, road wheels, turret optics and hardware.
+        guard displayMode == .modern else { return }
+
+        // Faceted glacis armor, sloped hull seams and rear engine deck.
+        polygon([v(-1.82, 1.18, 2.15), v(1.82, 1.18, 2.15),
+                 v(1.58, 0.62, 3.25), v(-1.58, 0.62, 3.25)])
+        line(path, v(-1.7, 0.75, 3.0), v(1.7, 0.75, 3.0), c)
+        line(path, v(-1.65, 1.20, -1.95), v(1.65, 1.20, -1.95), c)
+        for side in [-1.0, 1.0] {
+            // Segmented armored track guards, track plates and side skirts.
+            line(path, v(side*2.48, 0.90, -2.65), v(side*2.48, 0.90, 2.55), c)
+            line(path, v(side*2.48, 0.16, -2.75), v(side*2.48, 0.16, 2.55), c)
+            for index in -6...6 {
+                let z = Double(index) * 0.42
+                line(path, v(side*2.52, 0.10, z), v(side*2.52, 0.85, z + 0.09), c)
+            }
+            // Five eight-segment road wheels on each track.
+            for index in -2...2 {
+                let z = Double(index) * 1.02
+                let wheelY = 0.44
+                let radius = 0.31
+                for j in 0..<8 {
+                    let a = Double(j) * .pi / 4
+                    let b = Double(j + 1) * .pi / 4
+                    line(path,
+                         v(side*2.56, wheelY + sin(a)*radius, z + cos(a)*radius),
+                         v(side*2.56, wheelY + sin(b)*radius, z + cos(b)*radius), c)
+                }
+                line(path, v(side*2.56, wheelY, z),
+                     v(side*2.59, wheelY + 0.11, z), c)
+            }
+            // Angled turret cheek armor and side lifting brackets.
+            line(path, v(side*1.12, 1.38, 0.98), v(side*0.88, 2.10, 0.72), c)
+            line(path, v(side*1.05, 1.55, -1.13), v(side*0.79, 2.07, -0.84), c)
+            polygon([v(side*0.94, 1.89, -0.98), v(side*0.94, 1.89, -0.60),
+                     v(side*0.70, 2.18, -0.64), v(side*0.70, 2.18, -0.91)])
+        }
+        // Turret roof, commander's hatch perimeter, sight and optics.
+        polygon([v(-0.81, 2.06, -0.94), v(0.81, 2.06, -0.94),
+                 v(0.81, 2.06, 0.84), v(-0.81, 2.06, 0.84)])
+        for index in 0..<12 {
+            let a = Double(index) * .pi / 6
+            let b = Double(index + 1) * .pi / 6
+            line(path,
+                 v(-0.29 + cos(a)*0.42, 2.12, -0.25 + sin(a)*0.42),
+                 v(-0.29 + cos(b)*0.42, 2.12, -0.25 + sin(b)*0.42), c)
+        }
+        polygon([v(0.22, 2.10, 0.18), v(0.55, 2.10, 0.18),
+                 v(0.55, 2.46, 0.48), v(0.22, 2.46, 0.48)])
+        line(path, v(0.38, 2.46, 0.48), v(0.38, 2.65, 0.51), c)
+
+        // Recoil housing and three barrel reinforcing collars / muzzle ring.
+        polygon([v(-0.29, 1.95, 1.28), v(0.29, 1.95, 1.28),
+                 v(0.29, 1.61, 1.28), v(-0.29, 1.61, 1.28)])
+        for z in [1.15, 3.1, 4.5] {
+            polygon([v(-0.25, 1.97, z), v(0.25, 1.97, z),
+                     v(0.25, 1.63, z), v(-0.25, 1.63, z)])
+        }
+        line(path, v(0, 1.80, 4.5), v(0, 1.80, 4.83), c)
+
+        // Engine louvers, rear tow loops and whip antenna.
+        for index in -3...3 {
+            let x = Double(index) * 0.39
+            line(path, v(x, 1.29, -1.86), v(x, 1.29, -2.43), c)
+        }
+        for side in [-1.0, 1.0] {
+            polygon([v(side*1.31, 0.52, -3.07),
+                     v(side*1.66, 0.52, -3.07),
+                     v(side*1.66, 0.86, -3.07),
+                     v(side*1.31, 0.86, -3.07)])
+        }
+        line(path, v(-0.73, 2.03, -0.76), v(-0.89, 3.42, -0.83), c)
+        line(path, v(-0.89, 3.42, -0.83), v(-0.84, 3.71, -0.81), c)
     }
 
     private func drawSaucer(_ e: Foe, on path: CGMutablePath, camera c: CameraProjection) {
