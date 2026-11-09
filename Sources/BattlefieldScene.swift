@@ -51,6 +51,9 @@ final class BattlefieldScene: SKScene {
     } }
     var threatLevel: ThreatLevel = .veteran
     var soundOn = true
+    var customRules: SiegeRules?
+    var activePresetID = ""
+    private var rules: SiegeRules { (customRules ?? SiegeRules()).validated() }
 
     private var round: RoundState = .title
     private var pressedKeys: Set<UInt16> = []
@@ -299,7 +302,7 @@ final class BattlefieldScene: SKScene {
         pressedKeys.removeAll()
         score = 0
         wave = 1
-        lives = 3
+        lives = rules.startingLives
         shotTally = ShotTally()
         observedFPS = 60
         driveSpeed = 0
@@ -310,7 +313,7 @@ final class BattlefieldScene: SKScene {
         previousSteerDirection = 0
         tankPosition = GroundPoint(0, 0)
         gameClock = 0
-        cannon = CannonMagazine()
+        cannon = CannonMagazine(maxRounds: rules.ammoCapacity, reloadSeconds: rules.reloadSeconds)
         shieldDuration = 0
         shieldCooldown = 0
         invulnerability = 1.8
@@ -391,7 +394,7 @@ final class BattlefieldScene: SKScene {
             enemies[idx].reload -= dt
             enemies[idx].phase += dt
             let type = enemies[idx].kind
-            let movement = (type == .hunter ? 4.6 : (type == .saucer ? 5.4 : 2.55)) * threatLevel.enemyVelocity
+            let movement = (type == .hunter ? 4.6 : (type == .saucer ? 5.4 : 2.55)) * threatLevel.enemyVelocity * rules.enemySpeed
             let aim = atan2(diff.x, diff.z)
             if type == .saucer {
                 let tangent = GroundPoint(cos(enemies[idx].phase * 0.8), sin(enemies[idx].phase * 0.8))
@@ -407,11 +410,12 @@ final class BattlefieldScene: SKScene {
                 }
             }
             if enemies[idx].reload <= 0 && type != .saucer && distance < 79 && distance > 7 {
-                let error = Double.random(in: -threatLevel.enemyAimError ... threatLevel.enemyAimError)
+                let aimError = threatLevel.enemyAimError / rules.enemyAccuracy
+                let error = Double.random(in: -aimError ... aimError)
                 let direction = facing(aim + error)
                 shells.append(Shell(center: enemies[idx].center + direction * 3.0,
                                     direction: direction, hostile: true, timeLeft: 4.0))
-                enemies[idx].reload = Double.random(in: 2.3 ... 4.0) * threatLevel.enemyReload
+                enemies[idx].reload = Double.random(in: 2.3 ... 4.0) * threatLevel.enemyReload / rules.enemyReload
                 sound("enemy.wav")
             }
         }
@@ -506,15 +510,15 @@ final class BattlefieldScene: SKScene {
         shotTally.fire()
         let direction = facing(heading)
         shells.append(Shell(center: tankPosition + direction * 2.5,
-                            direction: direction, hostile: false, timeLeft: 1.55))
+                            direction: direction, hostile: false, timeLeft: rules.projectileLifetime))
         pulse = 0.13
         sound("shot.wav")
     }
 
     private func triggerShield() {
         guard round == .playing && shieldCooldown <= 0 && shieldDuration <= 0 else { return }
-        shieldDuration = 5.0
-        shieldCooldown = 11.0
+        shieldDuration = rules.shieldDuration
+        shieldCooldown = rules.shieldCooldown
         sound("shield.wav")
     }
 
@@ -540,7 +544,7 @@ final class BattlefieldScene: SKScene {
 
     private func makeObstacles() {
         obstacles.removeAll()
-        for i in 0..<23 {
+        for i in 0..<rules.obstacleCount {
             let angle = Double(i) * 2.39996 + Double.random(in: -0.4...0.4)
             let distance = Double.random(in: 24...145)
             let p = GroundPoint(sin(angle) * distance, cos(angle) * distance)
@@ -552,7 +556,7 @@ final class BattlefieldScene: SKScene {
 
     private func spawnWave() {
         enemies.removeAll()
-        let count = min(2 + wave, 8)
+        let count = rules.enemies(forWave: wave)
         for n in 0..<count {
             let angle = heading + (n == 0 ? Double.random(in: -0.20...0.20) : Double.random(in: -3.0...3.0))
             let dist = Double.random(in: 35...88)
@@ -562,7 +566,8 @@ final class BattlefieldScene: SKScene {
                 target = tankPosition + facing(Double.random(in: -3.1...3.1)) * Double.random(in: 30...110)
                 tries += 1
             }
-            let kind: FoeType = (wave >= 3 && n % 4 == 2) ? .hunter : ((wave >= 2 && n % 6 == 5) ? .saucer : .tank)
+            let kind: FoeType = (rules.huntersEnabled && wave >= 3 && n % 4 == 2)
+                ? .hunter : ((rules.saucersEnabled && wave >= 2 && n % 6 == 5) ? .saucer : .tank)
             enemies.append(Foe(center: target, heading: angle + .pi, kind: kind,
                                reload: Double.random(in: 2.0...4.0),
                                phase: Double.random(in: 0...6.0),
@@ -597,6 +602,86 @@ final class BattlefieldScene: SKScene {
         }.min(by: { abs($0.error) < abs($1.error) })
     }
 
+    // Exact in-progress battle state; displayed next in a paused state when resumed.
+    func makeSnapshot() -> SiegeSnapshot? {
+        guard round == .playing || round == .paused else { return nil }
+        return SiegeSnapshot(
+            version: 1,
+            displayMode: displayMode.rawValue,
+            threatLevel: threatLevel.rawValue, soundOn: soundOn,
+            activePresetID: activePresetID, customRules: customRules,
+            score: score, lives: lives, wave: wave, gameClock: gameClock,
+            heading: heading, driveSpeed: driveSpeed, tankPosition: tankPosition,
+            shieldRemaining: shieldDuration, shieldCooldown: shieldCooldown,
+            invulnerability: invulnerability, pendingWave: pendingWave,
+            cannon: cannon, shotTally: shotTally,
+            obstacles: obstacles.map { SavedSiegeObstacle(
+                center: $0.center, size: $0.size,
+                kind: $0.kind == .pyramid ? "pyramid" : "block") },
+            enemies: enemies.map { SavedSiegeFoe(
+                center: $0.center, heading: $0.heading,
+                kind: $0.kind == .hunter ? "hunter" : $0.kind == .saucer ? "saucer" : "tank",
+                reload: $0.reload, phase: $0.phase, hitPoints: $0.hitPoints) },
+            shells: shells.map { SavedSiegeShell(
+                center: $0.center, direction: $0.direction,
+                hostile: $0.hostile, timeLeft: $0.timeLeft) },
+            sparks: sparks.map { SavedSiegeSpark(
+                position: $0.position, velocity: $0.velocity,
+                timeLeft: $0.timeLeft, maxLife: $0.maxLife) }
+        )
+    }
+
+    @discardableResult
+    func restore(_ saved: SiegeSnapshot) -> Bool {
+        guard saved.version == 1, saved.lives > 0,
+              saved.score >= 0, saved.wave >= 1,
+              saved.tankPosition.x.isFinite, saved.tankPosition.z.isFinite,
+              saved.heading.isFinite, saved.gameClock.isFinite else { return false }
+        pressedKeys.removeAll()
+        activePresetID = saved.activePresetID
+        customRules = saved.customRules?.validated()
+        displayMode = DisplayMode(rawValue: saved.displayMode) ?? .classic
+        threatLevel = ThreatLevel(rawValue: saved.threatLevel) ?? .veteran
+        soundOn = saved.soundOn
+        score = saved.score
+        lives = saved.lives
+        wave = saved.wave
+        gameClock = saved.gameClock
+        heading = wrapAngle(saved.heading)
+        driveSpeed = saved.driveSpeed.isFinite ? saved.driveSpeed : 0
+        tankPosition = saved.tankPosition
+        shieldDuration = max(0, saved.shieldRemaining)
+        shieldCooldown = max(0, saved.shieldCooldown)
+        invulnerability = max(0, saved.invulnerability)
+        pendingWave = max(0, saved.pendingWave)
+        cannon = saved.cannon
+        shotTally = saved.shotTally
+        obstacles = saved.obstacles.map { Obstacle(
+            center: $0.center, size: $0.size,
+            kind: $0.kind == "pyramid" ? .pyramid : .block) }
+        enemies = saved.enemies.map { Foe(
+            center: $0.center, heading: $0.heading,
+            kind: $0.kind == "hunter" ? .hunter : $0.kind == "saucer" ? .saucer : .tank,
+            reload: $0.reload, phase: $0.phase, hitPoints: $0.hitPoints) }
+        shells = saved.shells.map { Shell(
+            center: $0.center, direction: $0.direction,
+            hostile: $0.hostile, timeLeft: $0.timeLeft) }
+        sparks = saved.sparks.map { Spark(
+            position: $0.position, velocity: $0.velocity,
+            timeLeft: $0.timeLeft, maxLife: $0.maxLife) }
+        steerHoldSeconds = 0
+        previousSteerDirection = 0
+        turnMotion = 0
+        suspension.reset()
+        observedFPS = 60
+        pulse = 0
+        lastUpdateTime = 0
+        bestScore = max(bestScore, score)
+        UserDefaults.standard.set(bestScore, forKey: "VectorSiegeHighScore")
+        round = .paused // Explicit P resumes, preventing surprise damage on load.
+        return true
+    }
+
     /// Manual, local-only snapshot for copying into bug reports. No automatic upload.
     func feedbackReport() -> String {
         let mode = displayMode == .classic ? "Classic" : "Modern"
@@ -623,8 +708,8 @@ final class BattlefieldScene: SKScene {
         Shots: \(shotTally.fired)  Hits: \(shotTally.hits)  Confirmed misses: \(shotTally.misses)
         Hit/miss ratio: \(shotTally.hits):\(shotTally.misses)  Resolved hit rate: \(String(format: "%.1f%%", accuracy))
         In flight: \(shotTally.pending)
-        Ammo: \(cannon.roundsRemaining)/\(CannonMagazine.capacity)  Cannon: \(cannon.statusText)
-        Last reload duration: \(String(format: "%.2f", cannon.lastReloadDuration)) seconds (fixed 1s)
+        Ammo: \(cannon.roundsRemaining)/\(cannon.maxRounds)  Cannon: \(cannon.statusText)
+        Last reload duration: \(String(format: "%.2f", cannon.lastReloadDuration)) seconds
         Enemies: \(enemies.count)  Projectiles: \(shells.count)
         FPS (smoothed): \(String(format: "%.1f", observedFPS))
         Shield: \(shieldDuration > 0 ? String(format: "Active %.1fs remaining", shieldDuration) : shieldCooldown > 0 ? "Recharging" : "Ready")
@@ -1347,7 +1432,7 @@ final class BattlefieldScene: SKScene {
                 : "SHIELD READY [SHIFT]"
         telemetryRightFootnote.text = shieldName
         telemetryAmmo.text = String(format: "AMMO %02d/%02d   %@", cannon.roundsRemaining,
-                                           CannonMagazine.capacity, cannon.statusText)
+                                           cannon.maxRounds, cannon.statusText)
         telemetryAmmo.fontColor = cannon.isEmpty ? accent : green
         warning.position = point(w / 2, h - 163)
         warning.fontSize = 12
