@@ -66,8 +66,7 @@ final class BattlefieldScene: SKScene {
     private var wave = 1
     private var lives = 3
     private var bestScore = UserDefaults.standard.integer(forKey: "VectorSiegeHighScore")
-    private var shotsFired = 0
-    private var hitsLanded = 0
+    private var shotTally = ShotTally()
     private var observedFPS: Double = 60
     private var showDetailedTelemetry = false
     private var cannon = CannonMagazine()
@@ -100,6 +99,8 @@ final class BattlefieldScene: SKScene {
     private let modernHostileShells = SKShapeNode()
     private let flashLines = SKShapeNode()
     private let reticle = SKShapeNode()
+    private let shieldBorder = SKShapeNode()
+    private let shieldNotice = SKLabelNode(fontNamed: "Menlo-Bold")
     private let radar = SKShapeNode()
     private let radarProjectileGlow = SKShapeNode()
     private let radarProjectileCore = SKShapeNode()
@@ -184,6 +185,17 @@ final class BattlefieldScene: SKScene {
         stagePanel.zPosition = 18
         stagePanel.lineWidth = 1.2
         addChild(stagePanel)
+        shieldBorder.zPosition = 9.0
+        shieldBorder.fillColor = .clear
+        shieldBorder.lineWidth = 3.0
+        shieldBorder.isHidden = true
+        addChild(shieldBorder)
+        shieldNotice.zPosition = 16.0
+        shieldNotice.fontSize = 15
+        shieldNotice.horizontalAlignmentMode = .center
+        shieldNotice.verticalAlignmentMode = .center
+        shieldNotice.isHidden = true
+        addChild(shieldNotice)
         for (label, z) in [
             (telemetryLeftHeading, 15.0), (telemetryRightHeading, 15.0),
             (telemetryLeftDetail, 15.0), (telemetryLeftFootnote, 15.0),
@@ -288,8 +300,7 @@ final class BattlefieldScene: SKScene {
         score = 0
         wave = 1
         lives = 3
-        shotsFired = 0
-        hitsLanded = 0
+        shotTally = ShotTally()
         observedFPS = 60
         driveSpeed = 0
         turnMotion = 0
@@ -411,8 +422,12 @@ final class BattlefieldScene: SKScene {
             let old = shell.center
             shell.center = shell.center + shell.direction * (dt * (shell.hostile ? 23 : 90))
             shell.timeLeft -= dt
-            if shell.timeLeft <= 0 { continue }
+            if shell.timeLeft <= 0 {
+                if !shell.hostile { shotTally.miss() }
+                continue
+            }
             if obstacles.contains(where: { segmentHitsObstacle(old, shell.center, $0) }) {
+                if !shell.hostile { shotTally.miss() }
                 burst(at: WorldPoint(shell.center, height: 1.2), count: 9)
                 sound("impact.wav")
                 continue
@@ -429,7 +444,7 @@ final class BattlefieldScene: SKScene {
                 for idx in enemies.indices where !casualties.contains(idx) {
                     if shell.center.distance(to: enemies[idx].center) < (enemies[idx].kind == .saucer ? 3.1 : 2.9) {
                         hit = true
-                        hitsLanded += 1
+                        shotTally.hit()
                         enemies[idx].hitPoints -= 1
                         burst(at: WorldPoint(enemies[idx].center,
                                              height: enemies[idx].kind == .saucer ? 5.1 : 1.45),
@@ -463,6 +478,7 @@ final class BattlefieldScene: SKScene {
             if pendingWave <= 0 {
                 wave += 1
                 spawnWave()
+                for shell in shells where !shell.hostile { shotTally.miss() }
                 shells.removeAll()
                 shieldCooldown = 0
                 invulnerability = 1.0
@@ -487,7 +503,7 @@ final class BattlefieldScene: SKScene {
 
     private func firePlayer() {
         guard cannon.fire() else { return }
-        shotsFired += 1
+        shotTally.fire()
         let direction = facing(heading)
         shells.append(Shell(center: tankPosition + direction * 2.5,
                             direction: direction, hostile: false, timeLeft: 1.55))
@@ -497,7 +513,7 @@ final class BattlefieldScene: SKScene {
 
     private func triggerShield() {
         guard round == .playing && shieldCooldown <= 0 && shieldDuration <= 0 else { return }
-        shieldDuration = 2.25
+        shieldDuration = 5.0
         shieldCooldown = 11.0
         sound("shield.wav")
     }
@@ -595,7 +611,7 @@ final class BattlefieldScene: SKScene {
         let target = targetTelemetry().map {
             String(format: "%.1f units, aim error %+.2f degrees", $0.range, $0.error * 180 / .pi)
         } ?? "None in front"
-        let accuracy = shotsFired > 0 ? 100.0 * Double(hitsLanded) / Double(shotsFired) : 0
+        let accuracy = shotTally.hitPercentage
         return """
         VECTOR SIEGE // PLAYTEST TELEMETRY
         Display: \(mode)  Difficulty: \(threatLevel.rawValue)  State: \(state)
@@ -604,12 +620,14 @@ final class BattlefieldScene: SKScene {
         Drive speed: \(String(format: "%.2f", driveSpeed)) units/s
         World position: \(String(format: "x %.1f, z %.1f", tankPosition.x, tankPosition.z))
         Target: \(target)
-        Shots: \(shotsFired)  Hits: \(hitsLanded)  Accuracy: \(String(format: "%.1f%%", accuracy))
+        Shots: \(shotTally.fired)  Hits: \(shotTally.hits)  Confirmed misses: \(shotTally.misses)
+        Hit/miss ratio: \(shotTally.hits):\(shotTally.misses)  Resolved hit rate: \(String(format: "%.1f%%", accuracy))
+        In flight: \(shotTally.pending)
         Ammo: \(cannon.roundsRemaining)/\(CannonMagazine.capacity)  Cannon: \(cannon.statusText)
         Last reload duration: \(String(format: "%.2f", cannon.lastReloadDuration)) seconds (fixed 1s)
         Enemies: \(enemies.count)  Projectiles: \(shells.count)
         FPS (smoothed): \(String(format: "%.1f", observedFPS))
-        Shield: \(shieldDuration > 0 ? "Active" : shieldCooldown > 0 ? "Recharging" : "Ready")
+        Shield: \(shieldDuration > 0 ? String(format: "Active %.1fs remaining", shieldDuration) : shieldCooldown > 0 ? "Recharging" : "Ready")
         Runtime: \(String(format: "%.1f", gameClock)) seconds
         Note: Manually copied from the game. No data sent automatically.
         """
@@ -1274,6 +1292,30 @@ final class BattlefieldScene: SKScene {
         reticle.strokeColor = invulnerability > 0 && Int(gameClock * 9).isMultiple(of: 2)
             ? accent : (shieldDuration > 0 ? green : accent)
 
+        // The border and a central countdown show protection without obscuring
+        // the battlefield. Both blink and fade during the last second.
+        let shieldOnline = shieldDuration > 0 && (round == .playing || round == .paused)
+        shieldBorder.isHidden = !shieldOnline
+        shieldNotice.isHidden = !shieldOnline
+        if shieldOnline {
+            let finalSecond = shieldDuration <= 1.0
+            let fade = finalSecond ? min(1.0, shieldDuration * 2.8) : 1.0
+            let blink = finalSecond ? 0.28 + 0.72 * abs(sin(gameClock * 17.0)) : 1.0
+            let opacity = CGFloat(fade * blink)
+            shieldBorder.path = CGPath(
+                roundedRect: CGRect(x: 9, y: 15, width: max(1, w - 18), height: max(1, h - 30)),
+                cornerWidth: 18, cornerHeight: 18, transform: nil)
+            shieldBorder.strokeColor = (finalSecond ? accent : green)
+                .withAlphaComponent(0.60 * opacity)
+            shieldBorder.glowWidth = displayMode == .modern ? 9.0 : 3.0
+            shieldNotice.position = point(w / 2, 82)
+            shieldNotice.fontColor = (finalSecond ? accent : green)
+                .withAlphaComponent(0.95 * opacity)
+            shieldNotice.text = finalSecond
+                ? String(format: "SHIELD FAILING  %.1fS", shieldDuration)
+                : String(format: "SHIELD ACTIVE  %.1fS", shieldDuration)
+        }
+
         leftHUD.position = point(radarX, h - 33)
         leftHUD.horizontalAlignmentMode = .center
         leftHUD.fontSize = 9
@@ -1287,8 +1329,11 @@ final class BattlefieldScene: SKScene {
         telemetryLeftDetail.text = target.map {
             String(format: "TGT %03.0f   AIM %+05.1f°", $0.range, $0.error * 180 / .pi)
         } ?? "TGT ---   AIM ---"
-        let accuracy = shotsFired > 0 ? 100.0 * Double(hitsLanded) / Double(shotsFired) : 0
-        telemetryLeftFootnote.text = String(format: "SHOTS %02d  HITS %02d  %.0f%%", shotsFired, hitsLanded, accuracy)
+        let accuracy = shotTally.hitPercentage
+        // Only resolved projectiles count toward the ratio; F is still in flight.
+        telemetryLeftFootnote.text = String(
+            format: "H/M %02d:%02d   HIT %.0f%%   F %02d",
+            shotTally.hits, shotTally.misses, accuracy, shotTally.pending)
         telemetryCoordinates.text = String(format: "POSITION   X %+.1f   Z %+.1f", tankPosition.x, tankPosition.z)
         rightHUD.position = point(w - 34, h - 57)
         rightHUD.horizontalAlignmentMode = .right

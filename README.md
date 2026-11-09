@@ -43,6 +43,12 @@ Vector Siege now has **Vector Drift-inspired cockpit telemetry panels** with sub
 
 Use **Copy Feedback** in the toolbar to copy a plaintext playtest snapshot (mode, difficulty, game state, wave, score, position, heading, speed, target offset, shots, hits, FPS, enemy/projectile counts, shield, and elapsed gameplay). Paste the snapshot into a bug report or this chat. **No telemetry is automatically uploaded or transmitted**; copying only accesses the local clipboard. A crash cannot be captured by the in-app button after the game has terminated; macOS crash diagnostics are separate.
 
+## v0.7 — five-second shield with expiry warning and hit/miss tracking
+
+- **Shield (Shift):** active for **5 seconds** (previously 2.25). A glowing perimeter outline and countdown indicate protection. During the **last second**, the border and notice blink and fade progressively. The existing 11-second cooldown is unchanged.
+- **Telemetry:** continuous **H/M hit:miss ratio**, hit percentage measured over *resolved* shots only, and **F** count for rounds still in flight. Shots that hit enemies count as hits; shots that hit obstacles, expire, or are cleared between waves count as misses. Shots still airborne are not treated as misses.
+- **Copy Feedback:** includes total rounds fired, confirmed hits, misses, in-flight projectiles, the resolved hit rate, and remaining shield time. These mechanics apply in Classic and Modern.
+
 ## v0.6 — classic terrain grid, modern shell mesh, stronger suspension dip
 
 - **Classic:** a restrained, dim-green world-anchored perspective grid is now drawn on the terrain, using wider 18-unit spacing. It flows naturally as the tank moves and turns.

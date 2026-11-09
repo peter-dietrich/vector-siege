@@ -63,12 +63,31 @@ struct GeometrySmoke {
         suspension.reset()
         precondition(suspension.pitch == 0 && suspension.pitchVelocity == 0)
 
+        var tally = ShotTally()
+        precondition(tally.fired == 0 && tally.pending == 0 && tally.hitPercentage == 0)
+        tally.fire()
+        tally.fire()
+        tally.fire()
+        precondition(tally.fired == 3 && tally.pending == 3)
+        tally.hit()
+        precondition(tally.pending == 2 && tally.hits == 1 && tally.hitPercentage == 100)
+        tally.miss()
+        precondition(tally.misses == 1 && tally.pending == 1)
+        precondition(tally.hitPercentage == 50)
+        tally.miss()
+        precondition(tally.pending == 0 && abs(tally.hitPercentage - 100.0 / 3.0) < 0.0001)
+        tally.miss()
+        tally.hit()
+        precondition(tally.resolved == 3 && tally.fired == 3, "One shot cannot resolve twice")
+        tally = ShotTally()
+        precondition(tally.fired == 0 && tally.resolved == 0)
+
         var shakenCamera = c
         shakenCamera.cameraLateral = 0.02
         shakenCamera.pitchPoints = -2.5
         precondition(shakenCamera.horizon != c.horizon)
         precondition(shakenCamera.local(WorldPoint(0, 0, 20)).right !=
                      c.local(WorldPoint(0, 0, 20)).right)
-        print("Perspective, steering, ammo, suspension and camera motion checks passed.")
+        print("Perspective, steering, ammo, suspension, hit/miss and camera checks passed.")
     }
 }

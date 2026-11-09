@@ -122,6 +122,27 @@ struct CannonMagazine {
 }
 
 
+/// Tallies only confirmed outcomes; unresolved rounds remain in flight.
+struct ShotTally {
+    private(set) var fired = 0
+    private(set) var hits = 0
+    private(set) var misses = 0
+
+    var pending: Int { max(0, fired - hits - misses) }
+    var resolved: Int { hits + misses }
+    var hitPercentage: Double {
+        resolved > 0 ? 100 * Double(hits) / Double(resolved) : 0
+    }
+
+    mutating func fire() { fired += 1 }
+    mutating func hit() {
+        if pending > 0 { hits += 1 }
+    }
+    mutating func miss() {
+        if pending > 0 { misses += 1 }
+    }
+}
+
 /// A critically damped-ish vehicle suspension with a short nose dip / rebound
 /// on acceleration and braking. Rendering uses this, not actual gun aim.
 struct TankSuspension {
