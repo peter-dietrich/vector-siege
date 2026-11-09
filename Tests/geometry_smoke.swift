@@ -88,6 +88,62 @@ struct GeometrySmoke {
         precondition(shakenCamera.horizon != c.horizon)
         precondition(shakenCamera.local(WorldPoint(0, 0, 20)).right !=
                      c.local(WorldPoint(0, 0, 20)).right)
-        print("Perspective, steering, ammo, suspension, hit/miss and camera checks passed.")
+        // Custom presets clamp invalid values while preserving useful defaults.
+        let standard = SiegeRules()
+        precondition(standard.ammoCapacity == 40 && standard.reloadSeconds == 1)
+        precondition(standard.shieldDuration == 5 && standard.shieldCooldown == 11)
+        precondition(standard.enemies(forWave: 1) == 3)
+        precondition(standard.enemies(forWave: 100) == 8)
+        var custom = SiegeRules()
+        custom.ammoCapacity = 250
+        custom.reloadSeconds = 0.01
+        custom.maxEnemies = 2
+        custom.startingEnemies = 5
+        custom.enemySpeed = 9
+        let validated = custom.validated()
+        precondition(validated.ammoCapacity == 200 && validated.reloadSeconds == 0.2)
+        precondition(validated.maxEnemies >= validated.startingEnemies)
+        precondition(validated.enemySpeed == 2.5)
+        let rulesData = try! JSONEncoder().encode(validated)
+        let decodedRules = try! JSONDecoder().decode(SiegeRules.self, from: rulesData)
+        precondition(decodedRules == validated)
+
+        // Save files retain exact magazine state, timers, world objects and shot stats.
+        var savedAmmo = CannonMagazine(maxRounds: 75, reloadSeconds: 1.7)
+        precondition(savedAmmo.fire())
+        savedAmmo.advance(by: 0.3)
+        var savedTally = ShotTally()
+        savedTally.fire()
+        savedTally.hit()
+        let snapshot = SiegeSnapshot(
+            version: 1, displayMode: "Modern", threatLevel: "Ace",
+            soundOn: true, activePresetID: "unit-test", customRules: validated,
+            score: 1500, lives: 2, wave: 4, gameClock: 123.5,
+            heading: .pi / 2, driveSpeed: 5.2,
+            tankPosition: GroundPoint(42, -17), shieldRemaining: 3.5,
+            shieldCooldown: 8.1, invulnerability: 0, pendingWave: 0,
+            cannon: savedAmmo, shotTally: savedTally,
+            obstacles: [SavedSiegeObstacle(center: GroundPoint(10, 10), size: 4, kind: "pyramid")],
+            enemies: [SavedSiegeFoe(center: GroundPoint(25, 12), heading: 1.3,
+                                   kind: "hunter", reload: 2, phase: 0.8, hitPoints: 2)],
+            shells: [SavedSiegeShell(center: GroundPoint(2, 6),
+                                    direction: GroundPoint(0, 1), hostile: false, timeLeft: 1.1)],
+            sparks: []
+        )
+        let slot = SiegeSaveSlot(id: "slot-1", name: "Test", savedAt: Date(),
+                                 snapshot: snapshot)
+        let encoded = try! JSONEncoder().encode(slot)
+        let restored = try! JSONDecoder().decode(SiegeSaveSlot.self, from: encoded)
+        precondition(restored.snapshot.displayMode == "Modern")
+        precondition(restored.snapshot.score == 1500 && restored.snapshot.wave == 4)
+        precondition(restored.snapshot.cannon.roundsRemaining == 74)
+        precondition(abs(restored.snapshot.cannon.reloadRemaining - 1.4) < 0.0001)
+        precondition(restored.snapshot.shotTally.hits == 1)
+        precondition(restored.snapshot.enemies.first?.kind == "hunter")
+        precondition(restored.snapshot.obstacles.first?.kind == "pyramid")
+        precondition(restored.snapshot.shells.count == 1)
+        precondition(restored.snapshot.customRules == validated)
+
+        print("Perspective, steering, ammo, suspension, save-state and custom-rule checks passed.")
     }
 }
