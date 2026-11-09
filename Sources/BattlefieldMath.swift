@@ -1,6 +1,6 @@
 import Foundation
 
-struct GroundPoint {
+struct GroundPoint: Codable {
     var x: Double
     var z: Double
     init(_ x: Double, _ z: Double) { self.x = x; self.z = z }
@@ -13,7 +13,7 @@ struct GroundPoint {
     func distance(to p: Self) -> Double { (self - p).length }
 }
 
-struct WorldPoint {
+struct WorldPoint: Codable {
     var x: Double
     var y: Double
     var z: Double
@@ -89,12 +89,21 @@ enum PrecisionSteering {
 
 /// 40-shot player cannon with a fixed one-second reload after every shot.
 /// Shared by Classic and Modern display modes.
-struct CannonMagazine {
+struct CannonMagazine: Codable {
     static let capacity = 40
     static let minimumReload = 1.0
     static let maximumReload = 1.0
 
     private(set) var roundsRemaining = capacity
+    private(set) var maxRounds = capacity
+    private(set) var reloadSeconds = 1.0
+
+    init(maxRounds: Int = CannonMagazine.capacity, reloadSeconds: Double = 1.0) {
+        let bounded = max(1, min(200, maxRounds))
+        self.maxRounds = bounded
+        self.roundsRemaining = bounded
+        self.reloadSeconds = max(0.2, min(6, reloadSeconds))
+    }
     private(set) var reloadRemaining: Double = 0
     private(set) var lastReloadDuration: Double = 0
 
@@ -110,8 +119,8 @@ struct CannonMagazine {
     mutating func fire(reloadDuration: Double? = nil) -> Bool {
         guard canFire else { return false }
         roundsRemaining -= 1
-        let sampled = reloadDuration ?? Double.random(in: Self.minimumReload...Self.maximumReload)
-        lastReloadDuration = min(Self.maximumReload, max(Self.minimumReload, sampled))
+        let sampled = reloadDuration ?? reloadSeconds
+        lastReloadDuration = max(0.2, min(6.0, sampled))
         reloadRemaining = roundsRemaining > 0 ? lastReloadDuration : 0
         return true
     }
@@ -123,7 +132,7 @@ struct CannonMagazine {
 
 
 /// Tallies only confirmed outcomes; unresolved rounds remain in flight.
-struct ShotTally {
+struct ShotTally: Codable {
     private(set) var fired = 0
     private(set) var hits = 0
     private(set) var misses = 0
@@ -165,5 +174,166 @@ struct TankSuspension {
         pitchVelocity -= delta * 0.14
         pitchVelocity += (-54 * pitch - 10.5 * pitchVelocity) * step
         pitch = min(0.125, max(-0.125, pitch + pitchVelocity * step))
+    }
+}
+
+
+// Custom tank-game rules. These do not mutate the built-in difficulty presets.
+struct SiegeRules: Codable, Equatable {
+    var ammoCapacity: Int = 40
+    var reloadSeconds: Double = 1.0
+    var projectileLifetime: Double = 1.55
+    var shieldDuration: Double = 5.0
+    var shieldCooldown: Double = 11.0
+    var startingLives: Int = 3
+    var startingEnemies: Int = 3
+    var extraEnemiesPerWave: Int = 1
+    var maxEnemies: Int = 8
+    var obstacleCount: Int = 23
+    var enemySpeed: Double = 1.0
+    var enemyReload: Double = 1.0
+    var enemyAccuracy: Double = 1.0
+    var huntersEnabled: Bool = true
+    var saucersEnabled: Bool = true
+
+    func validated() -> SiegeRules {
+        var r = self
+        r.ammoCapacity = min(200, max(1, ammoCapacity))
+        r.reloadSeconds = min(6, max(0.2, reloadSeconds))
+        r.projectileLifetime = min(5, max(0.5, projectileLifetime))
+        r.shieldDuration = min(20, max(1, shieldDuration))
+        r.shieldCooldown = min(45, max(0, shieldCooldown))
+        r.startingLives = min(12, max(1, startingLives))
+        r.startingEnemies = min(12, max(1, startingEnemies))
+        r.extraEnemiesPerWave = min(4, max(0, extraEnemiesPerWave))
+        r.maxEnemies = min(16, max(r.startingEnemies, maxEnemies))
+        r.obstacleCount = min(55, max(0, obstacleCount))
+        r.enemySpeed = min(2.5, max(0.25, enemySpeed))
+        r.enemyReload = min(3, max(0.4, enemyReload))
+        r.enemyAccuracy = min(3, max(0.25, enemyAccuracy))
+        return r
+    }
+
+    func enemies(forWave wave: Int) -> Int {
+        min(maxEnemies, startingEnemies + max(0, wave - 1) * extraEnemiesPerWave)
+    }
+}
+
+struct SiegePreset: Codable, Identifiable {
+    var id: String
+    var name: String
+    var rules: SiegeRules
+}
+
+// Pure Codable save types, independent of SpriteKit nodes and graphics.
+struct SavedSiegeObstacle: Codable {
+    var center: GroundPoint
+    var size: Double
+    var kind: String
+}
+struct SavedSiegeFoe: Codable {
+    var center: GroundPoint
+    var heading: Double
+    var kind: String
+    var reload: Double
+    var phase: Double
+    var hitPoints: Int
+}
+struct SavedSiegeShell: Codable {
+    var center: GroundPoint
+    var direction: GroundPoint
+    var hostile: Bool
+    var timeLeft: Double
+}
+struct SavedSiegeSpark: Codable {
+    var position: WorldPoint
+    var velocity: WorldPoint
+    var timeLeft: Double
+    var maxLife: Double
+}
+
+struct SiegeSnapshot: Codable {
+    var version: Int
+    var displayMode: String
+    var threatLevel: String
+    var soundOn: Bool
+    var activePresetID: String
+    var customRules: SiegeRules?
+    var score: Int
+    var lives: Int
+    var wave: Int
+    var gameClock: Double
+    var heading: Double
+    var driveSpeed: Double
+    var tankPosition: GroundPoint
+    var shieldRemaining: Double
+    var shieldCooldown: Double
+    var invulnerability: Double
+    var pendingWave: Double
+    var cannon: CannonMagazine
+    var shotTally: ShotTally
+    var obstacles: [SavedSiegeObstacle]
+    var enemies: [SavedSiegeFoe]
+    var shells: [SavedSiegeShell]
+    var sparks: [SavedSiegeSpark]
+}
+
+struct SiegeSaveSlot: Codable, Identifiable {
+    var id: String
+    var name: String
+    var savedAt: Date
+    var snapshot: SiegeSnapshot
+}
+
+enum SiegeGameStore {
+    private static let presetsKey = "vectorSiege.customPresets.v1"
+    private static let savesKey = "vectorSiege.savedGames.v1"
+
+    private static func load<T: Decodable>(_ key: String) -> [T] {
+        guard let data = UserDefaults.standard.data(forKey: key),
+              let values = try? JSONDecoder().decode([T].self, from: data) else { return [] }
+        return values
+    }
+
+    private static func persist<T: Encodable>(_ values: [T], at key: String) {
+        guard let data = try? JSONEncoder().encode(values) else { return }
+        UserDefaults.standard.set(data, forKey: key)
+    }
+
+    static func presets() -> [SiegePreset] { load(presetsKey) }
+    static func preset(id: String) -> SiegePreset? {
+        presets().first(where: { $0.id == id })
+    }
+    static func savePreset(_ preset: SiegePreset) {
+        var values = presets()
+        let clean = SiegePreset(id: preset.id, name: preset.name,
+                                rules: preset.rules.validated())
+        if let i = values.firstIndex(where: { $0.id == preset.id }) {
+            values[i] = clean
+        } else {
+            values.insert(clean, at: 0)
+        }
+        persist(values, at: presetsKey)
+    }
+    static func deletePreset(id: String) {
+        persist(presets().filter { $0.id != id }, at: presetsKey)
+    }
+
+    static func saves() -> [SiegeSaveSlot] {
+        let values: [SiegeSaveSlot] = load(savesKey)
+        return values.sorted { $0.savedAt > $1.savedAt }
+    }
+    @discardableResult
+    static func saveGame(_ snapshot: SiegeSnapshot) -> SiegeSaveSlot {
+        let presetName = snapshot.customRules == nil ? snapshot.threatLevel : "Custom"
+        let slot = SiegeSaveSlot(
+            id: UUID().uuidString,
+            name: "Wave \(snapshot.wave) · \(presetName) · \(snapshot.score) points",
+            savedAt: Date(), snapshot: snapshot)
+        persist(Array(([slot] + saves()).prefix(12)), at: savesKey)
+        return slot
+    }
+    static func deleteGame(id: String) {
+        persist(saves().filter { $0.id != id }, at: savesKey)
     }
 }
