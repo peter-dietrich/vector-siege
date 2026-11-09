@@ -34,6 +34,14 @@ private struct Spark {
 
 private enum RoundState { case title, playing, paused, gameOver }
 
+// Render-only face; the existing world obstacle geometry still owns collisions.
+private struct GlassFace {
+    var vertices: [WorldPoint]
+    var depth: Double
+    var tint: Int
+}
+
+
 final class BattlefieldScene: SKScene {
     var onDisplayModeChange: ((DisplayMode) -> Void)?
     var displayMode: DisplayMode = .classic { didSet {
@@ -73,6 +81,13 @@ final class BattlefieldScene: SKScene {
 
     private let skyline = SKShapeNode()
     private let farSkyline = SKShapeNode()
+    private let skyBands = (0..<10).map { _ in SKShapeNode() }
+    private let distantMountains = SKShapeNode()
+    private let middleMountains = SKShapeNode()
+    private let nearMountains = SKShapeNode()
+    private let horizonMist = SKShapeNode()
+    private let glassLayer = SKNode()
+    private var glassFacePool: [SKShapeNode] = []
     private let ground = SKShapeNode()
     private let structures = SKShapeNode()
     private let opponentLines = SKShapeNode()
@@ -112,6 +127,21 @@ final class BattlefieldScene: SKScene {
         scaleMode = .resizeFill
         anchorPoint = .zero
         backgroundColor = .black
+        for band in skyBands {
+            band.zPosition = 0.1
+            band.strokeColor = .clear
+            addChild(band)
+        }
+        for (layer, z) in [
+            (distantMountains, 0.8), (middleMountains, 1.25),
+            (nearMountains, 1.8), (horizonMist, 2.3)
+        ] {
+            layer.zPosition = z
+            layer.strokeColor = .clear
+            addChild(layer)
+        }
+        glassLayer.zPosition = 3.7
+        addChild(glassLayer)
 
         for (layer, z) in [
             (farSkyline, 1.0), (skyline, 2.0), (ground, 3.0), (structures, 4.0),
@@ -586,6 +616,16 @@ final class BattlefieldScene: SKScene {
             node.lineWidth = CGFloat(width)
             node.glowWidth = CGFloat(glow)
         }
+        let modern = displayMode == .modern
+        glassLayer.isHidden = !modern
+        for band in skyBands { band.isHidden = !modern }
+        for layer in [distantMountains, middleMountains, nearMountains, horizonMist] {
+            layer.isHidden = !modern
+        }
+        distantMountains.fillColor = NSColor(calibratedRed: 0.10, green: 0.16, blue: 0.22, alpha: 0.92)
+        middleMountains.fillColor = NSColor(calibratedRed: 0.085, green: 0.18, blue: 0.21, alpha: 0.94)
+        nearMountains.fillColor = NSColor(calibratedRed: 0.035, green: 0.115, blue: 0.125, alpha: 0.98)
+        horizonMist.fillColor = NSColor(calibratedRed: 0.25, green: 0.65, blue: 0.67, alpha: 0.06)
         let cc = green
         leftHUD.fontColor = cc
         midHUD.fontColor = cc
@@ -651,21 +691,64 @@ final class BattlefieldScene: SKScene {
     private func renderMountains(_ c: CameraProjection) {
         let farPath = CGMutablePath()
         let nearPath = CGMutablePath()
+        let distantFill = CGMutablePath()
+        let middleFill = CGMutablePath()
+        let closeFill = CGMutablePath()
         let width = c.viewportWidth
-        var prev1: CGPoint?
-        var prev2: CGPoint?
-        for i in 0...(Int(ceil(width / 15)) + 1) {
-            let x = Double(i) * 15 - 10
+        let step = 10.0
+        let samples = Int(ceil(width / step)) + 2
+
+        // Sky bands imitate atmospheric scattering with no textures or asset downloads.
+        // The brighter lower bands shift very slightly with heading, not with frame time.
+        if displayMode == .modern {
+            let skyBottom = c.horizon - 8
+            let bandHeight = (c.viewportHeight - skyBottom) / Double(skyBands.count)
+            for i in skyBands.indices {
+                let y = skyBottom + Double(i) * bandHeight
+                skyBands[i].path = CGPath(rect: CGRect(x: 0, y: y, width: width + 1,
+                                                        height: bandHeight + 1), transform: nil)
+                let t = Double(i) / Double(max(1, skyBands.count - 1))
+                skyBands[i].fillColor = NSColor(
+                    calibratedRed: CGFloat(0.045 - t * 0.027),
+                    green: CGFloat(0.105 - t * 0.072),
+                    blue: CGFloat(0.16 - t * 0.083), alpha: 1)
+            }
+        }
+        for i in 0...samples {
+            let x = min(width + 10, Double(i) * step - 10)
             let azimuth = heading + atan2((x - width / 2) / c.focal, 1)
             let back = point(x, c.horizon + ridge(azimuth + 0.6, multiplier: 0.47))
             let front = point(x, c.horizon + ridge(azimuth, multiplier: 1.0))
-            if let prev1 { segment(farPath, prev1, back) }
-            if let prev2 { segment(nearPath, prev2, front) }
-            prev1 = back
-            prev2 = front
+            if i == 0 {
+                farPath.move(to: back)
+                nearPath.move(to: front)
+                distantFill.move(to: point(x, c.horizon - 50))
+                middleFill.move(to: point(x, c.horizon - 50))
+                closeFill.move(to: point(x, c.horizon - 50))
+                distantFill.addLine(to: back)
+                middleFill.addLine(to: point(x, c.horizon + ridge(azimuth + 0.12, multiplier: 0.72)))
+                closeFill.addLine(to: front)
+            } else {
+                farPath.addLine(to: back)
+                nearPath.addLine(to: front)
+                distantFill.addLine(to: back)
+                middleFill.addLine(to: point(x, c.horizon + ridge(azimuth + 0.12, multiplier: 0.72)))
+                closeFill.addLine(to: front)
+            }
+        }
+        for path in [distantFill, middleFill, closeFill] {
+            path.addLine(to: point(width + 10, c.horizon - 55))
+            path.closeSubpath()
         }
         farSkyline.path = farPath
         skyline.path = nearPath
+        if displayMode == .modern {
+            distantMountains.path = distantFill
+            middleMountains.path = middleFill
+            nearMountains.path = closeFill
+            horizonMist.path = CGPath(rect: CGRect(x: 0, y: c.horizon - 10,
+                                                   width: width, height: 26), transform: nil)
+        }
     }
 
     private func renderGround(_ c: CameraProjection) {
@@ -686,14 +769,17 @@ final class BattlefieldScene: SKScene {
 
     private func renderObjects(_ c: CameraProjection) {
         let structurePath = CGMutablePath()
+        var facets: [GlassFace] = []
         for o in obstacles {
             // Culling far outside the visible scene.
             let offset = o.center - tankPosition
             if offset.length > 190 { continue }
             if o.kind == .pyramid { drawPyramid(o, on: structurePath, camera: c) }
             else { drawBlock(o, on: structurePath, camera: c) }
+            if displayMode == .modern { facets.append(contentsOf: glassFacets(for: o, camera: c)) }
         }
         structures.path = structurePath
+        updateGlassFaces(facets, camera: c)
 
         let enemyPath = CGMutablePath()
         for enemy in enemies {
@@ -702,6 +788,106 @@ final class BattlefieldScene: SKScene {
             else { drawTank(enemy, on: enemyPath, camera: c) }
         }
         opponentLines.path = enemyPath
+    }
+
+    // Filled translucent polygons are rendered back-to-front beneath the vector
+    // outlines. Near-plane clipping prevents screen-sized spikes when driving close.
+    private func glassFacePath(_ points: [WorldPoint], camera c: CameraProjection) -> CGPath? {
+        struct Vertex {
+            var right: Double
+            var up: Double
+            var forward: Double
+        }
+        var clipped = points.map {
+            let v = c.local($0)
+            return Vertex(right: v.right, up: v.up, forward: v.forward)
+        }
+        guard clipped.count >= 3 else { return nil }
+        let near = 0.8
+        var output: [Vertex] = []
+        var previous = clipped[clipped.count - 1]
+        for current in clipped {
+            let wasInside = previous.forward >= near
+            let isInside = current.forward >= near
+            if wasInside != isInside {
+                let t = (near - previous.forward) / (current.forward - previous.forward)
+                output.append(Vertex(right: previous.right + (current.right - previous.right) * t,
+                                     up: previous.up + (current.up - previous.up) * t,
+                                     forward: near))
+            }
+            if isInside { output.append(current) }
+            previous = current
+        }
+        clipped = output
+        guard clipped.count >= 3 else { return nil }
+        let path = CGMutablePath()
+        for (i, p) in clipped.enumerated() {
+            let projected = c.screen(right: p.right, up: p.up, forward: p.forward)
+            guard projected.x.isFinite && projected.y.isFinite,
+                  abs(projected.x) < 30000 && abs(projected.y) < 30000 else { return nil }
+            if i == 0 { path.move(to: point(projected.x, projected.y)) }
+            else { path.addLine(to: point(projected.x, projected.y)) }
+        }
+        path.closeSubpath()
+        return path
+    }
+
+    private func glassFacets(for o: Obstacle, camera c: CameraProjection) -> [GlassFace] {
+        let s = o.size
+        let bottom = [
+            WorldPoint(o.center.x-s, 0, o.center.z-s),
+            WorldPoint(o.center.x+s, 0, o.center.z-s),
+            WorldPoint(o.center.x+s, 0, o.center.z+s),
+            WorldPoint(o.center.x-s, 0, o.center.z+s)
+        ]
+        let topHeight = o.kind == .pyramid ? s * 1.28 : s * 1.35
+        let top = bottom.map { WorldPoint($0.x, topHeight, $0.z) }
+        let apex = WorldPoint(o.center.x, topHeight, o.center.z)
+        var polygons: [[WorldPoint]] = []
+        if o.kind == .pyramid {
+            for i in 0..<4 { polygons.append([bottom[i], bottom[(i+1)%4], apex]) }
+        } else {
+            for i in 0..<4 {
+                polygons.append([bottom[i], bottom[(i+1)%4], top[(i+1)%4], top[i]])
+            }
+            polygons.append(top)
+        }
+        return polygons.enumerated().map { index, vertices in
+            let z = vertices.reduce(0.0) { $0 + c.local($1).forward } / Double(vertices.count)
+            return GlassFace(vertices: vertices, depth: z, tint: index)
+        }
+    }
+
+    private func updateGlassFaces(_ facets: [GlassFace], camera c: CameraProjection) {
+        guard displayMode == .modern else {
+            for face in glassFacePool { face.isHidden = true }
+            return
+        }
+        let palette: [NSColor] = [
+            NSColor(calibratedRed: 0.13, green: 0.43, blue: 0.51, alpha: 0.23),
+            NSColor(calibratedRed: 0.32, green: 0.71, blue: 0.74, alpha: 0.17),
+            NSColor(calibratedRed: 0.08, green: 0.25, blue: 0.35, alpha: 0.32),
+            NSColor(calibratedRed: 0.40, green: 0.77, blue: 0.76, alpha: 0.18),
+            NSColor(calibratedRed: 0.60, green: 0.91, blue: 0.89, alpha: 0.21)
+        ]
+        var visible = 0
+        for facet in facets.sorted(by: { $0.depth > $1.depth }) {
+            guard let path = glassFacePath(facet.vertices, camera: c) else { continue }
+            if visible >= glassFacePool.count {
+                let face = SKShapeNode()
+                face.lineWidth = 0.5
+                face.strokeColor = NSColor(calibratedRed: 0.71, green: 0.98, blue: 0.97, alpha: 0.25)
+                glassLayer.addChild(face)
+                glassFacePool.append(face)
+            }
+            let face = glassFacePool[visible]
+            face.isHidden = false
+            face.path = path
+            face.fillColor = palette[facet.tint % palette.count]
+            face.zPosition = CGFloat(visible) * 0.001
+            visible += 1
+        }
+        for i in visible..<glassFacePool.count { glassFacePool[i].isHidden = true }
     }
 
     private func drawPyramid(_ o: Obstacle, on path: CGMutablePath, camera c: CameraProjection) {
