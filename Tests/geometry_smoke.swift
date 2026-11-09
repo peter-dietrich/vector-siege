@@ -25,6 +25,30 @@ struct GeometrySmoke {
         precondition(PrecisionSteering.heldRate(elapsed: 0.70) >
                      PrecisionSteering.heldRate(elapsed: 0.20))
         precondition(PrecisionSteering.heldRate(elapsed: 10) < 2.0)
-        print("Perspective, clipping, movement, angle and precision steering checks passed.")
+        var cannon = CannonMagazine()
+        precondition(CannonMagazine.capacity == 40)
+        precondition(CannonMagazine.minimumReload == 3 && CannonMagazine.maximumReload == 5)
+        precondition(cannon.canFire && cannon.roundsRemaining == 40)
+        precondition(cannon.fire(reloadDuration: 3))
+        precondition(cannon.roundsRemaining == 39 && !cannon.canFire)
+        precondition(cannon.statusText == "RELOAD 3.0s")
+        precondition(!cannon.fire(reloadDuration: 4))
+        cannon.advance(by: 2.5)
+        precondition(!cannon.canFire && cannon.reloadRemaining > 0)
+        cannon.advance(by: 0.5)
+        precondition(cannon.canFire && cannon.statusText == "READY")
+        precondition(cannon.fire(reloadDuration: 5))
+        precondition(cannon.reloadRemaining == 5 && cannon.roundsRemaining == 38)
+        cannon.advance(by: 5)
+        for _ in 0..<38 {
+            precondition(cannon.fire(reloadDuration: 4))
+            cannon.advance(by: 4)
+        }
+        precondition(cannon.isEmpty && cannon.roundsRemaining == 0)
+        precondition(cannon.statusText == "EMPTY" && !cannon.canFire)
+        precondition(!cannon.fire(reloadDuration: 3))
+        cannon = CannonMagazine()
+        precondition(cannon.canFire && cannon.roundsRemaining == 40)
+        print("Perspective, steering, 40 rounds and randomized 3–5s reload checks passed.")
     }
 }
