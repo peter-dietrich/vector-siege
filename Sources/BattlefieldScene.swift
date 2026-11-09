@@ -48,6 +48,8 @@ final class BattlefieldScene: SKScene {
     private var tankPosition = GroundPoint(0, 0)
     private var heading: Double = 0
     private var driveSpeed: Double = 0
+    private var steerHoldSeconds: Double = 0
+    private var previousSteerDirection: Double = 0
     private var score = 0
     private var wave = 1
     private var lives = 3
@@ -132,9 +134,14 @@ final class BattlefieldScene: SKScene {
     }
 
     func pressed(_ code: UInt16, repeatEvent: Bool) {
+        let newlyPressed = !pressedKeys.contains(code)
         pressedKeys.insert(code)
-        if repeatEvent { return }
+        if repeatEvent || !newlyPressed { return }
         switch code {
+        case 123, 0: // Left arrow / A: 0.5-degree tap
+            if round == .playing { heading = wrapAngle(heading - PrecisionSteering.tapAngle) }
+        case 124, 2: // Right arrow / D: 0.5-degree tap
+            if round == .playing { heading = wrapAngle(heading + PrecisionSteering.tapAngle) }
         case 36, 76: // Return / keypad Enter
             if round == .title || round == .gameOver { restart() }
         case 35: // P
@@ -150,7 +157,13 @@ final class BattlefieldScene: SKScene {
         }
     }
 
-    func released(_ code: UInt16) { pressedKeys.remove(code) }
+    func released(_ code: UInt16) {
+        pressedKeys.remove(code)
+        if !key(123, 0, 124, 2) {
+            steerHoldSeconds = 0
+            previousSteerDirection = 0
+        }
+    }
 
     func setShift(_ isPressed: Bool) {
         if isPressed && !pressedKeys.contains(56) {
@@ -169,6 +182,8 @@ final class BattlefieldScene: SKScene {
         lives = 3
         driveSpeed = 0
         heading = 0
+        steerHoldSeconds = 0
+        previousSteerDirection = 0
         tankPosition = GroundPoint(0, 0)
         gameClock = 0
         cannonCooldown = 0
@@ -209,7 +224,21 @@ final class BattlefieldScene: SKScene {
         let turn = usingTreads ? (leftTread - rightTread) / 2.0 : mainTurn
 
         driveSpeed += (demand * 16.5 - driveSpeed) * min(1, dt * 4.0)
-        heading = wrapAngle(heading + turn * 1.65 * dt * (usingTreads ? 1.1 : 1))
+        if usingTreads {
+            // Explicit tread driving retains its original, immediate turn response.
+            steerHoldSeconds = 0
+            previousSteerDirection = 0
+            heading = wrapAngle(heading + turn * 1.65 * 1.1 * dt)
+        } else if mainTurn != 0 {
+            if mainTurn != previousSteerDirection { steerHoldSeconds = 0 }
+            previousSteerDirection = mainTurn
+            steerHoldSeconds += dt
+            let turnRate = PrecisionSteering.heldRate(elapsed: steerHoldSeconds)
+            heading = wrapAngle(heading + mainTurn * turnRate * dt)
+        } else {
+            steerHoldSeconds = 0
+            previousSteerDirection = 0
+        }
         if abs(driveSpeed) > 0.01 {
             let proposed = tankPosition + facing(heading) * (driveSpeed * dt)
             if !blocked(proposed, radius: 1.6) { tankPosition = proposed }
