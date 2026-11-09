@@ -54,6 +54,10 @@ final class BattlefieldScene: SKScene {
     private var wave = 1
     private var lives = 3
     private var bestScore = UserDefaults.standard.integer(forKey: "VectorSiegeHighScore")
+    private var shotsFired = 0
+    private var hitsLanded = 0
+    private var observedFPS: Double = 60
+    private var showDetailedTelemetry = false
     private var cannonCooldown: Double = 0
     private var shieldDuration: Double = 0
     private var shieldCooldown: Double = 0
@@ -85,6 +89,17 @@ final class BattlefieldScene: SKScene {
     private let subtitle = SKLabelNode(fontNamed: "Menlo")
     private let message = SKLabelNode(fontNamed: "Menlo")
     private let scanlines = SKShapeNode()
+    private let telemetryLeftPanel = SKShapeNode(rectOf: CGSize(width: 390, height: 148), cornerRadius: 9)
+    private let telemetryRightPanel = SKShapeNode(rectOf: CGSize(width: 330, height: 148), cornerRadius: 9)
+    private let telemetryLeftAccent = SKShapeNode(rectOf: CGSize(width: 3, height: 122))
+    private let telemetryRightAccent = SKShapeNode(rectOf: CGSize(width: 3, height: 122))
+    private let telemetryLeftHeading = SKLabelNode(fontNamed: "Menlo-Bold")
+    private let telemetryRightHeading = SKLabelNode(fontNamed: "Menlo-Bold")
+    private let telemetryLeftDetail = SKLabelNode(fontNamed: "Menlo")
+    private let telemetryLeftFootnote = SKLabelNode(fontNamed: "Menlo")
+    private let telemetryRightDetail = SKLabelNode(fontNamed: "Menlo")
+    private let telemetryRightFootnote = SKLabelNode(fontNamed: "Menlo")
+    private let stagePanel = SKShapeNode(rectOf: CGSize(width: 470, height: 128), cornerRadius: 10)
 
     private var green = NSColor(calibratedRed: 0.35, green: 1.0, blue: 0.46, alpha: 1)
     private var muted = NSColor(calibratedRed: 0.10, green: 0.33, blue: 0.15, alpha: 1)
@@ -107,6 +122,42 @@ final class BattlefieldScene: SKScene {
             layer.fillColor = .clear
             addChild(layer)
         }
+
+        for panel in [telemetryLeftPanel, telemetryRightPanel] {
+            panel.zPosition = 11
+            panel.lineWidth = 0.8
+            addChild(panel)
+        }
+        for rail in [telemetryLeftAccent, telemetryRightAccent] {
+            rail.zPosition = 12
+            rail.strokeColor = .clear
+            addChild(rail)
+        }
+        stagePanel.zPosition = 18
+        stagePanel.lineWidth = 1.2
+        addChild(stagePanel)
+        for (label, z) in [
+            (telemetryLeftHeading, 15.0), (telemetryRightHeading, 15.0),
+            (telemetryLeftDetail, 15.0), (telemetryLeftFootnote, 15.0),
+            (telemetryRightDetail, 15.0), (telemetryRightFootnote, 15.0)
+        ] {
+            label.zPosition = z
+            label.verticalAlignmentMode = .center
+            addChild(label)
+        }
+        telemetryLeftHeading.text = "VECTOR SIEGE  //  TARGETING"
+        telemetryRightHeading.text = "SYSTEMS  //  COMBAT STATUS"
+        telemetryLeftHeading.horizontalAlignmentMode = .left
+        telemetryLeftDetail.horizontalAlignmentMode = .left
+        telemetryLeftFootnote.horizontalAlignmentMode = .left
+        telemetryRightHeading.horizontalAlignmentMode = .right
+        telemetryRightDetail.horizontalAlignmentMode = .right
+        telemetryRightFootnote.horizontalAlignmentMode = .right
+        for headingNode in [telemetryLeftHeading, telemetryRightHeading] {
+            headingNode.fontSize = 10
+        }
+        for detail in [telemetryLeftDetail, telemetryRightDetail] { detail.fontSize = 11 }
+        for footnote in [telemetryLeftFootnote, telemetryRightFootnote] { footnote.fontSize = 10 }
 
         for (label, z) in [(leftHUD, 14.0), (rightHUD, 14.0), (midHUD, 14.0),
                            (warning, 15.0), (banner, 20.0), (subtitle, 20.0), (message, 20.0)] {
@@ -151,6 +202,8 @@ final class BattlefieldScene: SKScene {
             restart()
         case 8: // C
             displayMode = displayMode == .classic ? .modern : .classic
+        case 17: // T: show extra local diagnostic details
+            showDetailedTelemetry.toggle()
         case 56, 60: // Shift, usually delivered via flagsChanged instead
             triggerShield()
         default: break
@@ -180,6 +233,9 @@ final class BattlefieldScene: SKScene {
         score = 0
         wave = 1
         lives = 3
+        shotsFired = 0
+        hitsLanded = 0
+        observedFPS = 60
         driveSpeed = 0
         heading = 0
         steerHoldSeconds = 0
@@ -200,6 +256,10 @@ final class BattlefieldScene: SKScene {
     }
 
     override func update(_ currentTime: TimeInterval) {
+        let elapsedFrame = lastUpdateTime == 0 ? 0.0 : currentTime - lastUpdateTime
+        if elapsedFrame > 0.001 && elapsedFrame < 1 {
+            observedFPS = 0.92 * observedFPS + 0.08 * min(240, 1.0 / elapsedFrame)
+        }
         let dt = lastUpdateTime == 0 ? 0.0 : min(0.04, max(0, currentTime - lastUpdateTime))
         lastUpdateTime = currentTime
         if round != .paused { gameClock += dt }
@@ -303,6 +363,7 @@ final class BattlefieldScene: SKScene {
                 for idx in enemies.indices where !casualties.contains(idx) {
                     if shell.center.distance(to: enemies[idx].center) < (enemies[idx].kind == .saucer ? 3.1 : 2.9) {
                         hit = true
+                        hitsLanded += 1
                         enemies[idx].hitPoints -= 1
                         burst(at: WorldPoint(enemies[idx].center,
                                              height: enemies[idx].kind == .saucer ? 5.1 : 1.45),
@@ -359,6 +420,7 @@ final class BattlefieldScene: SKScene {
     }
 
     private func firePlayer() {
+        shotsFired += 1
         cannonCooldown = 0.33
         let direction = facing(heading)
         shells.append(Shell(center: tankPosition + direction * 2.5,
@@ -443,6 +505,48 @@ final class BattlefieldScene: SKScene {
         run(SKAction.playSoundFileNamed(name, waitForCompletion: false))
     }
 
+    private func targetTelemetry() -> (range: Double, error: Double)? {
+        enemies.compactMap { foe -> (range: Double, error: Double)? in
+            let difference = foe.center - tankPosition
+            let distance = difference.length
+            let error = wrapAngle(atan2(difference.x, difference.z) - heading)
+            guard distance < 150, abs(error) < .pi / 2 else { return nil }
+            return (distance, error)
+        }.min(by: { abs($0.error) < abs($1.error) })
+    }
+
+    /// Manual, local-only snapshot for copying into bug reports. No automatic upload.
+    func feedbackReport() -> String {
+        let mode = displayMode == .classic ? "Classic" : "Modern"
+        let state: String
+        switch round {
+        case .title: state = "Title"
+        case .playing: state = "Playing"
+        case .paused: state = "Paused"
+        case .gameOver: state = "Game over"
+        }
+        let bearing = (heading * 180 / .pi + 360).truncatingRemainder(dividingBy: 360)
+        let target = targetTelemetry().map {
+            String(format: "%.1f units, aim error %+.2f degrees", $0.range, $0.error * 180 / .pi)
+        } ?? "None in front"
+        let accuracy = shotsFired > 0 ? 100.0 * Double(hitsLanded) / Double(shotsFired) : 0
+        return """
+        VECTOR SIEGE // PLAYTEST TELEMETRY
+        Display: \(mode)  Difficulty: \(threatLevel.rawValue)  State: \(state)
+        Wave: \(wave)  Score: \(score)  Best: \(bestScore)  Lives: \(lives)
+        Heading: \(String(format: "%.2f", bearing)) degrees
+        Drive speed: \(String(format: "%.2f", driveSpeed)) units/s
+        World position: \(String(format: "x %.1f, z %.1f", tankPosition.x, tankPosition.z))
+        Target: \(target)
+        Shots: \(shotsFired)  Hits: \(hitsLanded)  Accuracy: \(String(format: "%.1f%%", accuracy))
+        Enemies: \(enemies.count)  Projectiles: \(shells.count)
+        FPS (smoothed): \(String(format: "%.1f", observedFPS))
+        Shield: \(shieldDuration > 0 ? "Active" : shieldCooldown > 0 ? "Recharging" : "Ready")
+        Runtime: \(String(format: "%.1f", gameClock)) seconds
+        Note: Manually copied from the game. No data sent automatically.
+        """
+    }
+
     private func configurePalette() {
         if displayMode == .classic {
             green = NSColor(calibratedRed: 0.23, green: 1, blue: 0.27, alpha: 1)
@@ -481,6 +585,21 @@ final class BattlefieldScene: SKScene {
         message.fontColor = accent
         scanlines.strokeColor = green.withAlphaComponent(displayMode == .classic ? 0.035 : 0.025)
         scanlines.lineWidth = 0.5
+
+        let amber = NSColor(calibratedRed: 1, green: 0.72, blue: 0.40, alpha: 1)
+        let panelFill = NSColor(calibratedRed: 0.018, green: 0.045, blue: 0.044, alpha: 0.90)
+        for panel in [telemetryLeftPanel, telemetryRightPanel] {
+            panel.fillColor = panelFill
+            panel.strokeColor = amber.withAlphaComponent(displayMode == .classic ? 0.32 : 0.50)
+        }
+        for rail in [telemetryLeftAccent, telemetryRightAccent] { rail.fillColor = amber }
+        for label in [telemetryLeftHeading, telemetryRightHeading] { label.fontColor = amber }
+        for label in [telemetryLeftDetail, telemetryLeftFootnote,
+                      telemetryRightDetail, telemetryRightFootnote] {
+            label.fontColor = green.withAlphaComponent(0.86)
+        }
+        stagePanel.fillColor = NSColor(calibratedRed: 0.02, green: 0.05, blue: 0.05, alpha: 0.94)
+        stagePanel.strokeColor = amber.withAlphaComponent(0.55)
     }
 
     private func render() {
@@ -682,20 +801,33 @@ final class BattlefieldScene: SKScene {
         let hp = CGMutablePath()
         let rp = CGMutablePath()
         let sight = CGMutablePath()
-        let hudTop = h - 22
-        let radarX = 92.0
-        let radarY = h - 94
-        let radarRadius = 44.0
+        let radarX = 90.0
+        let radarY = h - 97
+        let radarRadius = 43.0
 
-        segment(hp, point(14, h - 163), point(w - 14, h - 163))
-        segment(hp, point(14, h - 164), point(14, h - 12))
-        segment(hp, point(w - 14, h - 164), point(w - 14, h - 12))
-        segment(hp, point(14, h - 12), point(w - 14, h - 12))
-        // Small registration ticks on top instrumentation strip.
-        for i in 0...24 {
-            let x = 180 + Double(i) / 24 * max(10, w - 390)
-            segment(hp, point(x, h - 26), point(x, h - (i.isMultiple(of: 4) ? 37 : 30)))
+        // Symmetric corner instruments leave a clear central sight line.
+        let leftPanelWidth = 390.0
+        let rightPanelWidth = 330.0
+        let panelHeight = 148.0
+        func panelRect(width: Double) -> CGPath {
+            CGPath(roundedRect: CGRect(x: -width / 2, y: -panelHeight / 2,
+                                       width: width, height: panelHeight),
+                   cornerWidth: 9, cornerHeight: 9, transform: nil)
         }
+        telemetryLeftPanel.path = panelRect(width: leftPanelWidth)
+        telemetryRightPanel.path = panelRect(width: rightPanelWidth)
+        telemetryLeftPanel.position = point(14 + leftPanelWidth / 2, h - 92)
+        telemetryRightPanel.position = point(w - 14 - rightPanelWidth / 2, h - 92)
+        telemetryLeftAccent.position = point(20, h - 92)
+        telemetryRightAccent.position = point(w - 20, h - 92)
+        telemetryLeftHeading.position = point(162, h - 43)
+        telemetryRightHeading.position = point(w - 34, h - 43)
+        telemetryLeftDetail.position = point(162, h - 99)
+        telemetryLeftFootnote.position = point(162, h - 127)
+        telemetryRightDetail.position = point(w - 34, h - 103)
+        telemetryRightFootnote.position = point(w - 34, h - 132)
+        // A slim radar divider belongs to the left panel rather than crossing the view.
+        segment(hp, point(149, h - 143), point(149, h - 48))
         hudLines.path = hp
 
         let circle = CGRect(x: radarX - radarRadius, y: radarY - radarRadius,
@@ -737,31 +869,50 @@ final class BattlefieldScene: SKScene {
         reticle.strokeColor = invulnerability > 0 && Int(gameClock * 9).isMultiple(of: 2)
             ? accent : (shieldDuration > 0 ? green : accent)
 
-        leftHUD.position = point(155, h - 74)
-        leftHUD.fontSize = 12
-        leftHUD.text = "RADAR"
-        midHUD.position = point(w*0.49, hudTop-41)
-        midHUD.fontSize = 17
-        midHUD.text = "SCORE  " + String(format: "%06d", score)
-        rightHUD.position = point(w - 32, hudTop-38)
-        rightHUD.fontSize = 13
-        rightHUD.text = "BEST " + String(format: "%06d", bestScore)
-        warning.position = point(w*0.52, h-131)
+        leftHUD.position = point(radarX, h - 41)
+        leftHUD.horizontalAlignmentMode = .center
+        leftHUD.fontSize = 11
+        leftHUD.text = "RADAR / 105"
+        midHUD.position = point(162, h - 72)
+        midHUD.horizontalAlignmentMode = .left
+        midHUD.fontSize = 12
+        let compass = Int((heading * 180 / .pi + 360).truncatingRemainder(dividingBy: 360).rounded()) % 360
+        midHUD.text = String(format: "HDG %03d°   SPD %05.1f", compass, driveSpeed)
+        let target = targetTelemetry()
+        telemetryLeftDetail.text = target.map {
+            String(format: "TGT %03.0f   AIM %+05.1f°", $0.range, $0.error * 180 / .pi)
+        } ?? "TGT ---   AIM ---"
+        let accuracy = shotsFired > 0 ? 100.0 * Double(hitsLanded) / Double(shotsFired) : 0
+        telemetryLeftFootnote.text = String(format: "SHOTS %02d  HITS %02d  %.0f%%", shotsFired, hitsLanded, accuracy)
+        rightHUD.position = point(w - 34, h - 75)
+        rightHUD.horizontalAlignmentMode = .right
+        rightHUD.fontSize = 12
+        rightHUD.text = String(format: "SCORE %06d  BEST %06d", score, bestScore)
+        telemetryRightDetail.text = String(format: "WAVE %02d   LIVES %d   %@", wave, lives, threatLevel.rawValue.uppercased())
+        let shieldName = shieldDuration > 0
+            ? String(format: "SHIELD ACTIVE %.1fs", shieldDuration)
+            : shieldCooldown > 0
+                ? String(format: "RECHARGING %.1fs", shieldCooldown)
+                : "SHIELD READY [SHIFT]"
+        telemetryRightFootnote.text = shieldName
+        warning.position = point(w / 2, h - 176)
         warning.fontSize = 12
-        let targetsInRange = enemies.contains { foe in
-            let relative = foe.center - tankPosition
-            return relative.length < 68 && abs(wrapAngle(atan2(relative.x, relative.z) - heading)) < 0.14
-        }
-        warning.text = targetsInRange ? "ENEMY IN SIGHTS" : (pendingWave > 0 ? "AREA SECURE" : "")
+        warning.text = target.map { abs($0.error) < 0.055 && $0.range < 68 ? "TARGET ALIGNED" : "" }
+            ?? (pendingWave > 0 ? "AREA SECURE" : "")
 
-        let modeName = displayMode == .classic ? "CRT // 1980" : "VECTOR // ENHANCED"
-        let extra = "WAVE " + String(format: "%02d", wave) + "    HULL " + String(repeating: "◆", count: max(0, lives))
-        let shieldName = shieldDuration > 0 ? "SHIELD ACTIVE" : (shieldCooldown > 0 ? String(format: "SHIELD %.0fS", shieldCooldown) : "SHIELD READY")
-        message.position = point(w/2, 47)
-        message.fontSize = 12
-        message.text = extra + "    //    " + shieldName + "    //    " + modeName
+        let modeName = displayMode == .classic ? "CLASSIC CRT" : "ENHANCED VECTOR"
+        message.position = point(w / 2, 47)
+        message.fontSize = 11
+        if showDetailedTelemetry {
+            message.text = String(format: "FPS %.0f  |  POSITION %+.1f, %+.1f  |  ENEMIES %d  |  SHELLS %d  |  [T] MINIMIZE",
+                                  observedFPS, tankPosition.x, tankPosition.z, enemies.count, shells.count)
+        } else {
+            message.text = modeName + "   //   [T] DIAGNOSTICS   //   COPY FEEDBACK IN TOOLBAR"
+        }
         message.fontColor = shieldDuration > 0 ? green : accent
 
+        stagePanel.position = point(w / 2, h * 0.61)
+        stagePanel.isHidden = round == .playing && pendingWave <= 0
         banner.position = point(w/2, h*0.67)
         banner.fontSize = min(42, w*0.052)
         subtitle.position = point(w/2, h*0.59)
