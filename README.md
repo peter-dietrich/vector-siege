@@ -43,6 +43,15 @@ Vector Siege now has **Vector Drift-inspired cockpit telemetry panels** with sub
 
 Use **Copy Feedback** in the toolbar to copy a plaintext playtest snapshot (mode, difficulty, game state, wave, score, position, heading, speed, target offset, shots, hits, FPS, enemy/projectile counts, shield, and elapsed gameplay). Paste the snapshot into a bug report or this chat. **No telemetry is automatically uploaded or transmitted**; copying only accesses the local clipboard. A crash cannot be captured by the in-app button after the game has terminated; macOS crash diagnostics are separate.
 
+## v0.8 — Custom Game presets and saved game slots
+
+Vector Siege now includes the **Custom Game**, **Save Game**, and **Resume** controls from Vector Drift.
+
+- **Custom Game:** name a preset and tune magazine capacity (1–200), cannon reload (0.2–6 seconds), projectile lifetime, starting lives, shield time and cooldown, first-wave and per-wave enemy counts, maximum enemies, obstacle count, enemy speed, enemy fire rate and accuracy, and hunter/saucer appearances. Choose **Save & Start Custom Game** to store and activate a reusable named preset, or **Built-in rules** to restore the original tank settings. The built-in Cadet, Veteran, and Ace difficulty levels remain selectable.
+- **Save Game:** during active or paused play, saves a timestamped local snapshot. Up to **12 slots** are retained, most recent first; saving does not replace existing saves.
+- **Resume:** shows saved games with their name, timestamp, display mode and difficulty; choose **Resume** or **Delete**. Restored battles retain score, lives, wave, position, heading, speed, ammo and reload timer, shield, invulnerability, enemies, obstacles, friendly and hostile shells, hit/miss stats, effects and selected custom rules. A restored game starts **paused**, so press **P** to resume safely.
+- **Storage:** presets and saved games are JSON encoded in this Mac's UserDefaults, with Vector Siege-specific keys. No external service is required or contacted. Saves are local to the Mac account and are not automatically synced through GitHub or between computers.
+
 ## v0.7 — five-second shield with expiry warning and hit/miss tracking
 
 - **Shield (Shift):** active for **5 seconds** (previously 2.25). A glowing perimeter outline and countdown indicate protection. During the **last second**, the border and notice blink and fade progressively. The existing 11-second cooldown is unchanged.
