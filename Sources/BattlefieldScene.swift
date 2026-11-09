@@ -99,6 +99,9 @@ final class BattlefieldScene: SKScene {
     private let flashLines = SKShapeNode()
     private let reticle = SKShapeNode()
     private let radar = SKShapeNode()
+    private let radarProjectileGlow = SKShapeNode()
+    private let radarProjectileCore = SKShapeNode()
+    private let radarEnemyContacts = SKShapeNode()
     private let hudLines = SKShapeNode()
     private let leftHUD = SKLabelNode(fontNamed: "Menlo-Bold")
     private let rightHUD = SKLabelNode(fontNamed: "Menlo-Bold")
@@ -146,6 +149,11 @@ final class BattlefieldScene: SKScene {
         }
         glassLayer.zPosition = 3.7
         addChild(glassLayer)
+        for (node, layer) in [(radarEnemyContacts, 13.3), (radarProjectileGlow, 13.6),
+                               (radarProjectileCore, 13.8)] {
+            node.zPosition = layer
+            addChild(node)
+        }
 
         for (layer, z) in [
             (farSkyline, 1.0), (skyline, 2.0), (ground, 3.0), (structures, 4.0),
@@ -651,6 +659,16 @@ final class BattlefieldScene: SKScene {
         message.fontColor = accent
         scanlines.strokeColor = green.withAlphaComponent(displayMode == .classic ? 0.035 : 0.025)
         scanlines.lineWidth = 0.5
+        radarEnemyContacts.strokeColor = accent
+        radarEnemyContacts.fillColor = accent.withAlphaComponent(0.82)
+        radarEnemyContacts.lineWidth = 0.5
+        radarProjectileGlow.strokeColor = .clear
+        radarProjectileGlow.fillColor = NSColor(calibratedRed: 1, green: 0.81, blue: 0.11, alpha: 0.24)
+        radarProjectileGlow.glowWidth = 9
+        radarProjectileCore.strokeColor = NSColor(calibratedRed: 1, green: 0.96, blue: 0.41, alpha: 0.98)
+        radarProjectileCore.fillColor = NSColor(calibratedRed: 1, green: 0.84, blue: 0.13, alpha: 1)
+        radarProjectileCore.glowWidth = 5
+        radarProjectileCore.lineWidth = 1.1
 
         let amber = NSColor(calibratedRed: 1, green: 0.72, blue: 0.40, alpha: 1)
         let panelFill = NSColor(calibratedRed: 0.018, green: 0.045, blue: 0.044, alpha: 0.90)
@@ -1063,19 +1081,37 @@ final class BattlefieldScene: SKScene {
         let sweepAngle = gameClock * 1.45
         segment(rp, point(radarX, radarY),
                 point(radarX+sin(sweepAngle)*radarRadius, radarY+cos(sweepAngle)*radarRadius))
+        let enemyContacts = CGMutablePath()
+        let projectileHalos = CGMutablePath()
+        let projectileDots = CGMutablePath()
+        // All contacts share the same player-relative, heading-rotated radar grid.
+        func radarPoint(_ center: GroundPoint) -> CGPoint? {
+            let dx = center.x - tankPosition.x
+            let dz = center.z - tankPosition.z
+            let right = dx * cos(heading) - dz * sin(heading)
+            let forward = dx * sin(heading) + dz * cos(heading)
+            guard hypot(right, forward) <= 105 else { return nil }
+            return point(radarX + right / 105 * radarRadius,
+                         radarY + forward / 105 * radarRadius)
+        }
         for foe in enemies {
-            let dx = foe.center.x-tankPosition.x
-            let dz = foe.center.z-tankPosition.z
-            let right = dx*cos(heading)-dz*sin(heading)
-            let fwd = dx*sin(heading)+dz*cos(heading)
-            let distance = hypot(right, fwd)
-            if distance > 105 { continue }
-            let x = radarX + right/105 * radarRadius
-            let y = radarY + fwd/105 * radarRadius
+            guard let contact = radarPoint(foe.center) else { continue }
             let blip = foe.kind == .hunter ? 3.8 : 2.6
-            rp.addRect(CGRect(x: x-blip/2, y: y-blip/2, width: blip, height: blip))
+            enemyContacts.addRect(CGRect(x: contact.x - blip/2, y: contact.y - blip/2,
+                                         width: blip, height: blip))
+        }
+        for shell in shells {
+            guard let contact = radarPoint(shell.center) else { continue }
+            let radius = shell.hostile ? 2.0 : 2.8
+            projectileHalos.addEllipse(in: CGRect(x: contact.x - 4.7, y: contact.y - 4.7,
+                                                   width: 9.4, height: 9.4))
+            projectileDots.addEllipse(in: CGRect(x: contact.x - radius, y: contact.y - radius,
+                                                  width: radius * 2, height: radius * 2))
         }
         radar.path = rp
+        radarEnemyContacts.path = enemyContacts
+        radarProjectileGlow.path = projectileHalos
+        radarProjectileCore.path = projectileDots
 
         let cx = w / 2
         let cy = c.horizon + 18
