@@ -1,0 +1,13 @@
+name: macOS build
+on:
+  push:
+  pull_request:
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Geometry smoke test
+        run: bash Tests/check-geometry.sh
+      - name: Build Vector Siege
+        run: xcodebuild -project VectorSiege.xcodeproj -scheme VectorSiege -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO build
