@@ -96,6 +96,8 @@ final class BattlefieldScene: SKScene {
     private let structures = SKShapeNode()
     private let opponentLines = SKShapeNode()
     private let shotLines = SKShapeNode()
+    private let modernFriendlyShells = SKShapeNode()
+    private let modernHostileShells = SKShapeNode()
     private let flashLines = SKShapeNode()
     private let reticle = SKShapeNode()
     private let radar = SKShapeNode()
@@ -157,7 +159,9 @@ final class BattlefieldScene: SKScene {
 
         for (layer, z) in [
             (farSkyline, 1.0), (skyline, 2.0), (ground, 3.0), (structures, 4.0),
-            (opponentLines, 5.0), (shotLines, 6.0), (flashLines, 7.0),
+            (opponentLines, 5.0), (shotLines, 6.0),
+            (modernFriendlyShells, 6.2), (modernHostileShells, 6.3),
+            (flashLines, 7.0),
             (scanlines, 8.0), (reticle, 10.0), (hudLines, 12.0), (radar, 13.0)
         ] {
             layer.zPosition = z
@@ -626,7 +630,9 @@ final class BattlefieldScene: SKScene {
         for (node, color, width, glow) in [
             (farSkyline, muted.withAlphaComponent(0.55), 1.0, 0.0),
             (skyline, green.withAlphaComponent(0.75), 1.25, displayMode == .classic ? 0.35 : 2.2),
-            (ground, muted, 0.85, displayMode == .classic ? 0 : 0.7),
+            (ground, displayMode == .classic ? muted.withAlphaComponent(0.34) : muted,
+             displayMode == .classic ? 0.65 : 0.85,
+             displayMode == .classic ? 0.0 : 0.7),
             (structures, green.withAlphaComponent(0.82), 1.5, displayMode == .classic ? 0.35 : 2.6),
             (opponentLines, green, 2.0, displayMode == .classic ? 0.7 : 4.0),
             (shotLines, accent, 2.5, displayMode == .classic ? 0.8 : 5),
@@ -640,6 +646,15 @@ final class BattlefieldScene: SKScene {
             node.glowWidth = CGFloat(glow)
         }
         let modern = displayMode == .modern
+        modernFriendlyShells.isHidden = !modern
+        modernHostileShells.isHidden = !modern
+        modernFriendlyShells.strokeColor = NSColor(calibratedRed: 1, green: 0.89, blue: 0.35, alpha: 0.98)
+        modernHostileShells.strokeColor = NSColor(calibratedRed: 1, green: 0.40, blue: 0.22, alpha: 0.94)
+        for shellNode in [modernFriendlyShells, modernHostileShells] {
+            shellNode.fillColor = .clear
+            shellNode.lineWidth = 1.65
+            shellNode.glowWidth = modern ? 3.5 : 0
+        }
         glassLayer.isHidden = !modern
         for band in skyBands { band.isHidden = !modern }
         for layer in [distantMountains, middleMountains, nearMountains, horizonMist] {
@@ -701,7 +716,7 @@ final class BattlefieldScene: SKScene {
                                                + 0.012 * sin(gameClock * 11.5))
         worldCamera.cameraLateral = driveAmount * 0.018 * sin(gameClock * 19)
                                    + turnAmount * 0.024 * sin(gameClock * 15.3)
-        worldCamera.pitchPoints = suspension.pitch * 122
+        worldCamera.pitchPoints = suspension.pitch * 138
                                   + driveAmount * 0.9 * sin(gameClock * 21)
         renderMountains(worldCamera)
         renderGround(worldCamera)
@@ -797,16 +812,21 @@ final class BattlefieldScene: SKScene {
 
     private func renderGround(_ c: CameraProjection) {
         let path = CGMutablePath()
-        // A subtle near-field reference grid in Modern; the original's empty plane in Classic.
-        if displayMode == .modern {
-            let baseX = floor(tankPosition.x / 12) * 12
-            let baseZ = floor(tankPosition.z / 12) * 12
-            for k in -13...13 {
-                let x = baseX + Double(k) * 12
-                line(path, WorldPoint(x, 0, baseZ - 155), WorldPoint(x, 0, baseZ + 155), c)
-                let z = baseZ + Double(k) * 12
-                line(path, WorldPoint(baseX - 155, 0, z), WorldPoint(baseX + 155, 0, z), c)
-            }
+        // A world-anchored perspective grid in both modes. Classic uses wider,
+        // dimmer green lines while Modern preserves its existing denser grid.
+        let classic = displayMode == .classic
+        let spacing = classic ? 18.0 : 12.0
+        let extent = classic ? 144.0 : 156.0
+        let count = classic ? 8 : 13
+        let baseX = floor(tankPosition.x / spacing) * spacing
+        let baseZ = floor(tankPosition.z / spacing) * spacing
+        for k in -count...count {
+            let x = baseX + Double(k) * spacing
+            line(path, WorldPoint(x, 0, baseZ - extent),
+                 WorldPoint(x, 0, baseZ + extent), c)
+            let z = baseZ + Double(k) * spacing
+            line(path, WorldPoint(baseX - extent, 0, z),
+                 WorldPoint(baseX + extent, 0, z), c)
         }
         ground.path = path
     }
@@ -1088,15 +1108,64 @@ final class BattlefieldScene: SKScene {
 
     private func renderProjectiles(_ c: CameraProjection) {
         let bulletPath = CGMutablePath()
+        let friendlyWire = CGMutablePath()
+        let hostileWire = CGMutablePath()
         for shell in shells {
             let height = shell.hostile ? 1.5 : 1.65
-            let p = WorldPoint(shell.center, height: height)
-            let tail = shell.center - shell.direction * (shell.hostile ? 2.4 : 3.8)
-            line(bulletPath, p, WorldPoint(tail, height: height), c)
-            line(bulletPath, WorldPoint(shell.center.x, height-0.28, shell.center.z),
-                 WorldPoint(shell.center.x, height+0.28, shell.center.z), c)
+            if displayMode == .classic {
+                // Preserve the original compact tracer in Classic.
+                let p = WorldPoint(shell.center, height: height)
+                let tail = shell.center - shell.direction * (shell.hostile ? 2.4 : 3.8)
+                line(bulletPath, p, WorldPoint(tail, height: height), c)
+                line(bulletPath, WorldPoint(shell.center.x, height-0.28, shell.center.z),
+                     WorldPoint(shell.center.x, height+0.28, shell.center.z), c)
+            } else {
+                // Modern rounds are small three-dimensional wireframe darts:
+                // pointed nose, two diamond rings, longitudinal ribs and
+                // stabilizing fins. Their actual physics remain unchanged.
+                let path = shell.hostile ? hostileWire : friendlyWire
+                let direction = shell.direction.normalized
+                let lateral = GroundPoint(direction.z, -direction.x)
+                let radius = shell.hostile ? 0.26 : 0.38
+                let tip = shell.center + direction * 1.2
+                let middle = shell.center + direction * 0.15
+                let rear = shell.center - direction * 0.75
+                let end = shell.center - direction * 1.55
+                func vertex(_ center: GroundPoint, _ side: Double, _ rise: Double) -> WorldPoint {
+                    WorldPoint(center.x + lateral.x * side, height + rise,
+                               center.z + lateral.z * side)
+                }
+                let nose = vertex(tip, 0, 0)
+                let tailTip = vertex(end, 0, 0)
+                let frontRing = [
+                    vertex(middle, radius, 0), vertex(middle, 0, radius),
+                    vertex(middle, -radius, 0), vertex(middle, 0, -radius)
+                ]
+                let backRing = [
+                    vertex(rear, radius * 0.75, 0), vertex(rear, 0, radius * 0.75),
+                    vertex(rear, -radius * 0.75, 0), vertex(rear, 0, -radius * 0.75)
+                ]
+                for i in 0..<4 {
+                    let next = (i + 1) % 4
+                    line(path, nose, frontRing[i], c)
+                    line(path, frontRing[i], frontRing[next], c)
+                    line(path, frontRing[i], backRing[i], c)
+                    line(path, backRing[i], backRing[next], c)
+                    line(path, backRing[i], tailTip, c)
+                }
+                for side in [-1.0, 1.0] {
+                    let fin = vertex(end, side * radius * 1.65, 0)
+                    line(path, frontRing[side > 0 ? 0 : 2], fin, c)
+                    line(path, fin, tailTip, c)
+                }
+                // A narrow illuminated tracer axis makes fast rounds readable
+                // without changing their position or hit detection.
+                line(path, nose, tailTip, c)
+            }
         }
         shotLines.path = bulletPath
+        modernFriendlyShells.path = friendlyWire
+        modernHostileShells.path = hostileWire
 
         let flarePath = CGMutablePath()
         for spark in sparks {

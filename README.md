@@ -43,6 +43,12 @@ Vector Siege now has **Vector Drift-inspired cockpit telemetry panels** with sub
 
 Use **Copy Feedback** in the toolbar to copy a plaintext playtest snapshot (mode, difficulty, game state, wave, score, position, heading, speed, target offset, shots, hits, FPS, enemy/projectile counts, shield, and elapsed gameplay). Paste the snapshot into a bug report or this chat. **No telemetry is automatically uploaded or transmitted**; copying only accesses the local clipboard. A crash cannot be captured by the in-app button after the game has terminated; macOS crash diagnostics are separate.
 
+## v0.6 — classic terrain grid, modern shell mesh, stronger suspension dip
+
+- **Classic:** a restrained, dim-green world-anchored perspective grid is now drawn on the terrain, using wider 18-unit spacing. It flows naturally as the tank moves and turns.
+- **Modern:** flying shells now render as illuminated 3D wireframe darts with pointed noses, four-sided ring cross-sections, longitudinal struts, and tail fins. Friendly rounds are yellow-gold; enemy rounds remain red-orange. The projectile physics, radar detection, ammo, and reload rules are unchanged.
+- **Tank suspension:** a moderately stronger nose dip when starting and stopping (about 25–40% more visual response) with the same spring damping. The view responds; gun aim and heading stay accurate.
+
 ## v0.5 — vehicle feel, detailed Modern tanks and radar projectiles
 
 - **Movement audio:** a low procedural engine rumble grows with forward/reverse speed and a separate soft tread rattle builds while turning. Both fade out at rest, pause or game over; the existing Sound toggle controls them. No extra sound assets are required.

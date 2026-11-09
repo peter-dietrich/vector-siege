@@ -141,8 +141,8 @@ struct TankSuspension {
         let delta = speed - lastSpeed
         lastSpeed = speed
         // A speed change kicks the hull; spring and damping then settle it.
-        pitchVelocity -= delta * 0.11
+        pitchVelocity -= delta * 0.14
         pitchVelocity += (-54 * pitch - 10.5 * pitchVelocity) * step
-        pitch = min(0.10, max(-0.10, pitch + pitchVelocity * step))
+        pitch = min(0.125, max(-0.125, pitch + pitchVelocity * step))
     }
 }

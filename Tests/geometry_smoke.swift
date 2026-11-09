@@ -53,11 +53,11 @@ struct GeometrySmoke {
         // independent of suspension pitch and lateral shudder.
         var suspension = TankSuspension()
         suspension.update(speed: 12, dt: 1.0 / 60.0)
-        precondition(abs(suspension.pitch) > 0.0001, "Acceleration should pitch the hull")
+        precondition(abs(suspension.pitch) > 0.020, "Acceleration should visibly pitch the hull")
         for _ in 0..<120 { suspension.update(speed: 12, dt: 1.0 / 60.0) }
         precondition(abs(suspension.pitch) < 0.001, "Suspension should settle")
         suspension.update(speed: 0, dt: 1.0 / 60.0)
-        precondition(abs(suspension.pitch) > 0.0001, "Braking should dip / rebound")
+        precondition(abs(suspension.pitch) > 0.020, "Braking should visibly dip / rebound")
         for _ in 0..<120 { suspension.update(speed: 0, dt: 1.0 / 60.0) }
         precondition(abs(suspension.pitch) < 0.001, "Stopping wobble should decay")
         suspension.reset()
