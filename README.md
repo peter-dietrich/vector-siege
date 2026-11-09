@@ -43,6 +43,12 @@ Vector Siege now has **Vector Drift-inspired cockpit telemetry panels** with sub
 
 Use **Copy Feedback** in the toolbar to copy a plaintext playtest snapshot (mode, difficulty, game state, wave, score, position, heading, speed, target offset, shots, hits, FPS, enemy/projectile counts, shield, and elapsed gameplay). Paste the snapshot into a bug report or this chat. **No telemetry is automatically uploaded or transmitted**; copying only accesses the local clipboard. A crash cannot be captured by the in-app button after the game has terminated; macOS crash diagnostics are separate.
 
+## v0.4 — faster cannon and Modern scenery
+
+- Player cannon reload is a fixed **1 second**, keeping the existing 40-round capacity. Multiple friendly shells can travel simultaneously; the cooldown, not the prior shell's lifespan, controls firing.
+- **Modern** graphics now feature a ten-band dark atmospheric sky gradient, three filled mountain silhouettes with different ridge profiles and parallax, a subtle horizon-mist band, and translucent cyan/teal glass-faced blocks and pyramids. Glass faces are clipped against the camera near plane, sorted by depth, and drawn below their bright vector outlines.
+- **Classic** remains the original green-wireframe treatment. Rendering-only changes preserve obstacle positions, collision geometry, difficulty and score.
+
 ## v0.3 — ammunition and coordinate telemetry
 
 Both **Classic** and **Modern** graphics use the same cannon ammunition mechanics:
