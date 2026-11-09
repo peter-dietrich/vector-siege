@@ -18,6 +18,13 @@ struct GeometrySmoke {
         precondition(crossed.0.0.isFinite && crossed.1.0.isFinite)
         precondition(abs(facing(.pi/2).x - 1) < 0.0001)
         precondition(abs(wrapAngle(3 * .pi) - .pi) < 0.0001)
-        print("Perspective, clipping, movement and angle smoke checks passed.")
+        precondition(abs(PrecisionSteering.tapAngle - .pi / 360) < 1e-12)
+        precondition(PrecisionSteering.heldRate(elapsed: 0.02) == 0)
+        precondition(PrecisionSteering.heldRate(elapsed: PrecisionSteering.holdDelay) == 0)
+        precondition(PrecisionSteering.heldRate(elapsed: 0.20) > 0)
+        precondition(PrecisionSteering.heldRate(elapsed: 0.70) >
+                     PrecisionSteering.heldRate(elapsed: 0.20))
+        precondition(PrecisionSteering.heldRate(elapsed: 10) < 2.0)
+        print("Perspective, clipping, movement, angle and precision steering checks passed.")
     }
 }
