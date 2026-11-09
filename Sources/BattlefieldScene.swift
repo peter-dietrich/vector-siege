@@ -1,5 +1,6 @@
 import SpriteKit
 import AppKit
+import AVFoundation
 
 private struct Obstacle {
     enum Kind { case block, pyramid }
@@ -56,6 +57,9 @@ final class BattlefieldScene: SKScene {
     private var tankPosition = GroundPoint(0, 0)
     private var heading: Double = 0
     private var driveSpeed: Double = 0
+    private var turnMotion: Double = 0
+    private var suspension = TankSuspension()
+    private lazy var movementAudio = TankMotionAudio()
     private var steerHoldSeconds: Double = 0
     private var previousSteerDirection: Double = 0
     private var score = 0
@@ -276,6 +280,8 @@ final class BattlefieldScene: SKScene {
         hitsLanded = 0
         observedFPS = 60
         driveSpeed = 0
+        turnMotion = 0
+        suspension.reset()
         heading = 0
         steerHoldSeconds = 0
         previousSteerDirection = 0
@@ -304,6 +310,11 @@ final class BattlefieldScene: SKScene {
         if round != .paused { gameClock += dt }
         if round == .playing { tick(dt) }
         if round == .title { pulse += dt }
+        let playing = round == .playing
+        movementAudio.update(
+            moving: playing ? min(1, abs(driveSpeed) / 16.5) : 0,
+            turning: playing ? turnMotion : 0,
+            enabled: playing && soundOn, dt: max(dt, 0.016))
         render()
     }
 
@@ -343,6 +354,10 @@ final class BattlefieldScene: SKScene {
             if !blocked(proposed, radius: 1.6) { tankPosition = proposed }
             else { driveSpeed *= -0.12 }
         }
+        // Suspension reacts to braking and collisions; a damped rebound dies away
+        // instead of drifting the actual tank heading or changing its shot trajectory.
+        suspension.update(speed: driveSpeed, dt: dt)
+        turnMotion += (abs(turn) - turnMotion) * min(1, dt * 12)
         if key(49) && cannon.canFire {
             firePlayer()
         }
@@ -659,10 +674,21 @@ final class BattlefieldScene: SKScene {
         guard w > 100 && h > 100 else { return }
         let camera = CameraProjection(position: tankPosition, yaw: heading,
                                       viewportWidth: w, viewportHeight: h)
-        renderMountains(camera)
-        renderGround(camera)
-        renderObjects(camera)
-        renderProjectiles(camera)
+        var worldCamera = camera
+        let driveAmount = min(1.0, abs(driveSpeed) / 16.5)
+        let turnAmount = min(1.0, turnMotion)
+        // Small patterned shudder reads as track vibration, but the sight / HUD
+        // stays fixed on the actual aim axis for precise, repeatable targeting.
+        worldCamera.eyeHeight += driveAmount * (0.015 * sin(gameClock * 24)
+                                               + 0.012 * sin(gameClock * 11.5))
+        worldCamera.cameraLateral = driveAmount * 0.018 * sin(gameClock * 19)
+                                   + turnAmount * 0.024 * sin(gameClock * 15.3)
+        worldCamera.pitchPoints = suspension.pitch * 122
+                                  + driveAmount * 0.9 * sin(gameClock * 21)
+        renderMountains(worldCamera)
+        renderGround(worldCamera)
+        renderObjects(worldCamera)
+        renderProjectiles(worldCamera)
         renderHUD(camera)
     }
 
@@ -1143,5 +1169,93 @@ final class BattlefieldScene: SKScene {
             }
             scanlines.path = sl
         } else { scanlines.path = nil }
+    }
+}
+
+// Two low-level, seamlessly repeating procedural sounds. No external samples:
+// AVAudioPlayer manages simple loops; volume tracks vehicle speed and steering.
+private final class TankMotionAudio {
+    private var engine: AVAudioPlayer?
+    private var treads: AVAudioPlayer?
+    private var driveLevel = 0.0
+    private var turnLevel = 0.0
+
+    init() {
+        engine = try? AVAudioPlayer(data: Self.makeWAV(treads: false))
+        treads = try? AVAudioPlayer(data: Self.makeWAV(treads: true))
+        for player in [engine, treads] {
+            player?.numberOfLoops = -1
+            player?.volume = 0
+            player?.prepareToPlay()
+        }
+    }
+
+    func update(moving: Double, turning: Double, enabled: Bool, dt: Double) {
+        let desiredDrive = enabled ? max(0, min(1, moving)) : 0
+        let desiredTurn = enabled ? max(0, min(1, turning)) : 0
+        let factor = min(1, max(0, dt) * 6)
+        driveLevel += (desiredDrive - driveLevel) * factor
+        turnLevel += (desiredTurn - turnLevel) * factor
+        if desiredDrive > 0.001 || desiredTurn > 0.001 {
+            if engine?.isPlaying == false { engine?.play() }
+            if treads?.isPlaying == false { treads?.play() }
+        }
+        engine?.volume = Float(driveLevel * 0.16)
+        treads?.volume = Float(turnLevel * 0.12)
+        if !enabled && driveLevel < 0.002 && turnLevel < 0.002 {
+            engine?.stop()
+            treads?.stop()
+        }
+    }
+
+    private static func makeWAV(treads: Bool) -> Data {
+        let rate = 22_050
+        let samples = rate * 2
+        var bytes = Data(capacity: 44 + samples * 2)
+        func put16(_ number: UInt16) {
+            bytes.append(UInt8(truncatingIfNeeded: number))
+            bytes.append(UInt8(truncatingIfNeeded: number >> 8))
+        }
+        func put32(_ number: UInt32) {
+            put16(UInt16(truncatingIfNeeded: number))
+            put16(UInt16(truncatingIfNeeded: number >> 16))
+        }
+        bytes.append(contentsOf: [82, 73, 70, 70]) // RIFF
+        put32(UInt32(36 + samples * 2))
+        bytes.append(contentsOf: [87, 65, 86, 69, 102, 109, 116, 32]) // WAVEfmt
+        put32(16)
+        put16(1) // uncompressed PCM
+        put16(1) // mono
+        put32(UInt32(rate))
+        put32(UInt32(rate * 2))
+        put16(2)
+        put16(16)
+        bytes.append(contentsOf: [100, 97, 116, 97]) // data
+        put32(UInt32(samples * 2))
+        var seed: UInt32 = treads ? 0xC2D6_6A11 : 0x95F2_A41B
+        var lowNoise = 0.0
+        let twoPi = 2.0 * Double.pi
+        for i in 0..<samples {
+            let t = Double(i) / Double(rate)
+            seed = 1_664_525 &* seed &+ 1_013_904_223
+            let noise = Double((seed >> 12) & 0xFFFF) / 32767.5 - 1
+            lowNoise = 0.87 * lowNoise + 0.13 * noise
+            let signal: Double
+            if treads {
+                let chatter = 0.45 + 0.55 * abs(sin(twoPi * 12.7 * t))
+                signal = chatter * (0.55 * lowNoise + 0.12 * noise)
+                         + 0.13 * sin(twoPi * 76 * t) * chatter
+            } else {
+                let idle = 0.40 * sin(twoPi * 43 * t)
+                           + 0.20 * sin(twoPi * 86 * t)
+                           + 0.12 * sin(twoPi * 129 * t)
+                signal = idle + 0.55 * lowNoise + 0.09 * noise
+            }
+            // A short fade at loop boundaries prevents sudden sample discontinuity.
+            let blend = min(1, Double(min(i, samples - 1 - i)) / 500)
+            let clamped = max(-1.0, min(1.0, signal * blend * 0.75))
+            put16(UInt16(bitPattern: Int16((clamped * 32767).rounded())))
+        }
+        return bytes
     }
 }
