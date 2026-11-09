@@ -31,10 +31,17 @@ Xcode may need to create the scheme when the project first opens; it normally ge
 | **P** | Pause / resume |
 | **R** | Start a new game |
 | **C** | Toggle Classic/Modern graphics in-game |
+| **T** | Toggle detailed local telemetry (FPS, world coordinates, enemies, shells) |
 | **I / K** | Left tread forward / backward |
 | **O / L** | Right tread forward / backward |
 
 The two tread controls can be used simultaneously, arcade-style: **I+O** moves forward, **K+L** reverses, **I+L** turns right in place, and **K+O** turns left in place. Standard arrow/WASD controls work as a simpler alternative.
+
+## v0.2 playtest feedback and telemetry
+
+Vector Siege now has **Vector Drift-inspired cockpit telemetry panels** with subtle amber headings and green vector readouts. The left radar/targeting panel shows tank heading, drive speed, nearest forward target distance, angular aim offset, and cumulative shots/hits/accuracy. The right panel tracks score, best score, current wave, lives, difficulty, and shield readiness. Press **T** to show/hide additional runtime diagnostics (smoothed FPS, world coordinates, enemy count, active projectiles).
+
+Use **Copy Feedback** in the toolbar to copy a plaintext playtest snapshot (mode, difficulty, game state, wave, score, position, heading, speed, target offset, shots, hits, FPS, enemy/projectile counts, shield, and elapsed gameplay). Paste the snapshot into a bug report or this chat. **No telemetry is automatically uploaded or transmitted**; copying only accesses the local clipboard. A crash cannot be captured by the in-app button after the game has terminated; macOS crash diagnostics are separate.
 
 ## What's in v0.1
 
