@@ -43,6 +43,13 @@ Vector Siege now has **Vector Drift-inspired cockpit telemetry panels** with sub
 
 Use **Copy Feedback** in the toolbar to copy a plaintext playtest snapshot (mode, difficulty, game state, wave, score, position, heading, speed, target offset, shots, hits, FPS, enemy/projectile counts, shield, and elapsed gameplay). Paste the snapshot into a bug report or this chat. **No telemetry is automatically uploaded or transmitted**; copying only accesses the local clipboard. A crash cannot be captured by the in-app button after the game has terminated; macOS crash diagnostics are separate.
 
+## v0.5 — vehicle feel, detailed Modern tanks and radar projectiles
+
+- **Movement audio:** a low procedural engine rumble grows with forward/reverse speed and a separate soft tread rattle builds while turning. Both fade out at rest, pause or game over; the existing Sound toggle controls them. No extra sound assets are required.
+- **Vehicle suspension:** subtle lateral camera shudder while moving and turning, fine vertical track vibration, and a damped nose dip/rebound as acceleration or braking changes. These are visual-only offsets: physical position, heading, reticle, shooting direction and collision calculations stay stable.
+- **Modern tank geometry:** sloped hull armor, armored side skirts, segmented tread shoes, individual road wheels, turret cheek plating, roof hatch, optics, reinforced cannon, exhaust/engine louvers, tow loops, and antenna. Classic retains the original simple wireframe tank.
+- **Radar upgrade:** moving friendly and hostile shell positions appear as **yellow glowing blips** on the existing heading-relative radar (friendly shells slightly larger); red enemy contacts remain distinct. Radar tracks every live shell inside its normal 105-unit detection radius.
+
 ## v0.4 — faster cannon and Modern scenery
 
 - Player cannon reload is a fixed **1 second**, keeping the existing 40-round capacity. Multiple friendly shells can travel simultaneously; the cooldown, not the prior shell's lifespan, controls firing.
