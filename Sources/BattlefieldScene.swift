@@ -313,7 +313,7 @@ final class BattlefieldScene: SKScene {
             if !blocked(proposed, radius: 1.6) { tankPosition = proposed }
             else { driveSpeed *= -0.12 }
         }
-        if key(49) && cannon.canFire && !shells.contains(where: { !$0.hostile }) {
+        if key(49) && cannon.canFire {
             firePlayer()
         }
 
@@ -549,7 +549,7 @@ final class BattlefieldScene: SKScene {
         Target: \(target)
         Shots: \(shotsFired)  Hits: \(hitsLanded)  Accuracy: \(String(format: "%.1f%%", accuracy))
         Ammo: \(cannon.roundsRemaining)/\(CannonMagazine.capacity)  Cannon: \(cannon.statusText)
-        Last reload duration: \(String(format: "%.2f", cannon.lastReloadDuration)) seconds (random 3–5s)
+        Last reload duration: \(String(format: "%.2f", cannon.lastReloadDuration)) seconds (fixed 1s)
         Enemies: \(enemies.count)  Projectiles: \(shells.count)
         FPS (smoothed): \(String(format: "%.1f", observedFPS))
         Shield: \(shieldDuration > 0 ? "Active" : shieldCooldown > 0 ? "Recharging" : "Ready")

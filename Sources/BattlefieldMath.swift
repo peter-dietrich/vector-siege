@@ -85,12 +85,12 @@ enum PrecisionSteering {
 }
 
 
-/// 40-shot player cannon with a fresh 3–5 second reload after every shot.
+/// 40-shot player cannon with a fixed one-second reload after every shot.
 /// Shared by Classic and Modern display modes.
 struct CannonMagazine {
     static let capacity = 40
-    static let minimumReload = 3.0
-    static let maximumReload = 5.0
+    static let minimumReload = 1.0
+    static let maximumReload = 1.0
 
     private(set) var roundsRemaining = capacity
     private(set) var reloadRemaining: Double = 0

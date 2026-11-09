@@ -26,7 +26,7 @@ Xcode may need to create the scheme when the project first opens; it normally ge
 | **↓ / S** | Reverse |
 | **← / A** | Rotate left |
 | **→ / D** | Rotate right |
-| **Space** | Fire cannon (40 rounds, random 3–5 second reload per shot) |
+| **Space** | Fire cannon (40 rounds, fixed 1-second reload per shot) |
 | **Shift** | Activate brief protective energy shield (cooldown) |
 | **P** | Pause / resume |
 | **R** | Start a new game |
@@ -48,10 +48,10 @@ Use **Copy Feedback** in the toolbar to copy a plaintext playtest snapshot (mode
 Both **Classic** and **Modern** graphics use the same cannon ammunition mechanics:
 
 - 40 rounds per new game/deployment; each successful shot consumes one round.
-- Each shot triggers a newly randomized **3–5-second reload**. The cooldown is unaffected by display mode and difficulty. The shot key cannot bypass reloading.
+- Each shot triggers a fixed **1-second reload**. The cooldown is unaffected by display mode and difficulty. The shot key cannot bypass reloading.
 - **AMMO 39/40 RELOAD 4.2s**, **AMMO 39/40 READY** or **AMMO 00/40 EMPTY** appear continuously in the right telemetry panel. No automatic ammunition refills occur between waves; New Game/redeploy restores 40.
 - The left panel continuously shows **POSITION X, Z** in battlefield world units. It updates as the tank moves without pressing T.
-- **Copy Feedback** includes remaining ammunition, cannon reload status, and the most recent randomized reload duration.
+- **Copy Feedback** includes remaining ammunition, cannon reload status, and the most recent reload duration.
 
 Enemy attack timing is unchanged.
 
