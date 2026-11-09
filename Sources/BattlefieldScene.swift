@@ -89,10 +89,10 @@ final class BattlefieldScene: SKScene {
     private let subtitle = SKLabelNode(fontNamed: "Menlo")
     private let message = SKLabelNode(fontNamed: "Menlo")
     private let scanlines = SKShapeNode()
-    private let telemetryLeftPanel = SKShapeNode(rectOf: CGSize(width: 390, height: 148), cornerRadius: 9)
-    private let telemetryRightPanel = SKShapeNode(rectOf: CGSize(width: 330, height: 148), cornerRadius: 9)
-    private let telemetryLeftAccent = SKShapeNode(rectOf: CGSize(width: 3, height: 150))
-    private let telemetryRightAccent = SKShapeNode(rectOf: CGSize(width: 3, height: 150))
+    private let telemetryLeftPanel = SKShapeNode(rectOf: CGSize(width: 390, height: 152), cornerRadius: 9)
+    private let telemetryRightPanel = SKShapeNode(rectOf: CGSize(width: 330, height: 152), cornerRadius: 9)
+    private let telemetryLeftAccent = SKShapeNode(rectOf: CGSize(width: 3, height: 130))
+    private let telemetryRightAccent = SKShapeNode(rectOf: CGSize(width: 3, height: 130))
     private let telemetryLeftHeading = SKLabelNode(fontNamed: "Menlo-Bold")
     private let telemetryRightHeading = SKLabelNode(fontNamed: "Menlo-Bold")
     private let telemetryLeftDetail = SKLabelNode(fontNamed: "Menlo")
@@ -158,11 +158,15 @@ final class BattlefieldScene: SKScene {
         telemetryRightDetail.horizontalAlignmentMode = .right
         telemetryRightFootnote.horizontalAlignmentMode = .right
         telemetryAmmo.horizontalAlignmentMode = .right
-        for headingNode in [telemetryLeftHeading, telemetryRightHeading] {
-            headingNode.fontSize = 10
-        }
-        for detail in [telemetryLeftDetail, telemetryRightDetail] { detail.fontSize = 11 }
-        for footnote in [telemetryLeftFootnote, telemetryRightFootnote, telemetryCoordinates, telemetryAmmo] { footnote.fontSize = 10 }
+        // Deliberate hierarchy: small section captions, medium supporting readouts,
+        // and larger speed, score and ammunition values. Keep rows tightly stacked.
+        for headingNode in [telemetryLeftHeading, telemetryRightHeading] { headingNode.fontSize = 9 }
+        telemetryLeftDetail.fontSize = 11
+        telemetryRightDetail.fontSize = 11
+        telemetryLeftFootnote.fontSize = 9
+        telemetryRightFootnote.fontSize = 10
+        telemetryCoordinates.fontSize = 10
+        telemetryAmmo.fontSize = 13
 
         for (label, z) in [(leftHUD, 14.0), (rightHUD, 14.0), (midHUD, 14.0),
                            (warning, 15.0), (banner, 20.0), (subtitle, 20.0), (message, 20.0)] {
@@ -809,13 +813,13 @@ final class BattlefieldScene: SKScene {
         let rp = CGMutablePath()
         let sight = CGMutablePath()
         let radarX = 90.0
-        let radarY = h - 97
-        let radarRadius = 43.0
+        let radarY = h - 92
+        let radarRadius = 39.0
 
-        // Symmetric corner instruments leave a clear central sight line.
+        // Compact corner instruments: fewer blank vertical gaps, more playfield visible.
         let leftPanelWidth = 390.0
         let rightPanelWidth = 330.0
-        let panelHeight = 174.0
+        let panelHeight = 152.0
         func panelRect(width: Double) -> CGPath {
             CGPath(roundedRect: CGRect(x: -width / 2, y: -panelHeight / 2,
                                        width: width, height: panelHeight),
@@ -823,20 +827,20 @@ final class BattlefieldScene: SKScene {
         }
         telemetryLeftPanel.path = panelRect(width: leftPanelWidth)
         telemetryRightPanel.path = panelRect(width: rightPanelWidth)
-        telemetryLeftPanel.position = point(14 + leftPanelWidth / 2, h - 95)
-        telemetryRightPanel.position = point(w - 14 - rightPanelWidth / 2, h - 95)
-        telemetryLeftAccent.position = point(20, h - 95)
-        telemetryRightAccent.position = point(w - 20, h - 95)
-        telemetryLeftHeading.position = point(162, h - 43)
-        telemetryRightHeading.position = point(w - 34, h - 43)
-        telemetryLeftDetail.position = point(162, h - 99)
-        telemetryLeftFootnote.position = point(162, h - 127)
-        telemetryCoordinates.position = point(162, h - 152)
-        telemetryRightDetail.position = point(w - 34, h - 103)
-        telemetryRightFootnote.position = point(w - 34, h - 132)
-        telemetryAmmo.position = point(w - 34, h - 157)
-        // A slim radar divider belongs to the left panel rather than crossing the view.
-        segment(hp, point(149, h - 143), point(149, h - 48))
+        telemetryLeftPanel.position = point(14 + leftPanelWidth / 2, h - 81)
+        telemetryRightPanel.position = point(w - 14 - rightPanelWidth / 2, h - 81)
+        telemetryLeftAccent.position = point(20, h - 81)
+        telemetryRightAccent.position = point(w - 20, h - 81)
+        telemetryLeftHeading.position = point(162, h - 33)
+        telemetryRightHeading.position = point(w - 34, h - 33)
+        telemetryLeftDetail.position = point(162, h - 81)
+        telemetryLeftFootnote.position = point(162, h - 104)
+        telemetryCoordinates.position = point(162, h - 127)
+        telemetryRightDetail.position = point(w - 34, h - 81)
+        telemetryRightFootnote.position = point(w - 34, h - 104)
+        telemetryAmmo.position = point(w - 34, h - 129)
+        // Slim radar divider, shortened to match the compressed instrument panel.
+        segment(hp, point(149, h - 136), point(149, h - 48))
         hudLines.path = hp
 
         let circle = CGRect(x: radarX - radarRadius, y: radarY - radarRadius,
@@ -878,13 +882,13 @@ final class BattlefieldScene: SKScene {
         reticle.strokeColor = invulnerability > 0 && Int(gameClock * 9).isMultiple(of: 2)
             ? accent : (shieldDuration > 0 ? green : accent)
 
-        leftHUD.position = point(radarX, h - 41)
+        leftHUD.position = point(radarX, h - 33)
         leftHUD.horizontalAlignmentMode = .center
-        leftHUD.fontSize = 11
+        leftHUD.fontSize = 9
         leftHUD.text = "RADAR / 105"
-        midHUD.position = point(162, h - 72)
+        midHUD.position = point(162, h - 57)
         midHUD.horizontalAlignmentMode = .left
-        midHUD.fontSize = 12
+        midHUD.fontSize = 15
         let compass = Int((heading * 180 / .pi + 360).truncatingRemainder(dividingBy: 360).rounded()) % 360
         midHUD.text = String(format: "HDG %03d°   SPD %05.1f", compass, driveSpeed)
         let target = targetTelemetry()
@@ -894,9 +898,9 @@ final class BattlefieldScene: SKScene {
         let accuracy = shotsFired > 0 ? 100.0 * Double(hitsLanded) / Double(shotsFired) : 0
         telemetryLeftFootnote.text = String(format: "SHOTS %02d  HITS %02d  %.0f%%", shotsFired, hitsLanded, accuracy)
         telemetryCoordinates.text = String(format: "POSITION   X %+.1f   Z %+.1f", tankPosition.x, tankPosition.z)
-        rightHUD.position = point(w - 34, h - 75)
+        rightHUD.position = point(w - 34, h - 57)
         rightHUD.horizontalAlignmentMode = .right
-        rightHUD.fontSize = 12
+        rightHUD.fontSize = 15
         rightHUD.text = String(format: "SCORE %06d  BEST %06d", score, bestScore)
         telemetryRightDetail.text = String(format: "WAVE %02d   LIVES %d   %@", wave, lives, threatLevel.rawValue.uppercased())
         let shieldName = shieldDuration > 0
@@ -908,7 +912,7 @@ final class BattlefieldScene: SKScene {
         telemetryAmmo.text = String(format: "AMMO %02d/%02d   %@", cannon.roundsRemaining,
                                            CannonMagazine.capacity, cannon.statusText)
         telemetryAmmo.fontColor = cannon.isEmpty ? accent : green
-        warning.position = point(w / 2, h - 176)
+        warning.position = point(w / 2, h - 163)
         warning.fontSize = 12
         warning.text = target.map { abs($0.error) < 0.055 && $0.range < 68 ? "TARGET ALIGNED" : "" }
             ?? (pendingWave > 0 ? "AREA SECURE" : "")
