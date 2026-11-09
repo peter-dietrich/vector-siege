@@ -89,6 +89,14 @@ struct SiegeWindow: View {
                 .toggleStyle(.button)
                 .help("Sound effects")
                 Button {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(session.scene.feedbackReport(), forType: .string)
+                } label: {
+                    Label("Copy Feedback", systemImage: "doc.on.clipboard")
+                }
+                .buttonStyle(.bordered)
+                .help("Copy a local playtest snapshot; no automatic uploads")
+                Button {
                     session.scene.restart()
                 } label: {
                     Label("New Game", systemImage: "arrow.clockwise")
