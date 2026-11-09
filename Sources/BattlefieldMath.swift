@@ -83,3 +83,38 @@ enum PrecisionSteering {
         return 0.32 + 1.65 * ramp // 0.32 -> 1.97 rad/sec
     }
 }
+
+
+/// 40-shot player cannon with a fresh 3–5 second reload after every shot.
+/// Shared by Classic and Modern display modes.
+struct CannonMagazine {
+    static let capacity = 40
+    static let minimumReload = 3.0
+    static let maximumReload = 5.0
+
+    private(set) var roundsRemaining = capacity
+    private(set) var reloadRemaining: Double = 0
+    private(set) var lastReloadDuration: Double = 0
+
+    var canFire: Bool { roundsRemaining > 0 && reloadRemaining <= 0 }
+    var isEmpty: Bool { roundsRemaining == 0 }
+
+    var statusText: String {
+        if isEmpty { return "EMPTY" }
+        if reloadRemaining > 0 { return String(format: "RELOAD %.1fs", reloadRemaining) }
+        return "READY"
+    }
+
+    mutating func fire(reloadDuration: Double? = nil) -> Bool {
+        guard canFire else { return false }
+        roundsRemaining -= 1
+        let sampled = reloadDuration ?? Double.random(in: Self.minimumReload...Self.maximumReload)
+        lastReloadDuration = min(Self.maximumReload, max(Self.minimumReload, sampled))
+        reloadRemaining = roundsRemaining > 0 ? lastReloadDuration : 0
+        return true
+    }
+
+    mutating func advance(by dt: Double) {
+        reloadRemaining = max(0, reloadRemaining - max(0, dt))
+    }
+}
