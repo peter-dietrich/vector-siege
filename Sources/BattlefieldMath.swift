@@ -70,3 +70,16 @@ func wrapAngle(_ angle: Double) -> Double {
 }
 
 func facing(_ angle: Double) -> GroundPoint { GroundPoint(sin(angle), cos(angle)) }
+
+/// Fine keyboard aiming: one small step on key-down, then a delayed,
+/// smoothly accelerating turn while the direction is held.
+enum PrecisionSteering {
+    static let tapAngle = Double.pi / 360.0 // 0.5 degree per tap
+    static let holdDelay = 0.12
+
+    static func heldRate(elapsed: Double) -> Double {
+        guard elapsed > holdDelay else { return 0 }
+        let ramp = min(1.0, max(0.0, (elapsed - holdDelay) / 0.45))
+        return 0.32 + 1.65 * ramp // 0.32 -> 1.97 rad/sec
+    }
+}
