@@ -27,14 +27,16 @@ struct CameraProjection {
     var viewportWidth: Double
     var viewportHeight: Double
     var eyeHeight = 1.5
+    var cameraLateral: Double = 0
+    var pitchPoints: Double = 0
 
     var focal: Double { min(viewportWidth * 0.89, viewportHeight * 1.45) }
-    var horizon: Double { viewportHeight * 0.455 }
+    var horizon: Double { viewportHeight * 0.455 + pitchPoints }
 
     func local(_ world: WorldPoint) -> (right: Double, up: Double, forward: Double) {
         let dx = world.x - position.x
         let dz = world.z - position.z
-        return (dx * cos(yaw) - dz * sin(yaw), world.y - eyeHeight,
+        return (dx * cos(yaw) - dz * sin(yaw) - cameraLateral, world.y - eyeHeight,
                 dx * sin(yaw) + dz * cos(yaw))
     }
 
@@ -116,5 +118,31 @@ struct CannonMagazine {
 
     mutating func advance(by dt: Double) {
         reloadRemaining = max(0, reloadRemaining - max(0, dt))
+    }
+}
+
+
+/// A critically damped-ish vehicle suspension with a short nose dip / rebound
+/// on acceleration and braking. Rendering uses this, not actual gun aim.
+struct TankSuspension {
+    private(set) var pitch: Double = 0
+    private(set) var pitchVelocity: Double = 0
+    private(set) var lastSpeed: Double = 0
+
+    mutating func reset() {
+        pitch = 0
+        pitchVelocity = 0
+        lastSpeed = 0
+    }
+
+    mutating func update(speed: Double, dt: Double) {
+        let step = max(0, min(0.04, dt))
+        guard step > 0 else { return }
+        let delta = speed - lastSpeed
+        lastSpeed = speed
+        // A speed change kicks the hull; spring and damping then settle it.
+        pitchVelocity -= delta * 0.11
+        pitchVelocity += (-54 * pitch - 10.5 * pitchVelocity) * step
+        pitch = min(0.10, max(-0.10, pitch + pitchVelocity * step))
     }
 }
