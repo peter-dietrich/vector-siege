@@ -49,6 +49,26 @@ struct GeometrySmoke {
         precondition(!cannon.fire(reloadDuration: 1))
         cannon = CannonMagazine()
         precondition(cannon.canFire && cannon.roundsRemaining == 40)
-        print("Perspective, steering, 40 rounds and fixed 1s reload checks passed.")
+        // Vehicle camera motion is visual only; the simulated tank aim remains
+        // independent of suspension pitch and lateral shudder.
+        var suspension = TankSuspension()
+        suspension.update(speed: 12, dt: 1.0 / 60.0)
+        precondition(abs(suspension.pitch) > 0.0001, "Acceleration should pitch the hull")
+        for _ in 0..<120 { suspension.update(speed: 12, dt: 1.0 / 60.0) }
+        precondition(abs(suspension.pitch) < 0.001, "Suspension should settle")
+        suspension.update(speed: 0, dt: 1.0 / 60.0)
+        precondition(abs(suspension.pitch) > 0.0001, "Braking should dip / rebound")
+        for _ in 0..<120 { suspension.update(speed: 0, dt: 1.0 / 60.0) }
+        precondition(abs(suspension.pitch) < 0.001, "Stopping wobble should decay")
+        suspension.reset()
+        precondition(suspension.pitch == 0 && suspension.pitchVelocity == 0)
+
+        var shakenCamera = c
+        shakenCamera.cameraLateral = 0.02
+        shakenCamera.pitchPoints = -2.5
+        precondition(shakenCamera.horizon != c.horizon)
+        precondition(shakenCamera.local(WorldPoint(0, 0, 20)).right !=
+                     c.local(WorldPoint(0, 0, 20)).right)
+        print("Perspective, steering, ammo, suspension and camera motion checks passed.")
     }
 }
