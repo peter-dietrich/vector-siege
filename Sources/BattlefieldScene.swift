@@ -971,7 +971,9 @@ final class BattlefieldScene: SKScene {
         midHUD.fontColor = cc
         rightHUD.fontColor = cc
         warning.fontColor = accent
-        banner.fontColor = cc
+        banner.fontColor = displayMode == .modern
+            ? NSColor(calibratedRed: 0.18, green: 0.95, blue: 0.98, alpha: 1)
+            : cc
         subtitle.fontColor = cc.withAlphaComponent(0.85)
         message.fontColor = accent
         scanlines.strokeColor = green.withAlphaComponent(displayMode == .classic ? 0.035 : 0.025)
@@ -1042,7 +1044,9 @@ final class BattlefieldScene: SKScene {
         radarObstacleContacts.fillColor = muted.withAlphaComponent(0.55)
         radarObstacleContacts.lineWidth = 0.7
         for rail in [telemetryLeftAccent, telemetryRightAccent] { rail.fillColor = amber }
-        for label in [telemetryLeftHeading, telemetryRightHeading] { label.fontColor = amber }
+        for label in [telemetryLeftHeading, telemetryRightHeading] {
+            label.fontColor = modern ? cyan : amber
+        }
         for label in [telemetryLeftDetail, telemetryLeftFootnote, telemetryCoordinates,
                       telemetryRightDetail, telemetryRightFootnote, telemetryAmmo] {
             label.fontColor = green.withAlphaComponent(0.86)
