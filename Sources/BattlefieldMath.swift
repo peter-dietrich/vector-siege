@@ -178,6 +178,12 @@ struct TankSuspension {
 }
 
 
+/// Shared baseline movement speeds (before skill/custom multipliers).
+/// Saucer motion was reduced from 1.10 to 0.33, a 70% decrease.
+enum EnemyMotion {
+    static let saucerBaseSpeed = 0.33
+}
+
 /// Spread initial enemies into angular sectors instead of clustering around
 /// a random heading. Reject any overlap with previous spawns or level geometry.
 enum EnemySpawnLayout {
