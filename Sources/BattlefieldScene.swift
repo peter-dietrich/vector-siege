@@ -165,6 +165,11 @@ final class BattlefieldScene: SKScene {
     private let modernTrim = SKShapeNode()
     private let modernLowerDash = SKShapeNode()
     private let modernLowerLines = SKShapeNode()
+    private let modernTankIcon = SKShapeNode()
+    private let modernTerrainProfile = SKShapeNode()
+    private let modernHeadingPointer = SKShapeNode()
+    private let modernLowerCorners = SKShapeNode()
+    private let modernLowerExtra = (0..<10).map { _ in SKLabelNode(fontNamed: "Menlo") }
     private let modernHitRing = SKShapeNode()
     private let modernHitTrack = SKShapeNode()
     private let modernAmmoTrack = SKShapeNode()
@@ -300,7 +305,9 @@ final class BattlefieldScene: SKScene {
         modernCockpit.zPosition = 11.5
         addChild(modernCockpit)
         for (node, z) in [(modernTrim, 0.6), (modernLowerDash, 0.0),
-                          (modernLowerLines, 0.7), (modernHitTrack, 0.8),
+                          (modernLowerLines, 0.7), (modernTankIcon, 1.4),
+                          (modernTerrainProfile, 1.4), (modernHeadingPointer, 1.5),
+                          (modernLowerCorners, 1.6), (modernHitTrack, 0.8),
                           (modernHitRing, 0.9), (modernAmmoTrack, 0.6),
                           (modernAmmoFill, 0.7), (modernShieldTrack, 0.6),
                           (modernShieldFill, 0.7), (modernThreatPanel, 0.4)] {
@@ -310,7 +317,7 @@ final class BattlefieldScene: SKScene {
         for label in [modernBest, modernTankStatus, modernIntegrity,
                       modernHitCaption, modernHitValue, modernCompassLabel,
                       modernHeadingValue, modernTerrainLabel,
-                      modernSectorValue, modernStatusText] + modernHeadingTicks {
+                      modernSectorValue, modernStatusText] + modernHeadingTicks + modernLowerExtra {
             label.zPosition = 4
             label.verticalAlignmentMode = .center
             modernCockpit.addChild(label)
@@ -318,6 +325,11 @@ final class BattlefieldScene: SKScene {
         for tick in modernHeadingTicks {
             tick.fontSize = 10
             tick.horizontalAlignmentMode = .center
+        }
+        for label in modernLowerExtra {
+            label.fontSize = 11
+            label.horizontalAlignmentMode = .left
+            label.verticalAlignmentMode = .center
         }
         modernBest.horizontalAlignmentMode = .right
         modernTankStatus.horizontalAlignmentMode = .left
@@ -340,7 +352,10 @@ final class BattlefieldScene: SKScene {
         modernSectorValue.fontSize = 14
         modernStatusText.fontSize = 10
         for node in [modernTrim, modernLowerLines, modernHitRing,
-                     modernHitTrack] { node.fillColor = .clear }
+                     modernHitTrack, modernTankIcon, modernTerrainProfile,
+                     modernHeadingPointer, modernLowerCorners] {
+            node.fillColor = .clear
+        }
         for node in [modernAmmoTrack, modernAmmoFill,
                      modernShieldTrack, modernShieldFill] {
             node.strokeColor = .clear
@@ -1145,11 +1160,23 @@ final class BattlefieldScene: SKScene {
         modernTrim.glowWidth = 2
         modernLowerDash.fillColor = NSColor(calibratedRed: 0.012, green: 0.052, blue: 0.070, alpha: 0.93)
         modernLowerDash.strokeColor = cyan
-        modernLowerLines.strokeColor = cyan.withAlphaComponent(0.48)
+        modernLowerLines.strokeColor = cyan.withAlphaComponent(0.45)
         modernLowerLines.lineWidth = 1
-        modernHitTrack.strokeColor = cyan.withAlphaComponent(0.17)
+        modernTankIcon.strokeColor = cyan
+        modernTankIcon.lineWidth = 2
+        modernTankIcon.glowWidth = 3
+        modernTerrainProfile.strokeColor = cyan.withAlphaComponent(0.94)
+        modernTerrainProfile.lineWidth = 1.8
+        modernTerrainProfile.glowWidth = 1.8
+        modernHeadingPointer.strokeColor = amber
+        modernHeadingPointer.lineWidth = 2
+        modernHeadingPointer.glowWidth = 3
+        modernLowerCorners.strokeColor = amber
+        modernLowerCorners.lineWidth = 2
+        modernLowerCorners.glowWidth = 3.5
+        modernHitTrack.strokeColor = cyan.withAlphaComponent(0.18)
         modernHitTrack.lineWidth = 8
-        modernHitRing.strokeColor = cyan
+        modernHitRing.strokeColor = NSColor(calibratedRed: 0.16, green: 1, blue: 0.49, alpha: 1)
         modernHitRing.lineWidth = 8
         modernHitRing.glowWidth = 3
         modernAmmoTrack.fillColor = cyan.withAlphaComponent(0.2)
@@ -1160,7 +1187,8 @@ final class BattlefieldScene: SKScene {
         modernThreatPanel.strokeColor = orange
         modernThreatPanel.glowWidth = 4
         for label in [modernBest, modernIntegrity, modernHitCaption,
-                      modernCompassLabel, modernTerrainLabel, modernStatusText] + modernHeadingTicks {
+                      modernCompassLabel, modernTerrainLabel, modernStatusText]
+                     + modernHeadingTicks + modernLowerExtra {
             label.fontColor = cyan.withAlphaComponent(0.85)
         }
         for label in [modernTankStatus, modernHitValue, modernHeadingValue, modernSectorValue] {
