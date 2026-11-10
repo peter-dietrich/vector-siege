@@ -192,15 +192,24 @@ enum EnemySpawnLayout {
 
     static func choosePosition(
         player: GroundPoint, heading: Double, index: Int, count: Int,
-        existing: [GroundPoint], isOpen: (GroundPoint) -> Bool
+        existing: [GroundPoint], phase: Double = 0,
+        forwardExclusion: Double = 0, isOpen: (GroundPoint) -> Bool
     ) -> GroundPoint? {
-        let sector = heading + 2 * Double.pi * Double(index) / Double(max(1, count))
+        // Randomizing the wave's phase (once per wave) breaks the previous
+        // fixed first-enemy-at-heading alignment. The optional exclusion
+        // prevents any enemy from starting in the player's central sightline.
+        let sector = heading + phase +
+            2 * Double.pi * Double(index) / Double(max(1, count))
         let angleOffsets: [Double] = [0, 0.18, -0.18, 0.36, -0.36,
                                       0.58, -0.58, 0.83, -0.83]
         let radii: [Double] = [76, 92, 110, 62, 128, 48, 140]
         func acceptable(_ point: GroundPoint) -> Bool {
-            point.distance(to: player) >= 28 &&
-            isSeparated(point, from: existing) && isOpen(point)
+            let offset = point - player
+            let bearing = atan2(offset.x, offset.z)
+            let centeredOnPlayer = abs(wrapAngle(bearing - heading))
+            return offset.length >= 43 &&
+                centeredOnPlayer >= forwardExclusion &&
+                isSeparated(point, from: existing) && isOpen(point)
         }
         for offset in angleOffsets {
             for distance in radii {
@@ -218,6 +227,19 @@ enum EnemySpawnLayout {
             }
         }
         return nil
+    }
+}
+
+/// Pure sweep geometry used by the tactical-radar fill and regression tests.
+/// A ray is clipped to the edges of a square to prevent sweep glow escaping
+/// the panel even when the beam passes near a corner.
+enum TacticalRadarGeometry {
+    static func squareReach(angle: Double, halfSide: Double) -> Double {
+        halfSide / max(abs(sin(angle)), abs(cos(angle)), 0.000001)
+    }
+    static func intensity(trailingFraction: Double) -> Double {
+        let t = min(1, max(0, trailingFraction))
+        return (1 - t) * (1 - t)
     }
 }
 
