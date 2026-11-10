@@ -228,7 +228,7 @@ final class BattlefieldScene: SKScene {
         }
         radarSweepBeam.zPosition = 13.15
         radarSweepBeam.fillColor = .clear
-        radarSweepBeam.lineWidth = 2.3
+        radarSweepBeam.lineWidth = 1.65
         addChild(radarSweepBeam)
         for wedge in radarSweepGlow {
             wedge.zPosition = 12.9
@@ -634,7 +634,7 @@ final class BattlefieldScene: SKScene {
             let type = enemies[idx].kind
             // Flying disks travel slowly to preserve their ominous, floating
             // appearance. Their visual rotation speed is independent.
-            let movement = (type == .hunter ? 4.6 : (type == .saucer ? 1.10 : 2.55))
+            let movement = (type == .hunter ? 4.6 : (type == .saucer ? 0.33 : 2.55))
                 * threatLevel.enemyVelocity * rules.enemySpeed
             let aim = atan2(diff.x, diff.z)
             if type == .saucer {
@@ -1123,7 +1123,7 @@ final class BattlefieldScene: SKScene {
              displayMode == .classic ? 0.15 : 0.55),
             (radar, displayMode == .modern
              ? NSColor(calibratedRed: 0.17, green: 0.96, blue: 0.74, alpha: 1)
-             : accent, 1.5, displayMode == .classic ? 0.2 : 2),
+             : accent, 1.1, 0),
             (hudLines, muted, 1.0, 0)
         ] {
             node.strokeColor = color
@@ -1176,7 +1176,7 @@ final class BattlefieldScene: SKScene {
         radarSaucerContacts.lineWidth = 1.2
         radarSaucerContacts.glowWidth = 3
         radarSweepBeam.strokeColor = NSColor(calibratedRed: 0.22, green: 1, blue: 0.48, alpha: 1)
-        radarSweepBeam.glowWidth = displayMode == .modern ? 4.0 : 1.8
+        radarSweepBeam.glowWidth = 0
         for wedge in radarSweepGlow {
             wedge.fillColor = NSColor(calibratedRed: 0.05, green: 1, blue: 0.36, alpha: 1)
         }
@@ -1244,9 +1244,10 @@ final class BattlefieldScene: SKScene {
         }
         rearLabel.fontColor = amber
         proximityLabel.fontColor = amber
+        // Raise displayed grid alpha by exactly ten percent.
         groundMesh.strokeColor = modern
-            ? NSColor(calibratedRed: 0.19, green: 0.65, blue: 0.55, alpha: 0.27)
-            : green.withAlphaComponent(0.18)
+            ? NSColor(calibratedRed: 0.19, green: 0.65, blue: 0.55, alpha: 0.297)
+            : green.withAlphaComponent(0.198)
         groundMesh.lineWidth = 0.48
         groundMesh.glowWidth = 0
         streetMarks.strokeColor = modern
@@ -1272,7 +1273,8 @@ final class BattlefieldScene: SKScene {
             ? NSColor(calibratedRed: 0.18, green: 0.79, blue: 0.65, alpha: 0.47)
             : muted.withAlphaComponent(0.62)
         radarStreetGrid.fillColor = .clear
-        radarStreetGrid.lineWidth = 0.8
+        radarStreetGrid.lineWidth = 0.65
+        radarStreetGrid.glowWidth = 0
         radarObstacleContacts.strokeColor = NSColor(calibratedRed: 0.22, green: 0.95, blue: 0.68, alpha: 0.93)
         radarObstacleContacts.fillColor = NSColor(calibratedRed: 0.25, green: 0.98, blue: 0.67, alpha: 0.50)
         radarObstacleContacts.lineWidth = 0.9
@@ -2016,7 +2018,9 @@ final class BattlefieldScene: SKScene {
         let left = leftCenter - bankWidth / 2
         let right = rightCenter - bankWidth / 2
         let top = h - 16
-        let scale = max(0.69, min(1, bankWidth / 310))
+        // Give each instrument label more presence, with a responsive cap
+        // so the three-column targeting and combat rows remain readable.
+        let scale = max(0.78, min(1.12, bankWidth / 300))
         func item(_ id: Int, _ text: String, _ x: Double, _ y: Double,
                   _ size: Double, _ color: NSColor = pale) {
             let label = modernUpperText[id]
@@ -2036,9 +2040,9 @@ final class BattlefieldScene: SKScene {
         item(0, "TARGETING  //  NAVIGATION",
              left + 15, top - 23, 12, cyan)
         item(1, String(format: "HDG %03d°", bearing),
-             left + 17, top - 79, 26, cyan)
+             left + 17, top - 79, 28, cyan)
         item(2, String(format: "SPD %+.1f", driveSpeed),
-             left + bankWidth * 0.57, top - 79, 23, cyan)
+             left + bankWidth * 0.57, top - 79, 25, cyan)
         item(3, targetBearing.map { String(format: "TGT %03d", $0) } ?? "TGT ---",
              left + 16, top - 126, 15)
         item(4, target.map { String(format: "AIM %+.1f°", $0.error * 180 / .pi) }
@@ -2062,7 +2066,7 @@ final class BattlefieldScene: SKScene {
              right + 15, top - 23, 12, cyan)
         item(13, "SCORE", right + 17, top - 59, 13)
         item(14, String(format: "%06d", score),
-             right + 17, top - 93, 33, cyan)
+             right + 17, top - 93, 36, cyan)
         item(15, "BEST", right + bankWidth * 0.72, top - 59, 13)
         item(16, String(format: "%06d", bestScore),
              right + bankWidth * 0.72, top - 92, 19, pale)
@@ -2071,7 +2075,7 @@ final class BattlefieldScene: SKScene {
         item(18, String(format: "LIVES %d", lives),
              right + bankWidth * 0.36, top - 128, 14)
         item(19, "LEVEL " + threatLevel.rawValue.uppercased(),
-             right + bankWidth * 0.64, top - 128, 13, greenBright)
+             right + bankWidth * 0.64, top - 128, 11.5, greenBright)
         item(20, "SHIELD", right + 52, top - 162, 14)
         let shieldStatus = shieldDuration > 0
             ? String(format: "ACTIVE %.1f", shieldDuration)
@@ -2486,7 +2490,9 @@ final class BattlefieldScene: SKScene {
         let radarRange = 165.0
         let panelHeight = modernHUD ? min(278.0, max(248.0, h * 0.34)) : 154.0
         let outerMargin = modernHUD ? 14.0 : 14.0
-        let panelGap = modernHUD ? 10.0 : 12.0
+        // Use narrower gutters. The radar monitor expands into the space
+        // previously left on either side of its circular display.
+        let panelGap = modernHUD ? 4.0 : 12.0
         let available = w - outerMargin * 2 - panelGap * 3
         // Side systems 26% each, radar 21%, and a wider rear monitor 27%.
         // This keeps the radar's circle visually close to its instrument frame.
@@ -2518,9 +2524,13 @@ final class BattlefieldScene: SKScene {
         }
         telemetryLeftPanel.path = panelRect(width: bankWidth)
         telemetryRightPanel.path = panelRect(width: bankWidth)
+        // Widen the radar monitor to its allocated column instead of
+        // artificially forcing a square frame of panelHeight width.
+        // The dial stays circular and centered; no neighboring bank moves.
         radarPanel.path = CGPath(
-            roundedRect: CGRect(x: -radarSide / 2, y: -radarSide / 2,
-                                width: radarSide, height: radarSide),
+            roundedRect: CGRect(x: -radarPanelWidth / 2,
+                                y: -panelHeight / 2,
+                                width: radarPanelWidth, height: panelHeight),
             cornerWidth: 10, cornerHeight: 10, transform: nil)
         rearPanel.path = panelRect(width: rearPanelWidth)
         telemetryLeftPanel.position = point(leftCenterX, topCenterY)
