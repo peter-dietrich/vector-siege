@@ -109,6 +109,43 @@ struct GeometrySmoke {
         let decodedRules = try! JSONDecoder().decode(SiegeRules.self, from: rulesData)
         precondition(decodedRules == validated)
 
+        // A reproducible city: large vacant blocks and clear streets first,
+        // then clustered structures in just a subset of block interiors.
+        precondition(CityLayout.isStreet(GroundPoint(0, 30)))
+        precondition(CityLayout.isStreet(GroundPoint(60, 37)))
+        precondition(CityLayout.isStreet(GroundPoint(7, 7)))
+        precondition(!CityLayout.isStreet(GroundPoint(30, 30)))
+        precondition(CityLayout.isBuildable(GroundPoint(30, 30), radius: 7))
+        precondition(!CityLayout.isBuildable(GroundPoint(5, 30), radius: 5))
+        let cityA = CityLayout.buildings(count: 23, seed: 8742)
+        let cityB = CityLayout.buildings(count: 23, seed: 8742)
+        let cityOther = CityLayout.buildings(count: 23, seed: 8743)
+        precondition(cityA.count == 23, "Generate the configured building count")
+        precondition(cityB.count == cityA.count)
+        precondition(zip(cityA, cityB).allSatisfy {
+            $0.center.x == $1.center.x && $0.center.z == $1.center.z
+        }, "Same seed must reproduce the same town")
+        precondition(zip(cityA, cityOther).contains {
+            $0.center.x != $1.center.x || $0.center.z != $1.center.z
+        }, "Different games should not use the same city blocks")
+        let occupiedBlocks = Set(cityA.map { "\($0.blockX),\($0.blockZ)" })
+        precondition(occupiedBlocks.count <= 9,
+                     "Most of the 36 city blocks should remain empty")
+        for site in cityA {
+            precondition(CityLayout.isBuildable(
+                site.center, radius: site.size * 0.9 + 2.7),
+                "Building footprint must not enter a street")
+        }
+        for i in cityA.indices {
+            for j in cityA.indices where j > i {
+                precondition(cityA[i].center.distance(to: cityA[j].center) >
+                             cityA[i].size * 0.78 + cityA[j].size * 0.78 + 5.4,
+                             "Building collision buffers should not overlap")
+            }
+        }
+        precondition(CityLayout.buildings(count: 0, seed: 1).isEmpty)
+        precondition(CityLayout.buildings(count: 55, seed: 555).count == 55)
+
         // Wave positions must fan out around the tank with a safe minimum
         // distance. Even if the preferred sector is blocked, never pile units.
         let origin = GroundPoint(0, 0)
