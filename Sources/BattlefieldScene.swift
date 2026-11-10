@@ -227,7 +227,8 @@ final class BattlefieldScene: SKScene {
                                cornerWidth: 6, cornerHeight: 6, transform: nil)
         rearMask.fillColor = .white
         rearMask.strokeColor = .clear
-        rearMask.position = CGPoint(x: 86, y: 54)
+        // Projection and crop coordinates are both bottom-left-relative.
+        rearMask.position = .zero
         rearView.maskNode = rearMask
         for (shape, depth) in [(rearBackground, 0.0), (rearGround, 1.0),
                                (rearEnvironment, 2.0), (rearEnemies, 3.0),
