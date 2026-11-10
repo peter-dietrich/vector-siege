@@ -1,5 +1,14 @@
 # Vector Siege
 
+## Maintainer documentation (2026 audit)
+
+- [Architecture and development](docs/DEVELOPMENT.md) — code structure, local workflow, data and gameplay scope.
+- [Build, tests and quality checks](docs/QA_CHECKLIST.md) — repeatable Mac checks and what CI does **not** prove.
+- [Release and signing](docs/RELEASE.md) — release tags, notarization, archive output and Fun City integration.
+- [Licensing and provenance](docs/LICENSING.md) — MIT terms, inspiration/trademarks, asset-origin review and redistribution boundaries.
+- [Third-party notices](THIRD_PARTY_NOTICES.md) — observed libraries/resources and verification status.
+
+
 An original first-person, wireframe tank-combat arcade game for **macOS 13+**, inspired by the 1980 era of vector arcade games. Independent from and not affiliated with Atari or Battlezone. Built with **SwiftUI + SpriteKit**, with no external packages or artwork required.
 
 ## Start on your Mac
