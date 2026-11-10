@@ -30,7 +30,8 @@ Xcode may need to create the scheme when the project first opens; it normally ge
 
 | Key | Action |
 | --- | --- |
-| **Return** | Start game / redeploy after game over |
+| **Return** | Deploy first level / redeploy after game over |
+| **Any key** | Start the next level from its wireframe LEVEL banner (action key is consumed) |
 | **↑ / W** | Drive forward |
 | **↓ / S** | Reverse |
 | **← / A** | Rotate left |
@@ -45,6 +46,14 @@ Xcode may need to create the scheme when the project first opens; it normally ge
 | **O / L** | Right tread forward / backward |
 
 The two tread controls can be used simultaneously, arcade-style: **I+O** moves forward, **K+L** reverses, **I+L** turns right in place, and **K+O** turns left in place. Standard arrow/WASD controls work as a simpler alternative.
+
+## v1.2 — paced flying disks, separated enemy waves and key-to-start levels
+
+- **Slower flying disks:** saucer translation speed is reduced from a base 5.4 to 1.10 world units/s (about 80% slower), independently of the visible spinning disk animation. The existing difficulty and Custom Game enemy-speed multipliers remain active.
+- **Fewer opening enemies:** normal games now begin with **two tanks**, with gradual growth on later waves up to the existing cap. Custom Game presets retain their own saved starting enemy counts.
+- **Never spawn a pile:** level enemies use radial sector placement, at least 30 world units apart, with boundary and obstacle checks. If a safe slot cannot be found, it is skipped rather than stacking enemies. Active AI also checks neighboring tanks before advancing and attempts a lateral sidestep when crowded.
+- **Level introduction:** Return deploys the first **LEVEL 01** wireframe banner; after each cleared wave a **LEVEL 02**, **LEVEL 03**, etc. banner appears. Gameplay and patrol timers stay paused while this screen is shown. **Any key** (including Shift) starts the level, without simultaneously firing, steering, or activating the shield.
+- **Save compatibility:** a save created while waiting at a level banner restores to the same banner. Older saved games remain loadable and open paused as before.
 
 ## v0.2 playtest feedback and telemetry
 
