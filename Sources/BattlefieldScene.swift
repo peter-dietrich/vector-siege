@@ -17,6 +17,9 @@ private struct Foe {
     var reload: Double
     var phase: Double
     var hitPoints: Int
+    // Transient routing cache: recalculated after restoring a save.
+    var navigationWaypoint: GroundPoint? = nil
+    var routeRefreshRemaining: Double = 0
 }
 
 private struct Shell {
@@ -582,36 +585,78 @@ final class BattlefieldScene: SKScene {
                 let tangent = GroundPoint(cos(enemies[idx].phase * 0.8), sin(enemies[idx].phase * 0.8))
                 enemies[idx].center = enemies[idx].center + tangent * (movement * dt)
             } else {
-                let wobble = type == .hunter ? sin(enemies[idx].phase * 1.4) * 0.28 : 0
-                enemies[idx].heading = wrapAngle(aim + wobble)
-                if distance > (type == .hunter ? 13 : 18) {
-                    let proposed = enemies[idx].center + facing(enemies[idx].heading) * (movement * dt)
-                    // Do not allow AI tanks to converge into overlapping piles.
-                    // A nearby neighbor forces a sidestep instead of moving
-                    // directly into its occupied space.
-                    let occupied = enemies.indices
-                        .filter { $0 != idx && enemies[$0].kind != .saucer }
-                        .map { enemies[$0].center }
-                    if !blocked(proposed, radius: 2.7) &&
+                let obstaclesForNavigation = obstacles.map {
+                    NavigationObstacle(center: $0.center, radius: $0.size * 0.78)
+                }
+                let shotBlockers = obstacles.map {
+                    NavigationObstacle(center: $0.center, radius: $0.size * 0.66)
+                }
+                let occupied = enemies.indices
+                    .filter { $0 != idx && enemies[$0].kind != .saucer }
+                    .map { enemies[$0].center }
+                let clearShot = EnemyNavigation.clearSegment(
+                    enemies[idx].center, tankPosition, obstacles: shotBlockers)
+                let desiredDistance = type == .hunter ? 19.0 : 24.0
+
+                // Replan if the target moves, cover blocks the shot, or the
+                // previous waypoint was reached. Stagger work across frames.
+                enemies[idx].routeRefreshRemaining -= dt
+                if enemies[idx].routeRefreshRemaining <= 0 ||
+                    (enemies[idx].navigationWaypoint?.distance(
+                        to: enemies[idx].center) ?? .infinity) < 4 {
+                    let shouldMove = !clearShot || distance > desiredDistance + 7
+                    enemies[idx].navigationWaypoint = shouldMove
+                        ? EnemyNavigation.nextWaypoint(
+                            from: enemies[idx].center, player: tankPosition,
+                            obstacles: obstaclesForNavigation,
+                            shotBlockers: shotBlockers, otherTanks: occupied,
+                            desiredStandOff: desiredDistance)
+                        : nil
+                    enemies[idx].routeRefreshRemaining =
+                        0.55 + Double(idx % 4) * 0.12
+                }
+
+                // When a tank is already in range and has a clear line of
+                // fire, face the player. Otherwise turn toward a waypoint
+                // around buildings, keeping a safe distance from other tanks.
+                let destination = enemies[idx].navigationWaypoint
+                let shouldAdvance = destination != nil &&
+                    (!clearShot || distance > desiredDistance + 6)
+                let steeringVector = shouldAdvance
+                    ? (destination! - enemies[idx].center) : diff
+                let aimHeading = atan2(steeringVector.x, steeringVector.z)
+                let wobble = type == .hunter ? sin(enemies[idx].phase * 1.4) * 0.12 : 0
+                enemies[idx].heading = wrapAngle(aimHeading + wobble)
+                if shouldAdvance {
+                    let headingVector = steeringVector.normalized
+                    let proposed = enemies[idx].center + headingVector * (movement * dt)
+                    let clearMovement = EnemyNavigation.clearSegment(
+                        enemies[idx].center, proposed,
+                        obstacles: obstaclesForNavigation,
+                        clearance: EnemyNavigation.enemyRadius)
+                    if !blocked(proposed, radius: EnemyNavigation.enemyRadius) &&
+                        clearMovement &&
                         proposed.distance(to: tankPosition) > 5 &&
                         EnemySpawnLayout.isSeparated(
                             proposed, from: occupied,
                             minimum: EnemySpawnLayout.movementSpacing) {
                         enemies[idx].center = proposed
                     } else {
-                        let side = facing(enemies[idx].heading + (idx.isMultiple(of: 2) ? 1.30 : -1.30))
-                        let sidestep = enemies[idx].center + side * (movement * dt * 0.7)
-                        if !blocked(sidestep, radius: 2.7) &&
-                            sidestep.distance(to: tankPosition) > 5 &&
-                            EnemySpawnLayout.isSeparated(
-                                sidestep, from: occupied,
-                                minimum: EnemySpawnLayout.movementSpacing) {
-                            enemies[idx].center = sidestep
-                        }
+                        // Obstacles or another tank can block the planned step;
+                        // discard the stale route so next frame finds a detour.
+                        enemies[idx].navigationWaypoint = nil
+                        enemies[idx].routeRefreshRemaining = 0
                     }
                 }
             }
-            if enemies[idx].reload <= 0 && type != .saucer && distance < 79 && distance > 7 {
+            let visibleTarget = type != .saucer &&
+                EnemyNavigation.clearSegment(
+                    enemies[idx].center, tankPosition,
+                    obstacles: obstacles.map {
+                        NavigationObstacle(center: $0.center, radius: $0.size * 0.66)
+                    })
+            if enemies[idx].reload <= 0 && visibleTarget &&
+                distance < 79 && distance > 7 {
                 let aimError = threatLevel.enemyAimError / rules.enemyAccuracy
                 let error = Double.random(in: -aimError ... aimError)
                 let direction = facing(aim + error)
