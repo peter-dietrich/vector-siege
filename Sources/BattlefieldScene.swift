@@ -125,6 +125,7 @@ final class BattlefieldScene: SKScene {
     private let rearLabel = SKLabelNode(fontNamed: "Menlo-Bold")
     private let proximityLabel = SKLabelNode(fontNamed: "Menlo-Bold")
     private let radarObstacleContacts = SKShapeNode()
+    private let radarStreetGrid = SKShapeNode()
     private let radarProjectileGlow = SKShapeNode()
     private let radarProjectileCore = SKShapeNode()
     private let radarEnemyContacts = SKShapeNode()
@@ -255,6 +256,8 @@ final class BattlefieldScene: SKScene {
         proximityLabel.verticalAlignmentMode = .center
         proximityLabel.isHidden = true
         addChild(proximityLabel)
+        radarStreetGrid.zPosition = 12.8
+        addChild(radarStreetGrid)
         radarObstacleContacts.zPosition = 13.1
         addChild(radarObstacleContacts)
         for panel in [telemetryLeftPanel, telemetryRightPanel] {
@@ -1151,6 +1154,11 @@ final class BattlefieldScene: SKScene {
         rearShots.glowWidth = 2.6
         rearBackground.strokeColor = .clear
         rearBackground.fillColor = NSColor(calibratedRed: 0.012, green: 0.04, blue: 0.055, alpha: 0.98)
+        radarStreetGrid.strokeColor = modern
+            ? NSColor(calibratedRed: 0.18, green: 0.79, blue: 0.65, alpha: 0.47)
+            : muted.withAlphaComponent(0.62)
+        radarStreetGrid.fillColor = .clear
+        radarStreetGrid.lineWidth = 0.8
         radarObstacleContacts.strokeColor = muted.withAlphaComponent(0.95)
         radarObstacleContacts.fillColor = muted.withAlphaComponent(0.55)
         radarObstacleContacts.lineWidth = 0.7
@@ -2068,10 +2076,9 @@ final class BattlefieldScene: SKScene {
         let rightCenterX = modernHUD
             ? w - outerMargin - bankWidth / 2
             : w - 14 - bankWidth / 2
-        let radarY = modernHUD ? topCenterY - 6 : h - 103.0
-        let radarRadius = modernHUD
-            ? min((radarPanelWidth - 24) / 2, (panelHeight - 42) / 2)
-            : 79.0
+        let radarSide = min(radarPanelWidth, panelHeight)
+        let radarY = topCenterY
+        let radarRadius = radarSide / 2 - 7.0
         let leftX = modernHUD ? leftCenterX - bankWidth / 2 + 18 : 34.0
         let rightX = modernHUD ? rightCenterX + bankWidth / 2 - 18 : w - 34
         func panelRect(width: Double) -> CGPath {
@@ -2081,7 +2088,10 @@ final class BattlefieldScene: SKScene {
         }
         telemetryLeftPanel.path = panelRect(width: bankWidth)
         telemetryRightPanel.path = panelRect(width: bankWidth)
-        radarPanel.path = panelRect(width: radarPanelWidth)
+        radarPanel.path = CGPath(
+            roundedRect: CGRect(x: -radarSide / 2, y: -radarSide / 2,
+                                width: radarSide, height: radarSide),
+            cornerWidth: 10, cornerHeight: 10, transform: nil)
         rearPanel.path = panelRect(width: rearPanelWidth)
         telemetryLeftPanel.position = point(leftCenterX, topCenterY)
         telemetryRightPanel.position = point(rightCenterX, topCenterY)
@@ -2116,30 +2126,83 @@ final class BattlefieldScene: SKScene {
         renderRearView(width: rearWidth, height: rearHeight)
         hudLines.path = hp
 
-        // Circular range rings and bearing grid; contacts are player-relative.
-        let circle = CGRect(x: radarX - radarRadius, y: radarY - radarRadius,
-                            width: radarRadius * 2, height: radarRadius * 2)
-        rp.addEllipse(in: circle)
-        for fraction in [1.0/3.0, 2.0/3.0] {
-            let rad = radarRadius * fraction
-            rp.addEllipse(in: CGRect(x: radarX - rad, y: radarY - rad,
-                                     width: rad * 2, height: rad * 2))
+        // Square tactical map fills its monitor. The circular range rings and
+        // sweep remain inside that square; the rotating ray reaches the edge.
+        let mapBorder = CGRect(x: radarX - radarRadius, y: radarY - radarRadius,
+                               width: radarRadius * 2, height: radarRadius * 2)
+        rp.addRect(mapBorder)
+        for fraction in [1.0/3.0, 2.0/3.0, 1.0] {
+            let ringRadius = radarRadius * fraction
+            rp.addEllipse(in: CGRect(x: radarX-ringRadius, y: radarY-ringRadius,
+                                     width: ringRadius*2, height: ringRadius*2))
         }
-        segment(rp, point(radarX, radarY-radarRadius), point(radarX, radarY+radarRadius))
-        segment(rp, point(radarX-radarRadius, radarY), point(radarX+radarRadius, radarY))
+        segment(rp, point(radarX, radarY-radarRadius),
+                point(radarX, radarY+radarRadius))
+        segment(rp, point(radarX-radarRadius, radarY),
+                point(radarX+radarRadius, radarY))
         for i in 0..<12 {
-            let a = Double(i) * Double.pi / 6
+            let angle = Double(i) * Double.pi / 6
             let inner = radarRadius - (i.isMultiple(of: 3) ? 9.0 : 4.0)
-            segment(rp, point(radarX + sin(a)*inner, radarY + cos(a)*inner),
-                    point(radarX + sin(a)*radarRadius, radarY + cos(a)*radarRadius))
+            segment(rp, point(radarX + sin(angle)*inner, radarY + cos(angle)*inner),
+                    point(radarX + sin(angle)*radarRadius,
+                          radarY + cos(angle)*radarRadius))
         }
         let sweepAngle = gameClock * 1.45
+        let directionX = sin(sweepAngle)
+        let directionY = cos(sweepAngle)
+        let sweepReach = radarRadius / max(abs(directionX), abs(directionY), 0.001)
         segment(rp, point(radarX, radarY),
-                point(radarX + sin(sweepAngle)*radarRadius,
-                      radarY + cos(sweepAngle)*radarRadius))
-        // Fixed nose-direction chevron identifies the center of the map.
+                point(radarX + directionX * sweepReach,
+                      radarY + directionY * sweepReach))
         segment(rp, point(radarX-3.6, radarY-3), point(radarX, radarY+5.5))
         segment(rp, point(radarX, radarY+5.5), point(radarX+3.6, radarY-3))
+
+        func projectedRadar(_ center: GroundPoint) -> CGPoint {
+            let dx = center.x - tankPosition.x
+            let dz = center.z - tankPosition.z
+            let right = dx*cos(heading) - dz*sin(heading)
+            let forward = dx*sin(heading) + dz*cos(heading)
+            return point(radarX + right/radarRange*radarRadius,
+                         radarY + forward/radarRange*radarRadius)
+        }
+        let cityMap = CGMutablePath()
+        // Liang-Barsky line clipping prevents street marks bleeding outside
+        // the radar square while allowing the whole urban grid to rotate.
+        func mapStreet(_ a: GroundPoint, _ b: GroundPoint) {
+            let p = projectedRadar(a)
+            let q = projectedRadar(b)
+            let dx = q.x - p.x
+            let dy = q.y - p.y
+            var lower = 0.0
+            var upper = 1.0
+            let values = [
+                (-dx, p.x - mapBorder.minX), (dx, mapBorder.maxX - p.x),
+                (-dy, p.y - mapBorder.minY), (dy, mapBorder.maxY - p.y)
+            ]
+            for (side, distance) in values {
+                if abs(side) < 0.000001 {
+                    if distance < 0 { return }
+                } else {
+                    let t = distance / side
+                    if side < 0 { lower = max(lower, t) }
+                    else { upper = min(upper, t) }
+                    if lower > upper { return }
+                }
+            }
+            segment(cityMap, point(p.x + lower*dx, p.y + lower*dy),
+                    point(p.x + upper*dx, p.y + upper*dy))
+        }
+        for road in -3...3 {
+            let center = Double(road) * CityLayout.streetSpacing
+            for side in [-1.0, 1.0] {
+                let margin = side * CityLayout.streetHalfWidth
+                mapStreet(GroundPoint(center + margin, -CityLayout.cityExtent),
+                          GroundPoint(center + margin, CityLayout.cityExtent))
+                mapStreet(GroundPoint(-CityLayout.cityExtent, center + margin),
+                          GroundPoint(CityLayout.cityExtent, center + margin))
+            }
+        }
+        radarStreetGrid.path = cityMap
 
         let obstaclesOnRadar = CGMutablePath()
         let enemyContacts = CGMutablePath()
@@ -2148,11 +2211,12 @@ final class BattlefieldScene: SKScene {
         func radarPoint(_ center: GroundPoint) -> CGPoint? {
             let dx = center.x - tankPosition.x
             let dz = center.z - tankPosition.z
-            let right = dx * cos(heading) - dz * sin(heading)
-            let forward = dx * sin(heading) + dz * cos(heading)
-            guard hypot(right, forward) <= radarRange else { return nil }
-            return point(radarX + right / radarRange * radarRadius,
-                         radarY + forward / radarRange * radarRadius)
+            let right = dx*cos(heading) - dz*sin(heading)
+            let forward = dx*sin(heading) + dz*cos(heading)
+            guard abs(right) <= radarRange - 5,
+                  abs(forward) <= radarRange - 5 else { return nil }
+            return point(radarX + right/radarRange*radarRadius,
+                         radarY + forward/radarRange*radarRadius)
         }
         for obstacle in obstacles {
             guard let contact = radarPoint(obstacle.center) else { continue }
