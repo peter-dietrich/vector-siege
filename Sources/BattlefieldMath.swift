@@ -416,13 +416,152 @@ struct SaucerPatrolClock: Codable {
 /// Radar/proximity units are world units; the standard tank is about 6 long.
 enum TankProximity {
     static let tankLength = 6.0
-    static let alertRadius = tankLength * 2.0
+    static let alertRadius = tankLength * 5.0
 
     static func isClose(_ distance: Double) -> Bool {
         distance.isFinite && distance <= alertRadius && distance >= 0
     }
 
     static func repeatInterval(for distance: Double) -> Double {
-        distance <= tankLength ? 0.30 : 0.65
+        if distance <= tankLength { return 0.30 }
+        if distance <= tankLength * 2 { return 0.65 }
+        return 1.4
+    }
+}
+
+/// Simplified top-down collision circles. Scene obstacles use the same radii
+/// as their physics/collision logic, and firing lanes use the smaller shell
+/// intersection radius.
+struct NavigationObstacle {
+    var center: GroundPoint
+    var radius: Double
+}
+
+/// Low-cost grid search for a clear position to fire from, not merely a
+/// route to the player's current position. Designed for the small arcade map.
+/// This runs on a staggered refresh schedule, not every frame.
+enum EnemyNavigation {
+    static let gridSpacing = 9.0
+    static let gridMin = -180.0
+    static let gridMax = 180.0
+    static let gridCount = 41
+    static let enemyRadius = 2.7
+    static let navigationMargin = 0.9
+
+    static func segmentDistance(_ center: GroundPoint,
+                                from start: GroundPoint, to end: GroundPoint) -> Double {
+        let vector = end - start
+        let length2 = vector.x * vector.x + vector.z * vector.z
+        guard length2 > 0.000001 else { return center.distance(to: start) }
+        let diff = center - start
+        let t = max(0, min(1, (diff.x * vector.x + diff.z * vector.z) / length2))
+        return center.distance(to: start + vector * t)
+    }
+
+    static func clearSegment(_ start: GroundPoint, _ end: GroundPoint,
+                             obstacles: [NavigationObstacle],
+                             clearance: Double = 0) -> Bool {
+        obstacles.allSatisfy {
+            segmentDistance($0.center, from: start, to: end) > $0.radius + clearance
+        }
+    }
+
+    static func isWalkable(_ location: GroundPoint,
+                           obstacles: [NavigationObstacle],
+                           otherTanks: [GroundPoint]) -> Bool {
+        guard abs(location.x) <= gridMax - enemyRadius,
+              abs(location.z) <= gridMax - enemyRadius else { return false }
+        return obstacles.allSatisfy {
+            $0.center.distance(to: location) > $0.radius + enemyRadius + navigationMargin
+        } && otherTanks.allSatisfy {
+            $0.distance(to: location) >= EnemySpawnLayout.movementSpacing + 1.0
+        }
+    }
+
+    /// Find an intermediate point on a collision-free path to a firing lane.
+    /// Prefer a spot 14–78 units from the player with an unobstructed shot.
+    /// Returns nil when none can be reached, so the caller may choose local
+    /// obstacle-avoidance fallback without ever teleporting the enemy.
+    static func nextWaypoint(
+        from start: GroundPoint, player: GroundPoint,
+        obstacles: [NavigationObstacle], shotBlockers: [NavigationObstacle],
+        otherTanks: [GroundPoint], desiredStandOff: Double = 18
+    ) -> GroundPoint? {
+        let count = gridCount
+        func index(_ point: GroundPoint) -> Int {
+            let col = max(0, min(count - 1, Int(((point.x - gridMin) / gridSpacing).rounded())))
+            let row = max(0, min(count - 1, Int(((point.z - gridMin) / gridSpacing).rounded())))
+            return row * count + col
+        }
+        func point(_ index: Int) -> GroundPoint {
+            GroundPoint(gridMin + Double(index % count) * gridSpacing,
+                        gridMin + Double(index / count) * gridSpacing)
+        }
+        let origin = index(start)
+        let offsets = [(-1,0),(1,0),(0,-1),(0,1),
+                       (-1,-1),(-1,1),(1,-1),(1,1)]
+        var predecessors = Array(repeating: -1, count: count * count)
+        var visited = Array(repeating: false, count: count * count)
+        var queue: [Int] = [origin]
+        var front = 0
+        visited[origin] = true
+
+        var found: Int?
+        while front < queue.count {
+            let currentIndex = queue[front]
+            front += 1
+            let candidate = currentIndex == origin ? start : point(currentIndex)
+            let distance = candidate.distance(to: player)
+            let clearShot = distance >= max(10, desiredStandOff - 5) &&
+                            distance <= 78 &&
+                            clearSegment(candidate, player, obstacles: shotBlockers)
+            if clearShot {
+                found = currentIndex
+                break
+            }
+            let col = currentIndex % count
+            let row = currentIndex / count
+            for (dx, dz) in offsets {
+                let c = col + dx
+                let r = row + dz
+                if c < 0 || r < 0 || c >= count || r >= count { continue }
+                let neighbor = r * count + c
+                if visited[neighbor] { continue }
+                let next = point(neighbor)
+                if !isWalkable(next, obstacles: obstacles,
+                               otherTanks: otherTanks) { continue }
+                let here = currentIndex == origin ? start : candidate
+                if !clearSegment(here, next, obstacles: obstacles,
+                                 clearance: enemyRadius + navigationMargin) { continue }
+                // A diagonal grid hop may cut a corner occupied by another tank.
+                if otherTanks.contains(where: {
+                    segmentDistance($0, from: here, to: next)
+                        < EnemySpawnLayout.movementSpacing
+                }) { continue }
+                visited[neighbor] = true
+                predecessors[neighbor] = currentIndex
+                queue.append(neighbor)
+            }
+        }
+        guard var cursor = found else { return nil }
+        var route: [GroundPoint] = []
+        while cursor != origin {
+            route.append(point(cursor))
+            cursor = predecessors[cursor]
+            if cursor < 0 { return nil }
+        }
+        route.reverse()
+        // Skip unnecessary grid corners when the direct route is traversable.
+        for waypoint in route.reversed() {
+            if clearSegment(start, waypoint, obstacles: obstacles,
+                            clearance: enemyRadius + navigationMargin) &&
+                otherTanks.allSatisfy({
+                    segmentDistance($0, from: start, to: waypoint)
+                        >= EnemySpawnLayout.movementSpacing
+                }) {
+                return waypoint
+            }
+        }
+        return route.first
     }
 }
