@@ -102,6 +102,7 @@ final class BattlefieldScene: SKScene {
     private let glassLayer = SKNode()
     private var glassFacePool: [SKShapeNode] = []
     private let ground = SKShapeNode()
+    private let groundMesh = SKShapeNode()
     private let streetMarks = SKShapeNode()
     private let structures = SKShapeNode()
     private let opponentLines = SKShapeNode()
@@ -114,6 +115,8 @@ final class BattlefieldScene: SKScene {
     private let shieldBorder = SKShapeNode()
     private let shieldNotice = SKLabelNode(fontNamed: "Menlo-Bold")
     private let radar = SKShapeNode()
+    private let radarSweepGlow = (0..<24).map { _ in SKShapeNode() }
+    private let radarCompassLabels = (0..<4).map { _ in SKLabelNode(fontNamed: "Menlo-Bold") }
     private let radarPanel = SKShapeNode()
     private let rearPanel = SKShapeNode()
     private let rearView = SKCropNode()
@@ -131,6 +134,8 @@ final class BattlefieldScene: SKScene {
     private let radarProjectileGlow = SKShapeNode()
     private let radarProjectileCore = SKShapeNode()
     private let radarEnemyContacts = SKShapeNode()
+    private let radarHunterContacts = SKShapeNode()
+    private let radarSaucerContacts = SKShapeNode()
     private let hudLines = SKShapeNode()
     private let leftHUD = SKLabelNode(fontNamed: "Menlo-Bold")
     private let rightHUD = SKLabelNode(fontNamed: "Menlo-Bold")
@@ -214,15 +219,29 @@ final class BattlefieldScene: SKScene {
         }
         glassLayer.zPosition = 3.7
         addChild(glassLayer)
-        for (node, layer) in [(radarEnemyContacts, 13.3), (radarProjectileGlow, 13.6),
+        for (node, layer) in [(radarEnemyContacts, 13.3), (radarHunterContacts, 13.4),
+                               (radarSaucerContacts, 13.45), (radarProjectileGlow, 13.6),
                                (radarProjectileCore, 13.8)] {
             node.zPosition = layer
             addChild(node)
         }
+        for wedge in radarSweepGlow {
+            wedge.zPosition = 12.9
+            wedge.strokeColor = .clear
+            wedge.lineWidth = 0
+            addChild(wedge)
+        }
+        for label in radarCompassLabels {
+            label.zPosition = 13.7
+            label.horizontalAlignmentMode = .center
+            label.verticalAlignmentMode = .center
+            label.fontSize = 11
+            addChild(label)
+        }
 
         for (layer, z) in [
             (farSkyline, 1.0), (skyline, 2.0), (ground, 3.0),
-            (streetMarks, 3.2), (structures, 4.0),
+            (groundMesh, 3.1), (streetMarks, 3.2), (structures, 4.0),
             (opponentLines, 5.0), (opponentSaucerLines, 5.1), (shotLines, 6.0),
             (modernFriendlyShells, 6.2), (modernHostileShells, 6.3),
             (flashLines, 7.0),
@@ -1203,6 +1222,11 @@ final class BattlefieldScene: SKScene {
         }
         rearLabel.fontColor = amber
         proximityLabel.fontColor = amber
+        groundMesh.strokeColor = modern
+            ? NSColor(calibratedRed: 0.19, green: 0.65, blue: 0.55, alpha: 0.27)
+            : green.withAlphaComponent(0.18)
+        groundMesh.lineWidth = 0.48
+        groundMesh.glowWidth = 0
         streetMarks.strokeColor = modern
             ? NSColor(calibratedRed: 0.70, green: 0.84, blue: 0.74, alpha: 0.29)
             : green.withAlphaComponent(0.31)
