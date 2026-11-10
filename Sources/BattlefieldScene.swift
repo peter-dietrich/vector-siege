@@ -167,6 +167,7 @@ final class BattlefieldScene: SKScene {
     private let modernHitValue = SKLabelNode(fontNamed: "Menlo-Bold")
     private let modernCompassLabel = SKLabelNode(fontNamed: "Menlo-Bold")
     private let modernHeadingValue = SKLabelNode(fontNamed: "Menlo-Bold")
+    private let modernHeadingTicks = (0..<7).map { _ in SKLabelNode(fontNamed: "Menlo") }
     private let modernTerrainLabel = SKLabelNode(fontNamed: "Menlo")
     private let modernSectorValue = SKLabelNode(fontNamed: "Menlo-Bold")
     private let modernStatusText = SKLabelNode(fontNamed: "Menlo")
@@ -276,10 +277,14 @@ final class BattlefieldScene: SKScene {
         for label in [modernBest, modernTankStatus, modernIntegrity,
                       modernHitCaption, modernHitValue, modernCompassLabel,
                       modernHeadingValue, modernTerrainLabel,
-                      modernSectorValue, modernStatusText] {
+                      modernSectorValue, modernStatusText] + modernHeadingTicks {
             label.zPosition = 4
             label.verticalAlignmentMode = .center
             modernCockpit.addChild(label)
+        }
+        for tick in modernHeadingTicks {
+            tick.fontSize = 10
+            tick.horizontalAlignmentMode = .center
         }
         modernBest.horizontalAlignmentMode = .right
         modernTankStatus.horizontalAlignmentMode = .left
@@ -1021,7 +1026,7 @@ final class BattlefieldScene: SKScene {
         modernThreatPanel.strokeColor = orange
         modernThreatPanel.glowWidth = 4
         for label in [modernBest, modernIntegrity, modernHitCaption,
-                      modernCompassLabel, modernTerrainLabel, modernStatusText] {
+                      modernCompassLabel, modernTerrainLabel, modernStatusText] + modernHeadingTicks {
             label.fontColor = cyan.withAlphaComponent(0.85)
         }
         for label in [modernTankStatus, modernHitValue, modernHeadingValue, modernSectorValue] {
@@ -1755,11 +1760,40 @@ final class BattlefieldScene: SKScene {
                     point(x, bottomY + bottomHeight - 15))
         }
         let halfScale = min(150.0, (rightDivider - w * 0.42) * 0.43)
-        for step in -6...6 {
-            let x = compassX + Double(step) * halfScale / 6
-            let major = step.isMultiple(of: 3)
+        let headingDegrees = (heading * 180 / .pi + 360)
+                             .truncatingRemainder(dividingBy: 360)
+        let tickStep = halfScale / 6
+        let tickShift = headingDegrees.truncatingRemainder(dividingBy: 10) / 10
+                        * tickStep
+        for step in -7...7 {
+            let x = compassX + Double(step) * tickStep - tickShift
+            if x < compassX - halfScale || x > compassX + halfScale { continue }
+            let major = step.isMultiple(of: 2)
             segment(deco, point(x, bottomY + 23),
-                    point(x, bottomY + (major ? 44 : 34)))
+                    point(x, bottomY + (major ? 40 : 32)))
+        }
+        let baseHeading = Int(floor(headingDegrees / 10)) * 10
+        for (index, label) in modernHeadingTicks.enumerated() {
+            let offset = (index - 3) * 2
+            let x = compassX + Double(offset) * tickStep - tickShift
+            label.position = point(x, bottomY + 51)
+            let bearing = (baseHeading + offset * 10 + 360) % 360
+            label.text = String(format: "%03d°", bearing)
+            label.isHidden = abs(x - compassX) > halfScale - 8
+        }
+
+        // Small real-time terrain signature at the far right of the lower deck.
+        let terrainLeft = w * 0.735
+        let terrainWidth = max(30, w * 0.10)
+        let terrainBase = bottomY + 25
+        var previousTerrain = point(terrainLeft, terrainBase)
+        for i in 0...24 {
+            let t = Double(i) / 24
+            let angle = heading + (t - 0.5) * 0.9
+            let y = terrainBase + min(27, ridge(angle, multiplier: 0.23))
+            let current = point(terrainLeft + t * terrainWidth, y)
+            if i > 0 { segment(deco, previousTerrain, current) }
+            previousTerrain = current
         }
         modernLowerLines.path = deco
 
