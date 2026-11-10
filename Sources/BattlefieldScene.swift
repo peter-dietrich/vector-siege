@@ -1622,8 +1622,9 @@ final class BattlefieldScene: SKScene {
         // Center map, with two independent telemetry banks to either side.
         let radarX = w / 2 - 104.0
         let rearX = w / 2 + 103.0
-        let radarY = h - 93.0
-        let radarRadius = 65.0
+        // Nearly inscribed dial: just a slim border inside the square monitor.
+        let radarY = h - 103.0
+        let radarRadius = 79.0
         let radarRange = 165.0
         let bankWidth = min(316.0, max(202.0, (w - 530.0) / 2))
         let panelHeight = 154.0
@@ -1635,7 +1636,7 @@ final class BattlefieldScene: SKScene {
         telemetryLeftPanel.path = panelRect(width: bankWidth)
         telemetryRightPanel.path = panelRect(width: bankWidth)
         radarPanel.path = CGPath(
-            roundedRect: CGRect(x: -83, y: -88, width: 166, height: 176),
+            roundedRect: CGRect(x: -89, y: -89, width: 178, height: 178),
             cornerWidth: 11, cornerHeight: 11, transform: nil)
         rearPanel.path = CGPath(
             roundedRect: CGRect(x: -91, y: -88, width: 182, height: 176),
@@ -1775,7 +1776,7 @@ final class BattlefieldScene: SKScene {
                 : String(format: "SHIELD ACTIVE  %.1fS", shieldDuration)
         }
 
-        leftHUD.position = point(radarX, h - 18)
+        leftHUD.position = point(radarX, h - 16)
         leftHUD.horizontalAlignmentMode = .center
         leftHUD.fontSize = 10
         leftHUD.text = "RADAR / 165"
