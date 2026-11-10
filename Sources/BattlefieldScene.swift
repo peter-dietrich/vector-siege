@@ -2173,8 +2173,8 @@ final class BattlefieldScene: SKScene {
             let q = projectedRadar(b)
             let dx = q.x - p.x
             let dy = q.y - p.y
-            var lower = 0.0
-            var upper = 1.0
+            var lower: CGFloat = 0
+            var upper: CGFloat = 1
             let values = [
                 (-dx, p.x - mapBorder.minX), (dx, mapBorder.maxX - p.x),
                 (-dy, p.y - mapBorder.minY), (dy, mapBorder.maxY - p.y)
@@ -2189,8 +2189,8 @@ final class BattlefieldScene: SKScene {
                     if lower > upper { return }
                 }
             }
-            segment(cityMap, point(p.x + lower*dx, p.y + lower*dy),
-                    point(p.x + upper*dx, p.y + upper*dy))
+            cityMap.move(to: CGPoint(x: p.x + lower*dx, y: p.y + lower*dy))
+            cityMap.addLine(to: CGPoint(x: p.x + upper*dx, y: p.y + upper*dy))
         }
         for road in -3...3 {
             let center = Double(road) * CityLayout.streetSpacing
