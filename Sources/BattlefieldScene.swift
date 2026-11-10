@@ -634,7 +634,7 @@ final class BattlefieldScene: SKScene {
             let type = enemies[idx].kind
             // Flying disks travel slowly to preserve their ominous, floating
             // appearance. Their visual rotation speed is independent.
-            let movement = (type == .hunter ? 4.6 : (type == .saucer ? 0.33 : 2.55))
+            let movement = (type == .hunter ? 4.6 : (type == .saucer ? EnemyMotion.saucerBaseSpeed : 2.55))
                 * threatLevel.enemyVelocity * rules.enemySpeed
             let aim = atan2(diff.x, diff.z)
             if type == .saucer {
