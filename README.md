@@ -47,6 +47,13 @@ Xcode may need to create the scheme when the project first opens; it normally ge
 
 The two tread controls can be used simultaneously, arcade-style: **I+O** moves forward, **K+L** reverses, **I+L** turns right in place, and **K+O** turns left in place. Standard arrow/WASD controls work as a simpler alternative.
 
+## v1.6 — military dashboard lower telemetry and orange enemy tanks
+
+- **Modern lower dash:** replaced the older utility-strip presentation with a beveled, illuminated military dashboard drawn entirely in SpriteKit, following the approved reference composition. The left tank-silhouette section shows tank readiness and systems/mode status; the adjacent HIT RATIO section uses a live percentage and bright green circular progress ring. The center holds a dynamic heading tape, calibrated scale and orange bearing pointer. At right are a heading-responsive terrain profile and a sector ID calculated from actual city-grid coordinates, elevation (flat-ground baseline 0.0 m), and live position. These are native shapes/labels rather than an image overlay.
+- **Integrity interpretation:** the displayed percentage is the proportion of **starting lives still remaining**, not a separate per-hit armor damage simulation. It reaches zero when the mission ends.
+- **Orange enemies:** all enemy **tank** wireframes use a highly visible orange outline in both Classic and Modern, including the rear-view monitor. Flying saucers remain a distinct green color. Radar enemy markers are orange; friendly shells remain distinguishable.
+- **No gameplay regressions intended:** enemy AI, shield, ammo/reload, save/restore, city geometry, and Classic's original bottom-of-screen help strip are not modified by this redesign.
+
 ## v1.5 — reference cockpit telemetry and downtown density gradient
 
 - **Modern-only upper HUD redesign:** the left and right top telemetry panels are now built with real, independent SpriteKit labels, split rows and thin illuminated dividers inspired by the approved cockpit references. Navigation shows oversized heading and speed, followed by target heading, aim offset, range, confirmed hits/misses, resolved accuracy, rounds in flight and X/Z coordinates. Combat shows oversized score, best score, current wave, remaining lives and difficulty, a shield-status panel, ammunition and reload timer, plus actual shield/ammo progress bars. Cyan digital typography, green readiness values, icon outlines and orange cut-corner details keep the instrument hierarchy readable. The tactical radar and rear-facing camera continue updating live between the two panels.
