@@ -944,6 +944,7 @@ final class BattlefieldScene: SKScene {
             node.glowWidth = CGFloat(glow)
         }
         let modern = displayMode == .modern
+        modernCockpit.isHidden = !modern
         modernFriendlyShells.isHidden = !modern
         modernHostileShells.isHidden = !modern
         modernFriendlyShells.strokeColor = NSColor(calibratedRed: 1, green: 0.89, blue: 0.35, alpha: 0.98)
@@ -986,8 +987,40 @@ final class BattlefieldScene: SKScene {
         let amber = NSColor(calibratedRed: 1, green: 0.72, blue: 0.40, alpha: 1)
         let panelFill = NSColor(calibratedRed: 0.018, green: 0.045, blue: 0.044, alpha: 0.90)
         for panel in [telemetryLeftPanel, telemetryRightPanel, radarPanel, rearPanel] {
-            panel.fillColor = panelFill
-            panel.strokeColor = amber.withAlphaComponent(displayMode == .classic ? 0.32 : 0.50)
+            panel.fillColor = modern
+                ? NSColor(calibratedRed: 0.008, green: 0.040, blue: 0.060, alpha: 0.96)
+                : panelFill
+            panel.strokeColor = modern
+                ? NSColor(calibratedRed: 0.18, green: 0.86, blue: 0.91, alpha: 0.85)
+                : amber.withAlphaComponent(0.32)
+        }
+        let cyan = NSColor(calibratedRed: 0.18, green: 0.97, blue: 0.95, alpha: 1)
+        let orange = NSColor(calibratedRed: 1, green: 0.45, blue: 0.14, alpha: 1)
+        modernTrim.strokeColor = cyan
+        modernTrim.lineWidth = 1.3
+        modernTrim.glowWidth = 2
+        modernLowerDash.fillColor = NSColor(calibratedRed: 0.012, green: 0.052, blue: 0.070, alpha: 0.93)
+        modernLowerDash.strokeColor = cyan
+        modernLowerLines.strokeColor = cyan.withAlphaComponent(0.48)
+        modernLowerLines.lineWidth = 1
+        modernHitTrack.strokeColor = cyan.withAlphaComponent(0.17)
+        modernHitTrack.lineWidth = 8
+        modernHitRing.strokeColor = cyan
+        modernHitRing.lineWidth = 8
+        modernHitRing.glowWidth = 3
+        modernAmmoTrack.fillColor = cyan.withAlphaComponent(0.2)
+        modernAmmoFill.fillColor = cyan
+        modernShieldTrack.fillColor = cyan.withAlphaComponent(0.2)
+        modernShieldFill.fillColor = cyan
+        modernThreatPanel.fillColor = NSColor(calibratedRed: 0.14, green: 0.02, blue: 0.015, alpha: 0.88)
+        modernThreatPanel.strokeColor = orange
+        modernThreatPanel.glowWidth = 4
+        for label in [modernBest, modernIntegrity, modernHitCaption,
+                      modernCompassLabel, modernTerrainLabel, modernStatusText] {
+            label.fontColor = cyan.withAlphaComponent(0.85)
+        }
+        for label in [modernTankStatus, modernHitValue, modernHeadingValue, modernSectorValue] {
+            label.fontColor = cyan
         }
         rearLabel.fontColor = amber
         proximityLabel.fontColor = amber
@@ -1617,9 +1650,7 @@ final class BattlefieldScene: SKScene {
     /// A live, tank-relative rear camera rendered from a true 180-degree
     /// perspective. All paths are clipped by SKCropNode to the inset viewport.
     /// This does not affect physics, aiming or the main scene camera.
-    private func renderRearView() {
-        let width = 172.0
-        let height = 108.0
+    private func renderRearView(width: Double, height: Double) {
         let backCamera = CameraProjection(
             position: tankPosition, yaw: wrapAngle(heading + .pi),
             viewportWidth: width, viewportHeight: height)
