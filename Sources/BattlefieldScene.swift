@@ -1724,7 +1724,8 @@ final class BattlefieldScene: SKScene {
     private func renderModernCockpit(
         width w: Double, height h: Double, bankWidth: Double,
         leftX: Double, rightX: Double, radarX: Double,
-        rearX: Double, topHeight: Double
+        rearX: Double, radarPanelWidth: Double,
+        rearPanelWidth: Double, topHeight: Double
     ) {
         let cyan = NSColor(calibratedRed: 0.21, green: 0.98, blue: 0.94, alpha: 1)
         let amber = NSColor(calibratedRed: 1, green: 0.52, blue: 0.22, alpha: 1)
@@ -1773,8 +1774,8 @@ final class BattlefieldScene: SKScene {
             segment(trim, point(x + direction * 22, panelBottom),
                     point(x + direction * 90, panelBottom))
         }
-        let bridgeStart = radarX - bankWidth / 2 + 15
-        let bridgeEnd = rearX + bankWidth / 2 - 15
+        let bridgeStart = radarX - radarPanelWidth / 2 + 15
+        let bridgeEnd = rearX + rearPanelWidth / 2 - 15
         segment(trim, point(bridgeStart, panelBottom + 7),
                 point(bridgeEnd, panelBottom + 7))
         modernTrim.path = trim
@@ -1877,27 +1878,31 @@ final class BattlefieldScene: SKScene {
         let sight = CGMutablePath()
         let modernHUD = displayMode == .modern
         let radarRange = 165.0
-        let panelHeight = modernHUD ? min(236.0, max(184.0, h * 0.265)) : 154.0
+        let panelHeight = modernHUD ? min(268.0, max(200.0, h * 0.295)) : 154.0
         let outerMargin = modernHUD ? 14.0 : 14.0
         let panelGap = modernHUD ? 10.0 : 12.0
         let available = w - outerMargin * 2 - panelGap * 3
-        let modernBankWidth = max(175.0, available / 4.0)
+        // Side systems 26% each, radar 21%, and a wider rear monitor 27%.
+        // This keeps the radar's circle visually close to its instrument frame.
+        let modernBankWidth = available * 0.26
         let bankWidth = modernHUD ? modernBankWidth
             : min(316.0, max(202.0, (w - 530.0) / 2))
+        let radarPanelWidth = modernHUD ? available * 0.21 : 178.0
+        let rearPanelWidth = modernHUD ? available * 0.27 : 182.0
         let topCenterY = modernHUD ? h - 16 - panelHeight / 2 : h - 94.0
         let leftCenterX = modernHUD ? outerMargin + bankWidth / 2 : 14 + bankWidth / 2
         let radarX = modernHUD
-            ? outerMargin + bankWidth + panelGap + bankWidth / 2
+            ? outerMargin + bankWidth + panelGap + radarPanelWidth / 2
             : w / 2 - 104.0
         let rearX = modernHUD
-            ? outerMargin + bankWidth * 2 + panelGap * 2 + bankWidth / 2
+            ? outerMargin + bankWidth + radarPanelWidth + panelGap * 2 + rearPanelWidth / 2
             : w / 2 + 103.0
         let rightCenterX = modernHUD
             ? w - outerMargin - bankWidth / 2
             : w - 14 - bankWidth / 2
         let radarY = modernHUD ? topCenterY - 6 : h - 103.0
         let radarRadius = modernHUD
-            ? min((bankWidth - 30) / 2, (panelHeight - 46) / 2)
+            ? min((radarPanelWidth - 24) / 2, (panelHeight - 42) / 2)
             : 79.0
         let leftX = modernHUD ? leftCenterX - bankWidth / 2 + 18 : 34.0
         let rightX = modernHUD ? rightCenterX + bankWidth / 2 - 18 : w - 34
@@ -1908,8 +1913,8 @@ final class BattlefieldScene: SKScene {
         }
         telemetryLeftPanel.path = panelRect(width: bankWidth)
         telemetryRightPanel.path = panelRect(width: bankWidth)
-        radarPanel.path = panelRect(width: modernHUD ? bankWidth : 178)
-        rearPanel.path = panelRect(width: modernHUD ? bankWidth : 182)
+        radarPanel.path = panelRect(width: radarPanelWidth)
+        rearPanel.path = panelRect(width: rearPanelWidth)
         telemetryLeftPanel.position = point(leftCenterX, topCenterY)
         telemetryRightPanel.position = point(rightCenterX, topCenterY)
         radarPanel.position = point(radarX, topCenterY)
@@ -1929,7 +1934,7 @@ final class BattlefieldScene: SKScene {
 
         // Resize the actual rear camera's crop region and projection together.
         // Classic retains the original narrow rear monitor.
-        let rearWidth = modernHUD ? max(120.0, bankWidth - 20) : 172.0
+        let rearWidth = modernHUD ? max(120.0, rearPanelWidth - 20) : 172.0
         let rearHeight = modernHUD ? panelHeight - 53 : 108.0
         rearMask.path = CGPath(
             roundedRect: CGRect(x: 0, y: 0, width: rearWidth, height: rearHeight),
@@ -2177,7 +2182,8 @@ final class BattlefieldScene: SKScene {
             renderModernCockpit(
                 width: w, height: h, bankWidth: bankWidth,
                 leftX: leftX, rightX: rightX, radarX: radarX,
-                rearX: rearX, topHeight: panelHeight)
+                rearX: rearX, radarPanelWidth: radarPanelWidth,
+                rearPanelWidth: rearPanelWidth, topHeight: panelHeight)
         }
 
         stagePanel.position = point(w / 2, h * 0.61)
