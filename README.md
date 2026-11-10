@@ -47,6 +47,13 @@ Xcode may need to create the scheme when the project first opens; it normally ge
 
 The two tread controls can be used simultaneously, arcade-style: **I+O** moves forward, **K+L** reverses, **I+L** turns right in place, and **K+O** turns left in place. Standard arrow/WASD controls work as a simpler alternative.
 
+## v1.3 — five-length proximity detection and smart enemy cover navigation
+
+- **Earlier warning:** the enemy-tank proximity perimeter expands to **five tank lengths / 30 world units** (previously two lengths). Both Classic and Modern continue showing the visual warning, with a softer alert every 1.4 seconds in the outer zone, every 0.65 seconds inside two tank lengths, and every 0.30 seconds inside one tank length. The existing Sound switch controls alarm audio.
+- **Obstacle-aware enemy navigation:** instead of steering directly into nearby buildings and stopping, ground tanks periodically plan routes on a coarse obstacle-aware navigation grid. Obstacles have clearance buffers and enemies maintain separation from each other. Tanks travel through intermediate waypoints to reach a clear angle on the player's tank; they replan if their route is obstructed or the goal moves.
+- **Line-of-sight checks:** enemies hold fire while a building, tower, monolith, block, or pyramid obstructs their firing line. They resume shooting when the route brings them into a clear firing position.
+- **Compatibility:** applies to both display modes and the built-in/custom enemy difficulty multipliers. Existing save formats remain unchanged; enemy routes are temporary and recalculated after load. Saucers retain their separate slow aerial movement.
+
 ## v1.2 — paced flying disks, separated enemy waves and key-to-start levels
 
 - **Slower flying disks:** saucer translation speed is reduced from a base 5.4 to 1.10 world units/s (about 80% slower), independently of the visible spinning disk animation. The existing difficulty and Custom Game enemy-speed multipliers remain active.
