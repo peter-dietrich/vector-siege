@@ -1049,20 +1049,22 @@ final class BattlefieldScene: SKScene {
 
     private func glassFacets(for o: Obstacle, camera c: CameraProjection) -> [GlassFace] {
         let s = o.size
-        let bottom = [
-            WorldPoint(o.center.x-s, 0, o.center.z-s),
-            WorldPoint(o.center.x+s, 0, o.center.z-s),
-            WorldPoint(o.center.x+s, 0, o.center.z+s),
-            WorldPoint(o.center.x-s, 0, o.center.z+s)
-        ]
+        let halfX: Double
+        let halfZ: Double
         let topHeight: Double
         switch o.kind {
-        case .pyramid: topHeight = s * 1.28
-        case .block: topHeight = s * 1.35
-        case .tower: topHeight = s * 4.1
-        case .building: topHeight = s * 2.2
-        case .monolith: topHeight = s * 6.0
+        case .pyramid: halfX = s; halfZ = s; topHeight = s * 1.28
+        case .block: halfX = s; halfZ = s; topHeight = s * 1.35
+        case .tower: halfX = s * 0.55; halfZ = s * 0.62; topHeight = s * 4.1
+        case .building: halfX = s * 1.05; halfZ = s * 0.85; topHeight = s * 2.2
+        case .monolith: halfX = s * 0.45; halfZ = s * 0.42; topHeight = s * 6.0
         }
+        let bottom = [
+            WorldPoint(o.center.x-halfX, 0, o.center.z-halfZ),
+            WorldPoint(o.center.x+halfX, 0, o.center.z-halfZ),
+            WorldPoint(o.center.x+halfX, 0, o.center.z+halfZ),
+            WorldPoint(o.center.x-halfX, 0, o.center.z+halfZ)
+        ]
         let top = bottom.map { WorldPoint($0.x, topHeight, $0.z) }
         let apex = WorldPoint(o.center.x, topHeight, o.center.z)
         var polygons: [[WorldPoint]] = []
@@ -1136,6 +1138,83 @@ final class BattlefieldScene: SKScene {
             line(path, bottom[i], bottom[(i+1)%4], c)
             line(path, top[i], top[(i+1)%4], c)
             line(path, bottom[i], top[i], c)
+        }
+    }
+
+    private func drawArchitecture(_ o: Obstacle, on path: CGMutablePath, camera c: CameraProjection) {
+        let s = o.size
+        let halfX: Double
+        let halfZ: Double
+        let height: Double
+        switch o.kind {
+        case .tower: halfX = s * 0.55; halfZ = s * 0.62; height = s * 4.1
+        case .building: halfX = s * 1.05; halfZ = s * 0.85; height = s * 2.2
+        case .monolith: halfX = s * 0.45; halfZ = s * 0.42; height = s * 6.0
+        default: return
+        }
+        func v(_ x: Double, _ y: Double, _ z: Double) -> WorldPoint {
+            WorldPoint(o.center.x + x, y, o.center.z + z)
+        }
+        let bottom = [v(-halfX, 0, -halfZ), v(halfX, 0, -halfZ),
+                      v(halfX, 0, halfZ), v(-halfX, 0, halfZ)]
+        let top = [v(-halfX, height, -halfZ), v(halfX, height, -halfZ),
+                   v(halfX, height, halfZ), v(-halfX, height, halfZ)]
+        for i in 0..<4 {
+            let next = (i+1) % 4
+            line(path, bottom[i], bottom[next], c)
+            line(path, top[i], top[next], c)
+            line(path, bottom[i], top[i], c)
+        }
+        if o.kind == .building {
+            // Tiered roof, two side window grids and a simple door portal.
+            let innerHeight = height + s * 0.34
+            for i in 0..<4 {
+                let j = (i + 1) % 4
+                let a = v((i == 0 || i == 3 ? -1.0 : 1.0) * halfX * 0.68,
+                          innerHeight, (i < 2 ? -1.0 : 1.0) * halfZ * 0.68)
+                let b = v((j == 0 || j == 3 ? -1.0 : 1.0) * halfX * 0.68,
+                          innerHeight, (j < 2 ? -1.0 : 1.0) * halfZ * 0.68)
+                line(path, a, b, c)
+                line(path, top[i], a, c)
+            }
+            for floor in 1...3 {
+                let y = height * Double(floor) / 4
+                line(path, v(-halfX, y, halfZ + 0.02), v(halfX, y, halfZ + 0.02), c)
+                line(path, v(halfX + 0.02, y, -halfZ), v(halfX + 0.02, y, halfZ), c)
+                for column in 1...3 {
+                    let x = -halfX + 2 * halfX * Double(column) / 4
+                    line(path, v(x, y - height * 0.08, halfZ + 0.03),
+                         v(x, y + height * 0.08, halfZ + 0.03), c)
+                }
+            }
+            line(path, v(-s*0.22, 0, halfZ + 0.04),
+                 v(-s*0.22, height*0.35, halfZ + 0.04), c)
+            line(path, v(s*0.22, 0, halfZ + 0.04),
+                 v(s*0.22, height*0.35, halfZ + 0.04), c)
+        } else if o.kind == .tower {
+            // Cross bracing, vertical antenna and an elevated observation ring.
+            for floor in 1...5 {
+                let y0 = height * Double(floor - 1) / 5
+                let y1 = height * Double(floor) / 5
+                for side in [-1.0, 1.0] {
+                    line(path, v(side*halfX, y0, -halfZ), v(side*halfX, y1, halfZ), c)
+                }
+                line(path, v(-halfX, y1, halfZ), v(halfX, y1, halfZ), c)
+            }
+            line(path, v(0, height, 0), v(0, height + s*1.2, 0), c)
+            line(path, v(-halfX*1.2, height * 0.86, halfZ*1.1),
+                 v(halfX*1.2, height * 0.86, halfZ*1.1), c)
+        } else {
+            // Tall rectangular monolith, subtle horizontal seams and inset
+            // front vertical glowing strips.
+            for floor in 1...8 {
+                let y = height * Double(floor) / 9
+                line(path, v(-halfX, y, halfZ), v(halfX, y, halfZ), c)
+            }
+            for side in [-0.65, 0.65] {
+                line(path, v(side*halfX, height*0.08, halfZ+0.02),
+                     v(side*halfX, height*0.93, halfZ+0.02), c)
+            }
         }
     }
 
