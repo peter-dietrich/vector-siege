@@ -112,6 +112,7 @@ final class BattlefieldScene: SKScene {
     private let radarPanel = SKShapeNode()
     private let rearPanel = SKShapeNode()
     private let rearView = SKCropNode()
+    private let rearMask = SKShapeNode()
     private let rearGround = SKShapeNode()
     private let rearEnvironment = SKShapeNode()
     private let rearEnemies = SKShapeNode()
@@ -145,6 +146,30 @@ final class BattlefieldScene: SKScene {
     private let telemetryRightDetail = SKLabelNode(fontNamed: "Menlo")
     private let telemetryRightFootnote = SKLabelNode(fontNamed: "Menlo")
     private let telemetryAmmo = SKLabelNode(fontNamed: "Menlo-Bold")
+
+    // Modern-mode cockpit treatment. Separate decoration and text nodes make
+    // every value live and keep Classic independent of the premium layout.
+    private let modernCockpit = SKNode()
+    private let modernTrim = SKShapeNode()
+    private let modernLowerDash = SKShapeNode()
+    private let modernLowerLines = SKShapeNode()
+    private let modernHitRing = SKShapeNode()
+    private let modernHitTrack = SKShapeNode()
+    private let modernAmmoTrack = SKShapeNode()
+    private let modernAmmoFill = SKShapeNode()
+    private let modernShieldTrack = SKShapeNode()
+    private let modernShieldFill = SKShapeNode()
+    private let modernThreatPanel = SKShapeNode()
+    private let modernBest = SKLabelNode(fontNamed: "Menlo")
+    private let modernTankStatus = SKLabelNode(fontNamed: "Menlo-Bold")
+    private let modernIntegrity = SKLabelNode(fontNamed: "Menlo")
+    private let modernHitCaption = SKLabelNode(fontNamed: "Menlo-Bold")
+    private let modernHitValue = SKLabelNode(fontNamed: "Menlo-Bold")
+    private let modernCompassLabel = SKLabelNode(fontNamed: "Menlo-Bold")
+    private let modernHeadingValue = SKLabelNode(fontNamed: "Menlo-Bold")
+    private let modernTerrainLabel = SKLabelNode(fontNamed: "Menlo")
+    private let modernSectorValue = SKLabelNode(fontNamed: "Menlo-Bold")
+    private let modernStatusText = SKLabelNode(fontNamed: "Menlo")
     private let stagePanel = SKShapeNode(rectOf: CGSize(width: 470, height: 128), cornerRadius: 10)
 
     private var green = NSColor(calibratedRed: 0.35, green: 1.0, blue: 0.46, alpha: 1)
@@ -198,7 +223,8 @@ final class BattlefieldScene: SKScene {
         rearPanel.lineWidth = 0.8
         addChild(rearPanel)
         rearView.zPosition = 12.5
-        let rearMask = SKShapeNode(rectOf: CGSize(width: 172, height: 108), cornerRadius: 6)
+        rearMask.path = CGPath(roundedRect: CGRect(x: -86, y: -54, width: 172, height: 108),
+                               cornerWidth: 6, cornerHeight: 6, transform: nil)
         rearMask.fillColor = .white
         rearMask.strokeColor = .clear
         rearMask.position = CGPoint(x: 86, y: 54)
@@ -236,6 +262,52 @@ final class BattlefieldScene: SKScene {
         stagePanel.zPosition = 18
         stagePanel.lineWidth = 1.2
         addChild(stagePanel)
+        modernCockpit.zPosition = 11.5
+        addChild(modernCockpit)
+        for (node, z) in [(modernTrim, 0.6), (modernLowerDash, 0.0),
+                          (modernLowerLines, 0.7), (modernHitTrack, 0.8),
+                          (modernHitRing, 0.9), (modernAmmoTrack, 0.6),
+                          (modernAmmoFill, 0.7), (modernShieldTrack, 0.6),
+                          (modernShieldFill, 0.7), (modernThreatPanel, 0.4)] {
+            node.zPosition = z
+            modernCockpit.addChild(node)
+        }
+        for label in [modernBest, modernTankStatus, modernIntegrity,
+                      modernHitCaption, modernHitValue, modernCompassLabel,
+                      modernHeadingValue, modernTerrainLabel,
+                      modernSectorValue, modernStatusText] {
+            label.zPosition = 4
+            label.verticalAlignmentMode = .center
+            modernCockpit.addChild(label)
+        }
+        modernBest.horizontalAlignmentMode = .right
+        modernTankStatus.horizontalAlignmentMode = .left
+        modernIntegrity.horizontalAlignmentMode = .left
+        modernHitCaption.horizontalAlignmentMode = .left
+        modernHitValue.horizontalAlignmentMode = .left
+        modernCompassLabel.horizontalAlignmentMode = .center
+        modernHeadingValue.horizontalAlignmentMode = .center
+        modernTerrainLabel.horizontalAlignmentMode = .right
+        modernSectorValue.horizontalAlignmentMode = .right
+        modernStatusText.horizontalAlignmentMode = .left
+        for label in [modernHitCaption, modernCompassLabel, modernTerrainLabel] {
+            label.fontSize = 10
+        }
+        modernBest.fontSize = 11
+        modernTankStatus.fontSize = 12
+        modernIntegrity.fontSize = 12
+        modernHitValue.fontSize = 28
+        modernHeadingValue.fontSize = 25
+        modernSectorValue.fontSize = 14
+        modernStatusText.fontSize = 10
+        for node in [modernTrim, modernLowerLines, modernHitRing,
+                     modernHitTrack] { node.fillColor = .clear }
+        for node in [modernAmmoTrack, modernAmmoFill,
+                     modernShieldTrack, modernShieldFill] {
+            node.strokeColor = .clear
+        }
+        modernLowerDash.lineWidth = 1.1
+        modernThreatPanel.lineWidth = 1.5
         titleLogo.size = CGSize(width: 245, height: 245)
         titleLogo.zPosition = 21
         titleLogo.isHidden = true
