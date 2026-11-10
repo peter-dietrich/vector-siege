@@ -85,14 +85,9 @@ struct SiegeWindow: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 16) {
-                HStack(spacing: 7) {
-                    Image(systemName: "scope")
-                        .font(.system(size: 19, weight: .bold))
-                        .foregroundStyle(Color(red: 0.46, green: 1, blue: 0.56))
-                    Text("VECTOR SIEGE")
-                        .font(.system(size: 16, weight: .heavy, design: .monospaced))
-                        .tracking(2.5)
-                }
+                Text("VECTOR SIEGE")
+                    .font(.system(size: 15, weight: .bold, design: .monospaced))
+                    .tracking(1.5)
                 Spacer(minLength: 4)
                 Picker("Display", selection: $session.displayMode) {
                     ForEach(DisplayMode.allCases) { Text($0.rawValue).tag($0) }
@@ -374,8 +369,8 @@ struct SiegePresetEditor: View {
                     Toggle("Enable flying saucers", isOn: $rules.saucersEnabled)
                 }
                 Section("Battlefield") {
-                    Stepper("Obstacles: \(rules.obstacleCount)",
-                            value: $rules.obstacleCount, in: 0...55)
+                    Stepper("City structures: \(rules.obstacleCount)",
+                            value: $rules.obstacleCount, in: 0...120)
                 }
             }
             .formStyle(.grouped)
