@@ -168,6 +168,16 @@ struct GeometrySmoke {
         precondition(migratedSave.snapshot.secondsUntilSaucerPatrol == nil,
                      "Old save slots must decode without the patrol field")
 
-        print("Perspective, steering, ammo, suspension, saves and 120s patrol checks passed.")
+        precondition(TankProximity.alertRadius == 12)
+        precondition(!TankProximity.isClose(12.01))
+        precondition(TankProximity.isClose(12))
+        precondition(TankProximity.isClose(6))
+        precondition(!TankProximity.isClose(-1))
+        precondition(!TankProximity.isClose(.infinity))
+        precondition(TankProximity.repeatInterval(for: 5) <
+                     TankProximity.repeatInterval(for: 10),
+                     "Proximity alerts should accelerate for very close threats")
+
+        print("Perspective, steering, ammo, suspension, saves, patrol and proximity checks passed.")
     }
 }
