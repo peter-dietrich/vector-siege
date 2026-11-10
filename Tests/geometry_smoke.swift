@@ -201,16 +201,47 @@ struct GeometrySmoke {
         precondition(migratedSave.snapshot.secondsUntilSaucerPatrol == nil,
                      "Old save slots must decode without the patrol field")
 
-        precondition(TankProximity.alertRadius == 12)
-        precondition(!TankProximity.isClose(12.01))
+        precondition(TankProximity.alertRadius == 30)
+        precondition(!TankProximity.isClose(30.01))
+        precondition(TankProximity.isClose(30))
         precondition(TankProximity.isClose(12))
         precondition(TankProximity.isClose(6))
         precondition(!TankProximity.isClose(-1))
         precondition(!TankProximity.isClose(.infinity))
         precondition(TankProximity.repeatInterval(for: 5) <
-                     TankProximity.repeatInterval(for: 10),
-                     "Proximity alerts should accelerate for very close threats")
+                     TankProximity.repeatInterval(for: 10))
+        precondition(TankProximity.repeatInterval(for: 10) <
+                     TankProximity.repeatInterval(for: 28),
+                     "Alarm must become more urgent as enemy approaches")
 
-        print("Perspective, steering, ammo, spacing, level saves and patrol checks passed.")
+        // A tank facing a building must be able to choose a reachable
+        // intermediate waypoint around cover rather than driving into it.
+        let cover = [NavigationObstacle(center: GroundPoint(42, 0), radius: 13)]
+        let tankStart = GroundPoint(0, 0)
+        let playerAt = GroundPoint(95, 0)
+        precondition(!EnemyNavigation.clearSegment(
+            tankStart, playerAt, obstacles: cover))
+        let detour = EnemyNavigation.nextWaypoint(
+            from: tankStart, player: playerAt, obstacles: cover,
+            shotBlockers: cover, otherTanks: [])
+        precondition(detour != nil, "Tank must route around an obstructing building")
+        if let waypoint = detour {
+            precondition(EnemyNavigation.clearSegment(
+                tankStart, waypoint, obstacles: cover,
+                clearance: EnemyNavigation.enemyRadius))
+            precondition(EnemyNavigation.isWalkable(
+                waypoint, obstacles: cover, otherTanks: []))
+        }
+        // Clear firing lanes should never be mistaken for blocked lanes.
+        precondition(EnemyNavigation.clearSegment(
+            GroundPoint(0, 40), GroundPoint(95, 40), obstacles: cover))
+        // Close-range enemy collision buffers must be respected.
+        precondition(!EnemyNavigation.isWalkable(
+            GroundPoint(42, 0), obstacles: cover, otherTanks: []))
+        precondition(!EnemyNavigation.isWalkable(
+            GroundPoint(10, 10), obstacles: [],
+            otherTanks: [GroundPoint(12, 10)]))
+
+        print("Perspective, ammo, patrol, five-length warning and enemy detours passed.")
     }
 }
