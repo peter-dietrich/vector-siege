@@ -63,6 +63,9 @@ final class BattlefieldScene: SKScene {
     private var turnMotion: Double = 0
     private var suspension = TankSuspension()
     private lazy var movementAudio = TankMotionAudio()
+    private lazy var proximityAudio = TankProximityAudio()
+    private var proximityCountdown = 0.0
+    private var nearestTankDistance: Double? = nil
     private var steerHoldSeconds: Double = 0
     private var previousSteerDirection: Double = 0
     private var score = 0
@@ -107,6 +110,15 @@ final class BattlefieldScene: SKScene {
     private let shieldNotice = SKLabelNode(fontNamed: "Menlo-Bold")
     private let radar = SKShapeNode()
     private let radarPanel = SKShapeNode()
+    private let rearPanel = SKShapeNode()
+    private let rearView = SKCropNode()
+    private let rearGround = SKShapeNode()
+    private let rearEnvironment = SKShapeNode()
+    private let rearEnemies = SKShapeNode()
+    private let rearShots = SKShapeNode()
+    private let rearBackground = SKShapeNode()
+    private let rearLabel = SKLabelNode(fontNamed: "Menlo-Bold")
+    private let proximityLabel = SKLabelNode(fontNamed: "Menlo-Bold")
     private let radarObstacleContacts = SKShapeNode()
     private let radarProjectileGlow = SKShapeNode()
     private let radarProjectileCore = SKShapeNode()
@@ -182,6 +194,32 @@ final class BattlefieldScene: SKScene {
         radarPanel.zPosition = 11
         radarPanel.lineWidth = 0.8
         addChild(radarPanel)
+        rearPanel.zPosition = 11
+        rearPanel.lineWidth = 0.8
+        addChild(rearPanel)
+        rearView.zPosition = 12.5
+        let rearMask = SKShapeNode(rectOf: CGSize(width: 172, height: 108), cornerRadius: 6)
+        rearMask.fillColor = .white
+        rearMask.strokeColor = .clear
+        rearView.maskNode = rearMask
+        for (shape, depth) in [(rearBackground, 0.0), (rearGround, 1.0),
+                               (rearEnvironment, 2.0), (rearEnemies, 3.0),
+                               (rearShots, 4.0)] {
+            shape.zPosition = depth
+            rearView.addChild(shape)
+        }
+        addChild(rearView)
+        rearLabel.zPosition = 15
+        rearLabel.fontSize = 10
+        rearLabel.horizontalAlignmentMode = .center
+        rearLabel.verticalAlignmentMode = .center
+        addChild(rearLabel)
+        proximityLabel.zPosition = 16
+        proximityLabel.fontSize = 14
+        proximityLabel.horizontalAlignmentMode = .center
+        proximityLabel.verticalAlignmentMode = .center
+        proximityLabel.isHidden = true
+        addChild(proximityLabel)
         radarObstacleContacts.zPosition = 13.1
         addChild(radarObstacleContacts)
         for panel in [telemetryLeftPanel, telemetryRightPanel] {
@@ -239,12 +277,12 @@ final class BattlefieldScene: SKScene {
         // Deliberate hierarchy: small section captions, medium supporting readouts,
         // and larger speed, score and ammunition values. Keep rows tightly stacked.
         for headingNode in [telemetryLeftHeading, telemetryRightHeading] { headingNode.fontSize = 9 }
-        telemetryLeftDetail.fontSize = 11
-        telemetryRightDetail.fontSize = 11
-        telemetryLeftFootnote.fontSize = 9
-        telemetryRightFootnote.fontSize = 10
-        telemetryCoordinates.fontSize = 10
-        telemetryAmmo.fontSize = 13
+        telemetryLeftDetail.fontSize = 12
+        telemetryRightDetail.fontSize = 12
+        telemetryLeftFootnote.fontSize = 11
+        telemetryRightFootnote.fontSize = 11
+        telemetryCoordinates.fontSize = 10.5
+        telemetryAmmo.fontSize = 15
 
         for (label, z) in [(leftHUD, 14.0), (rightHUD, 14.0), (midHUD, 14.0),
                            (warning, 15.0), (banner, 20.0), (subtitle, 20.0), (message, 20.0)] {
@@ -322,6 +360,8 @@ final class BattlefieldScene: SKScene {
         lives = rules.startingLives
         shotTally = ShotTally()
         observedFPS = 60
+        nearestTankDistance = nil
+        proximityCountdown = 0
         driveSpeed = 0
         turnMotion = 0
         suspension.reset()
@@ -365,6 +405,21 @@ final class BattlefieldScene: SKScene {
             moving: playing ? min(1, abs(driveSpeed) / 16.5) : 0,
             turning: playing ? turnMotion : 0,
             enabled: playing && soundOn, dt: max(dt, 0.016))
+        if playing {
+            nearestTankDistance = enemies
+                .filter { $0.kind != .saucer }
+                .map { $0.center.distance(to: tankPosition) }
+                .min()
+            proximityCountdown = max(0, proximityCountdown - dt)
+            if let distance = nearestTankDistance, TankProximity.isClose(distance) {
+                if proximityCountdown <= 0 {
+                    if soundOn { proximityAudio.beep() }
+                    proximityCountdown = TankProximity.repeatInterval(for: distance)
+                }
+            } else {
+                proximityCountdown = 0
+            }
+        }
         render()
     }
 
@@ -739,6 +794,8 @@ final class BattlefieldScene: SKScene {
         turnMotion = 0
         suspension.reset()
         observedFPS = 60
+        nearestTankDistance = nil
+        proximityCountdown = 0
         pulse = 0
         lastUpdateTime = 0
         bestScore = max(bestScore, score)
@@ -855,10 +912,23 @@ final class BattlefieldScene: SKScene {
 
         let amber = NSColor(calibratedRed: 1, green: 0.72, blue: 0.40, alpha: 1)
         let panelFill = NSColor(calibratedRed: 0.018, green: 0.045, blue: 0.044, alpha: 0.90)
-        for panel in [telemetryLeftPanel, telemetryRightPanel, radarPanel] {
+        for panel in [telemetryLeftPanel, telemetryRightPanel, radarPanel, rearPanel] {
             panel.fillColor = panelFill
             panel.strokeColor = amber.withAlphaComponent(displayMode == .classic ? 0.32 : 0.50)
         }
+        rearLabel.fontColor = amber
+        proximityLabel.fontColor = amber
+        rearGround.strokeColor = green.withAlphaComponent(0.55)
+        rearGround.lineWidth = 0.6
+        rearEnvironment.strokeColor = green.withAlphaComponent(0.82)
+        rearEnvironment.lineWidth = 1.15
+        rearEnemies.strokeColor = accent
+        rearEnemies.lineWidth = 1.9
+        rearEnemies.glowWidth = displayMode == .modern ? 3.0 : 0.8
+        rearShots.strokeColor = amber
+        rearShots.glowWidth = 2.6
+        rearBackground.strokeColor = .clear
+        rearBackground.fillColor = NSColor(calibratedRed: 0.012, green: 0.04, blue: 0.055, alpha: 0.98)
         radarObstacleContacts.strokeColor = muted.withAlphaComponent(0.95)
         radarObstacleContacts.fillColor = muted.withAlphaComponent(0.55)
         radarObstacleContacts.lineWidth = 0.7
@@ -1469,6 +1539,77 @@ final class BattlefieldScene: SKScene {
                             spark.position.z - v.z*0.045*delta), c)
         }
         flashLines.path = flarePath
+    }
+
+    /// A live, tank-relative rear camera rendered from a true 180-degree
+    /// perspective. All paths are clipped by SKCropNode to the inset viewport.
+    /// This does not affect physics, aiming or the main scene camera.
+    private func renderRearView() {
+        let width = 172.0
+        let height = 108.0
+        let backCamera = CameraProjection(
+            position: tankPosition, yaw: wrapAngle(heading + .pi),
+            viewportWidth: width, viewportHeight: height)
+        let backgroundPath = CGMutablePath()
+        backgroundPath.addRect(CGRect(x: 0, y: 0, width: width, height: height))
+        rearBackground.path = backgroundPath
+
+        let gridPath = CGMutablePath()
+        let backHeading = heading + .pi
+        let baseX = floor(tankPosition.x / 20) * 20
+        let baseZ = floor(tankPosition.z / 20) * 20
+        for i in -8...8 {
+            let x = baseX + Double(i) * 20
+            line(gridPath, WorldPoint(x, 0, baseZ-160),
+                 WorldPoint(x, 0, baseZ+160), backCamera)
+            let z = baseZ + Double(i) * 20
+            line(gridPath, WorldPoint(baseX-160, 0, z),
+                 WorldPoint(baseX+160, 0, z), backCamera)
+        }
+        // Distant skyline, viewed from the rear camera instead of mirrored front.
+        let horizon = backCamera.horizon
+        var previous = point(0, horizon)
+        for i in 0...34 {
+            let x = Double(i) * width / 34
+            let bearing = backHeading + atan2((x - width/2)/backCamera.focal, 1)
+            let top = point(x, horizon + ridge(bearing, multiplier: 0.38))
+            if i > 0 { segment(gridPath, previous, top) }
+            previous = top
+        }
+        rearGround.path = gridPath
+
+        let obstaclePath = CGMutablePath()
+        for object in obstacles where object.center.distance(to: tankPosition) < 95 {
+            switch object.kind {
+            case .pyramid: drawPyramid(object, on: obstaclePath, camera: backCamera)
+            case .block: drawBlock(object, on: obstaclePath, camera: backCamera)
+            case .tower, .building, .monolith:
+                if displayMode == .modern {
+                    drawArchitecture(object, on: obstaclePath, camera: backCamera)
+                } else {
+                    drawBlock(object, on: obstaclePath, camera: backCamera)
+                }
+            }
+        }
+        rearEnvironment.path = obstaclePath
+
+        let enemyPath = CGMutablePath()
+        for foe in enemies where foe.center.distance(to: tankPosition) < 120 {
+            if foe.kind == .saucer {
+                drawSaucer(foe, on: enemyPath, camera: backCamera)
+            } else {
+                drawTank(foe, on: enemyPath, camera: backCamera)
+            }
+        }
+        rearEnemies.path = enemyPath
+        let projectilePath = CGMutablePath()
+        for shell in shells {
+            let height = shell.hostile ? 1.5 : 1.65
+            let tail = shell.center - shell.direction * 2.6
+            line(projectilePath, WorldPoint(shell.center, height: height),
+                 WorldPoint(tail, height: height), backCamera)
+        }
+        rearShots.path = projectilePath
     }
 
     private func renderHUD(_ c: CameraProjection) {
