@@ -1464,8 +1464,8 @@ final class BattlefieldScene: SKScene {
         let sight = CGMutablePath()
         // Center map, with two independent telemetry banks to either side.
         let radarX = w / 2
-        let radarY = h - 87.0
-        let radarRadius = 57.0
+        let radarY = h - 93.0
+        let radarRadius = 69.0
         let radarRange = 165.0
         let bankWidth = min(316.0, max(230.0, (w - 218.0) / 2 - 26.0))
         let panelHeight = 154.0
@@ -1476,10 +1476,12 @@ final class BattlefieldScene: SKScene {
         }
         telemetryLeftPanel.path = panelRect(width: bankWidth)
         telemetryRightPanel.path = panelRect(width: bankWidth)
-        radarPanel.path = panelRect(width: 152)
+        radarPanel.path = CGPath(
+            roundedRect: CGRect(x: -89, y: -89, width: 178, height: 178),
+            cornerWidth: 12, cornerHeight: 12, transform: nil)
         telemetryLeftPanel.position = point(14 + bankWidth / 2, h - 84)
         telemetryRightPanel.position = point(w - 14 - bankWidth / 2, h - 84)
-        radarPanel.position = point(radarX, h - 84)
+        radarPanel.position = point(radarX, h - 94)
         telemetryLeftAccent.position = point(20, h - 84)
         telemetryRightAccent.position = point(w - 20, h - 84)
         telemetryLeftHeading.position = point(34, h - 33)
@@ -1606,7 +1608,7 @@ final class BattlefieldScene: SKScene {
                 : String(format: "SHIELD ACTIVE  %.1fS", shieldDuration)
         }
 
-        leftHUD.position = point(radarX, h - 18)
+        leftHUD.position = point(radarX, h - 12)
         leftHUD.horizontalAlignmentMode = .center
         leftHUD.fontSize = 9
         leftHUD.text = "RADAR / 165"
@@ -1639,7 +1641,7 @@ final class BattlefieldScene: SKScene {
         telemetryAmmo.text = String(format: "AMMO %02d/%02d   %@", cannon.roundsRemaining,
                                            cannon.maxRounds, cannon.statusText)
         telemetryAmmo.fontColor = cannon.isEmpty ? accent : green
-        warning.position = point(w / 2, h - 163)
+        warning.position = point(w / 2, h - 201)
         warning.fontSize = 12
         warning.text = target.map { abs($0.error) < 0.055 && $0.range < 68 ? "TARGET ALIGNED" : "" }
             ?? (pendingWave > 0 ? "AREA SECURE" : "")
