@@ -136,7 +136,6 @@ final class BattlefieldScene: SKScene {
     private let warning = SKLabelNode(fontNamed: "Menlo-Bold")
     private let banner = SKLabelNode(fontNamed: "Menlo-Bold")
     private let levelFrame = SKShapeNode()
-    private let titleLogo = SKSpriteNode(imageNamed: "VectorSiegeLogo")
     private let subtitle = SKLabelNode(fontNamed: "Menlo")
     private let message = SKLabelNode(fontNamed: "Menlo")
     private let scanlines = SKShapeNode()
@@ -327,14 +326,6 @@ final class BattlefieldScene: SKScene {
         }
         modernLowerDash.lineWidth = 1.1
         modernThreatPanel.lineWidth = 1.5
-        titleLogo.size = CGSize(width: 245, height: 245)
-        titleLogo.zPosition = 21
-        titleLogo.isHidden = true
-        addChild(titleLogo)
-        titleLogo.run(.repeatForever(.sequence([
-            .fadeAlpha(to: 0.78, duration: 2.2),
-            .fadeAlpha(to: 1.0, duration: 2.2)
-        ])))
         shieldBorder.zPosition = 9.0
         shieldBorder.fillColor = .clear
         shieldBorder.lineWidth = 3.0
@@ -805,13 +796,27 @@ final class BattlefieldScene: SKScene {
         // city-block interiors with small clusters, leaving broad empty blocks.
         let seed = UInt64.random(in: 1...UInt64.max)
         for site in CityLayout.buildings(count: rules.obstacleCount, seed: seed) {
+            let centerDistrict = abs(site.center.x) < 60 &&
+                                 abs(site.center.z) < 60
+            let middleDistrict = abs(site.center.x) < 120 &&
+                                 abs(site.center.z) < 120
             let kind: Obstacle.Kind
-            switch site.variant {
-            case 0, 5: kind = .pyramid
-            case 2, 6: kind = .tower
-            case 3: kind = .building
-            case 7: kind = .monolith
-            default: kind = .block
+            if centerDistrict {
+                // Downtown skyline: predominantly tall city buildings.
+                switch site.variant % 5 {
+                case 0, 1: kind = .building
+                case 2, 3: kind = .tower
+                default: kind = .monolith
+                }
+            } else if middleDistrict {
+                switch site.variant % 5 {
+                case 0, 1: kind = .building
+                case 2: kind = .tower
+                case 3: kind = .block
+                default: kind = .pyramid
+                }
+            } else {
+                kind = site.variant.isMultiple(of: 3) ? .building : .block
             }
             obstacles.append(Obstacle(center: site.center,
                                       size: site.size, kind: kind))
@@ -2476,8 +2481,6 @@ final class BattlefieldScene: SKScene {
         }
         banner.position = point(w / 2, dialogCenterY + 33)
         banner.fontSize = levelReady ? min(49, w * 0.057) : min(38, w * 0.042)
-        titleLogo.position = point(w / 2, h * 0.66)
-        titleLogo.isHidden = round != .title
         subtitle.position = point(w / 2,
                                   round == .title ? h * 0.42 : dialogCenterY - 26)
         subtitle.fontSize = modernHUD ? 14 : 15
