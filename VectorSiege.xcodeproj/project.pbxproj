@@ -5,6 +5,7 @@
     objectVersion = 56;
     objects = {
 		A9B7ABA54592D04D293712DC = { isa = PBXBuildFile; fileRef = 4376FFDFF495BC6CAAEF2B45; };
+		A1B2C3D4E5F60718293A4B5C = { isa = PBXBuildFile; fileRef = A1B2C3D4E5F60718293A4B5D; };
 		7B4FA13200313AC2076C523D = { isa = PBXBuildFile; fileRef = 404450E4823EE7690FDE4F47; };
 		DA43340BDBB625B893190C5D = { isa = PBXBuildFile; fileRef = 651FAAC9335FBD8159C2925C; };
 		4D2DA07AD47344DBCBD29D57 = { isa = PBXBuildFile; fileRef = 7DFFDF91DB3EAE8F58F16771; };
@@ -17,6 +18,7 @@
 		404450E4823EE7690FDE4F47 = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BattlefieldMath.swift; sourceTree = "<group>"; };
 		651FAAC9335FBD8159C2925C = { isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BattlefieldScene.swift; sourceTree = "<group>"; };
 		7DFFDF91DB3EAE8F58F16771 = { isa = PBXFileReference; lastKnownFileType = audio.wav; path = shot.wav; sourceTree = "<group>"; };
+		A1B2C3D4E5F60718293A4B5D = { isa = PBXFileReference; lastKnownFileType = image.jpeg; path = VectorSiegeLogo.jpg; sourceTree = "<group>"; };
 		6E3A25673868B540D528B732 = { isa = PBXFileReference; lastKnownFileType = audio.wav; path = enemy.wav; sourceTree = "<group>"; };
 		C1BE6136B8B464ACCB87FD6C = { isa = PBXFileReference; lastKnownFileType = audio.wav; path = impact.wav; sourceTree = "<group>"; };
 		08503BA64A081C6DF5662F35 = { isa = PBXFileReference; lastKnownFileType = audio.wav; path = explosion.wav; sourceTree = "<group>"; };
@@ -25,10 +27,10 @@
 		38A007151ABE87CC01A5B6E9 = { isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = VectorSiege.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		DC76E9F0C0006E8F919E0C51 = { isa = PBXGroup; children = (4D820FADAFBC7A1FCACC4F07, 3B91224C671A3400805ED16F, BFE00B156DCFC34C4751A6E5); sourceTree = "<group>"; };
 		4D820FADAFBC7A1FCACC4F07 = { isa = PBXGroup; children = (4376FFDFF495BC6CAAEF2B45, 404450E4823EE7690FDE4F47, 651FAAC9335FBD8159C2925C); path = Sources; sourceTree = "<group>"; };
-		3B91224C671A3400805ED16F = { isa = PBXGroup; children = (7DFFDF91DB3EAE8F58F16771, 6E3A25673868B540D528B732, C1BE6136B8B464ACCB87FD6C, 08503BA64A081C6DF5662F35, DE88B7C625DF7A09B2877947, D255ECCA6197FA582456DCB9); path = Resources; sourceTree = "<group>"; };
+		3B91224C671A3400805ED16F = { isa = PBXGroup; children = (7DFFDF91DB3EAE8F58F16771, 6E3A25673868B540D528B732, C1BE6136B8B464ACCB87FD6C, 08503BA64A081C6DF5662F35, DE88B7C625DF7A09B2877947, D255ECCA6197FA582456DCB9, A1B2C3D4E5F60718293A4B5D); path = Resources; sourceTree = "<group>"; };
 		BFE00B156DCFC34C4751A6E5 = { isa = PBXGroup; children = (38A007151ABE87CC01A5B6E9); name = Products; sourceTree = "<group>"; };
 		72A8017E75795FC05F78F54C = { isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A9B7ABA54592D04D293712DC, 7B4FA13200313AC2076C523D, DA43340BDBB625B893190C5D); runOnlyForDeploymentPostprocessing = 0; };
-		963488E8A773A44C9A5DC523 = { isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (4D2DA07AD47344DBCBD29D57, 0344B214576FD5ACE6E80B62, 748859311A8832FB40567F40, 9B456069F2B94D206864B57E, 401E536EE192E1E376E3B4A5, 3A60C29E49926491CE356636); runOnlyForDeploymentPostprocessing = 0; };
+		963488E8A773A44C9A5DC523 = { isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (4D2DA07AD47344DBCBD29D57, 0344B214576FD5ACE6E80B62, 748859311A8832FB40567F40, 9B456069F2B94D206864B57E, 401E536EE192E1E376E3B4A5, 3A60C29E49926491CE356636, A1B2C3D4E5F60718293A4B5C); runOnlyForDeploymentPostprocessing = 0; };
 		0E8A3AD980EC179856012B7E = { isa = PBXNativeTarget;
             buildConfigurationList = C57128001CE614BF8549D6BB;
             buildPhases = (72A8017E75795FC05F78F54C, 963488E8A773A44C9A5DC523);
