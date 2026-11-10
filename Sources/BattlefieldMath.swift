@@ -351,7 +351,7 @@ struct SaucerPatrolClock: Codable {
         guard elapsed > 0 else { return false }
         secondsUntilArrival -= elapsed
         if secondsUntilArrival <= 0 {
-            secondsUntilArrival = min(interval, secondsUntilArrival + interval)
+            secondsUntilArrival = min(Self.interval, secondsUntilArrival + Self.interval)
             return true
         }
         return false
