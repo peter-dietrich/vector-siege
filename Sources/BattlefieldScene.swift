@@ -3,7 +3,7 @@ import AppKit
 import AVFoundation
 
 private struct Obstacle {
-    enum Kind { case block, pyramid }
+    enum Kind { case block, pyramid, tower, building, monolith }
     var center: GroundPoint
     var size: Double
     var kind: Kind
@@ -80,6 +80,7 @@ final class BattlefieldScene: SKScene {
     private var gameClock: Double = 0
     private var lastUpdateTime: TimeInterval = 0
     private var pendingWave: Double = 0
+    private var saucerPatrol = SaucerPatrolClock()
     private var obstacles: [Obstacle] = []
     private var enemies: [Foe] = []
     private var shells: [Shell] = []
@@ -318,6 +319,7 @@ final class BattlefieldScene: SKScene {
         shieldCooldown = 0
         invulnerability = 1.8
         pendingWave = 0
+        saucerPatrol = SaucerPatrolClock()
         shells.removeAll()
         sparks.removeAll()
         makeObstacles()
@@ -345,6 +347,7 @@ final class BattlefieldScene: SKScene {
     }
 
     private func tick(_ dt: Double) {
+        if saucerPatrol.advance(by: dt) && rules.saucersEnabled { spawnPatrolSaucer() }
         cannon.advance(by: dt)
         shieldCooldown = max(0, shieldCooldown - dt)
         shieldDuration = max(0, shieldDuration - dt)
@@ -549,9 +552,27 @@ final class BattlefieldScene: SKScene {
             let distance = Double.random(in: 24...145)
             let p = GroundPoint(sin(angle) * distance, cos(angle) * distance)
             let size = Double.random(in: 3.0...6.7)
-            obstacles.append(Obstacle(center: p, size: size,
-                                      kind: i.isMultiple(of: 2) ? .pyramid : .block))
+            let style = i % 8
+            let kind: Obstacle.Kind
+            switch style {
+            case 0, 5: kind = .pyramid
+            case 2, 6: kind = .tower
+            case 3: kind = .building
+            case 7: kind = .monolith
+            default: kind = .block
+            }
+            obstacles.append(Obstacle(center: p, size: size, kind: kind))
         }
+    }
+
+    private func spawnPatrolSaucer() {
+        let bearing = heading + Double.random(in: -0.9...0.9)
+        let origin = tankPosition + facing(bearing) * 96
+        let safeOrigin = GroundPoint(max(-175, min(175, origin.x)),
+                                     max(-175, min(175, origin.z)))
+        enemies.append(Foe(center: safeOrigin, heading: bearing + .pi,
+                           kind: .saucer, reload: 999,
+                           phase: Double.random(in: 0...(2 * .pi)), hitPoints: 1))
     }
 
     private func spawnWave() {
@@ -602,6 +623,26 @@ final class BattlefieldScene: SKScene {
         }.min(by: { abs($0.error) < abs($1.error) })
     }
 
+    private func obstacleKindName(_ kind: Obstacle.Kind) -> String {
+        switch kind {
+        case .block: return "block"
+        case .pyramid: return "pyramid"
+        case .tower: return "tower"
+        case .building: return "building"
+        case .monolith: return "monolith"
+        }
+    }
+
+    private func obstacleKind(named name: String) -> Obstacle.Kind {
+        switch name {
+        case "pyramid": return .pyramid
+        case "tower": return .tower
+        case "building": return .building
+        case "monolith": return .monolith
+        default: return .block
+        }
+    }
+
     // Exact in-progress battle state; displayed next in a paused state when resumed.
     func makeSnapshot() -> SiegeSnapshot? {
         guard round == .playing || round == .paused else { return nil }
@@ -617,7 +658,7 @@ final class BattlefieldScene: SKScene {
             cannon: cannon, shotTally: shotTally,
             obstacles: obstacles.map { SavedSiegeObstacle(
                 center: $0.center, size: $0.size,
-                kind: $0.kind == .pyramid ? "pyramid" : "block") },
+                kind: obstacleKindName($0.kind)) },
             enemies: enemies.map { SavedSiegeFoe(
                 center: $0.center, heading: $0.heading,
                 kind: $0.kind == .hunter ? "hunter" : $0.kind == .saucer ? "saucer" : "tank",
@@ -627,7 +668,8 @@ final class BattlefieldScene: SKScene {
                 hostile: $0.hostile, timeLeft: $0.timeLeft) },
             sparks: sparks.map { SavedSiegeSpark(
                 position: $0.position, velocity: $0.velocity,
-                timeLeft: $0.timeLeft, maxLife: $0.maxLife) }
+                timeLeft: $0.timeLeft, maxLife: $0.maxLife) },
+            secondsUntilSaucerPatrol: saucerPatrol.secondsUntilArrival
         )
     }
 
@@ -654,11 +696,12 @@ final class BattlefieldScene: SKScene {
         shieldCooldown = max(0, saved.shieldCooldown)
         invulnerability = max(0, saved.invulnerability)
         pendingWave = max(0, saved.pendingWave)
+        saucerPatrol.restore(secondsRemaining: saved.secondsUntilSaucerPatrol)
         cannon = saved.cannon
         shotTally = saved.shotTally
         obstacles = saved.obstacles.map { Obstacle(
             center: $0.center, size: $0.size,
-            kind: $0.kind == "pyramid" ? .pyramid : .block) }
+            kind: obstacleKind(named: $0.kind)) }
         enemies = saved.enemies.map { Foe(
             center: $0.center, heading: $0.heading,
             kind: $0.kind == "hunter" ? .hunter : $0.kind == "saucer" ? .saucer : .tank,
@@ -941,8 +984,13 @@ final class BattlefieldScene: SKScene {
             // Culling far outside the visible scene.
             let offset = o.center - tankPosition
             if offset.length > 190 { continue }
-            if o.kind == .pyramid { drawPyramid(o, on: structurePath, camera: c) }
-            else { drawBlock(o, on: structurePath, camera: c) }
+            switch o.kind {
+            case .pyramid: drawPyramid(o, on: structurePath, camera: c)
+            case .block: drawBlock(o, on: structurePath, camera: c)
+            case .tower, .building, .monolith:
+                if displayMode == .modern { drawArchitecture(o, on: structurePath, camera: c) }
+                else { drawBlock(o, on: structurePath, camera: c) }
+            }
             if displayMode == .modern { facets.append(contentsOf: glassFacets(for: o, camera: c)) }
         }
         structures.path = structurePath
@@ -1007,7 +1055,14 @@ final class BattlefieldScene: SKScene {
             WorldPoint(o.center.x+s, 0, o.center.z+s),
             WorldPoint(o.center.x-s, 0, o.center.z+s)
         ]
-        let topHeight = o.kind == .pyramid ? s * 1.28 : s * 1.35
+        let topHeight: Double
+        switch o.kind {
+        case .pyramid: topHeight = s * 1.28
+        case .block: topHeight = s * 1.35
+        case .tower: topHeight = s * 4.1
+        case .building: topHeight = s * 2.2
+        case .monolith: topHeight = s * 6.0
+        }
         let top = bottom.map { WorldPoint($0.x, topHeight, $0.z) }
         let apex = WorldPoint(o.center.x, topHeight, o.center.z)
         var polygons: [[WorldPoint]] = []
