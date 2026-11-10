@@ -191,6 +191,38 @@ struct GeometrySmoke {
             spawned.append(point)
         }
         precondition(spawned.count == 8)
+        // Every new wave has a different angular phase. None of its enemies
+        // may appear directly inside the commander's forward aiming cone.
+        for phase in [-2.7, -0.9, 0.2, 1.6, 2.9] {
+            var positions: [GroundPoint] = []
+            for index in 0..<6 {
+                let candidate = EnemySpawnLayout.choosePosition(
+                    player: origin, heading: 0.6, index: index, count: 6,
+                    existing: positions, phase: phase,
+                    forwardExclusion: Double.pi / 5.0,
+                    isOpen: { abs($0.x) < 177 && abs($0.z) < 177 })
+                precondition(candidate != nil, "Wave needs safe side/rear spawn slots")
+                let p = candidate!
+                let bearing = atan2(p.x, p.z)
+                precondition(abs(wrapAngle(bearing - 0.6)) >= Double.pi / 5 - 0.00001)
+                precondition(EnemySpawnLayout.isSeparated(p, from: positions))
+                positions.append(p)
+            }
+        }
+        for angle in stride(from: -Double.pi, through: Double.pi,
+                            by: Double.pi / 12) {
+            let reach = TacticalRadarGeometry.squareReach(
+                angle: angle, halfSide: 80)
+            let x = abs(sin(angle) * reach)
+            let y = abs(cos(angle) * reach)
+            precondition(max(x, y) <= 80.00001)
+            precondition(abs(max(x, y) - 80) < 0.00001,
+                         "Radar beam must terminate exactly on the square")
+        }
+        precondition(TacticalRadarGeometry.intensity(trailingFraction: 0) == 1)
+        precondition(TacticalRadarGeometry.intensity(trailingFraction: 1) == 0)
+        precondition(TacticalRadarGeometry.intensity(trailingFraction: 0.2) >
+                     TacticalRadarGeometry.intensity(trailingFraction: 0.8))
         precondition(!EnemySpawnLayout.isSeparated(
             GroundPoint(spawned[0].x + 1, spawned[0].z + 1),
             from: spawned))
