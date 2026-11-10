@@ -2319,7 +2319,7 @@ final class BattlefieldScene: SKScene {
         }
         modernTerrainProfile.path = terrain
         modernTerrainLabel.position = point(x4 - 17, topY - 28)
-        modernTerrainLabel.text = "TERRAIN"
+        modernTerrainLabel.text = "TERRAIN PROFILE"
         modernTerrainLabel.fontSize = CGFloat(12 * scale)
 
         // Sector readout uses actual 60-unit city blocks, not fabricated
