@@ -872,11 +872,16 @@ final class BattlefieldScene: SKScene {
     private func spawnWave() {
         enemies.removeAll()
         let count = rules.enemies(forWave: wave)
+        // Change the angular starting sectors every wave. Keep the central
+        // aiming cone empty on spawn, even after moving to a new city block.
+        let wavePhase = Double.random(in: (-Double.pi)...Double.pi)
+        let forwardExclusion = Double.pi / 5.0
         for n in 0..<count {
             let occupied = enemies.map { $0.center }
             guard let target = EnemySpawnLayout.choosePosition(
                 player: tankPosition, heading: heading, index: n, count: count,
-                existing: occupied,
+                existing: occupied, phase: wavePhase,
+                forwardExclusion: forwardExclusion,
                 isOpen: { !self.blocked($0, radius: 4) }) else {
                 // Never spawn a pile of tanks: an obstructed sector produces
                 // fewer enemies rather than falling back to an occupied cell.
@@ -1084,12 +1089,14 @@ final class BattlefieldScene: SKScene {
              displayMode == .classic ? 0 : 1.3),
             (structures, green.withAlphaComponent(0.82), 1.5, displayMode == .classic ? 0.35 : 2.6),
             // Enemy armor is always orange for immediate identification.
-            (opponentLines, NSColor(calibratedRed: 1, green: 0.49, blue: 0.12, alpha: 1),
-             2.0, displayMode == .classic ? 0.9 : 4.6),
+            (opponentLines, NSColor(calibratedRed: 1, green: 0.57, blue: 0.19, alpha: 1),
+             displayMode == .classic ? 1.35 : 1.55,
+             displayMode == .classic ? 0.15 : 0.8),
             (opponentSaucerLines, green, 1.8, displayMode == .classic ? 0.7 : 3.1),
             (shotLines, accent, 2.5, displayMode == .classic ? 0.8 : 5),
             (flashLines, accent, 2.0, displayMode == .classic ? 1 : 5),
-            (reticle, accent, 1.1, displayMode == .classic ? 0.25 : 2),
+            (reticle, accent, displayMode == .classic ? 1.05 : 1.5,
+             displayMode == .classic ? 0.15 : 0.55),
             (radar, displayMode == .modern
              ? NSColor(calibratedRed: 0.17, green: 0.96, blue: 0.74, alpha: 1)
              : accent, 1.5, displayMode == .classic ? 0.2 : 2),
@@ -1206,8 +1213,8 @@ final class BattlefieldScene: SKScene {
         rearEnvironment.strokeColor = green.withAlphaComponent(0.82)
         rearEnvironment.lineWidth = 1.15
         rearEnemies.strokeColor = enemyOrange
-        rearEnemies.lineWidth = 1.9
-        rearEnemies.glowWidth = displayMode == .modern ? 3.3 : 0.8
+        rearEnemies.lineWidth = 1.45
+        rearEnemies.glowWidth = displayMode == .modern ? 0.8 : 0.2
         rearSaucers.strokeColor = green
         rearSaucers.lineWidth = 1.5
         rearSaucers.glowWidth = displayMode == .modern ? 2.5 : 0.7
