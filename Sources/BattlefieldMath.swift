@@ -350,7 +350,8 @@ struct SaucerPatrolClock: Codable {
     mutating func advance(by elapsed: Double) -> Bool {
         guard elapsed > 0 else { return false }
         secondsUntilArrival -= elapsed
-        if secondsUntilArrival <= 0 {
+        // Tolerate sub-microsecond floating-point error at exactly 120s.
+        if secondsUntilArrival <= 0.000001 {
             secondsUntilArrival = min(Self.interval, secondsUntilArrival + Self.interval)
             return true
         }
