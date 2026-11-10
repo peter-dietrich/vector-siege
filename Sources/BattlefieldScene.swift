@@ -1338,18 +1338,47 @@ final class BattlefieldScene: SKScene {
     }
 
     private func drawSaucer(_ e: Foe, on path: CGMutablePath, camera c: CameraProjection) {
-        let n = 10
-        let height = 5.1 + sin(gameClock*2.4 + e.phase)*0.55
+        // Animated rotating wireframe disk: moving facets and radial spokes make
+        // the spin obvious in both Classic and Modern display modes.
+        let n = displayMode == .modern ? 18 : 12
+        let spin = gameClock * 2.9 + e.phase
+        let hover = 5.1 + sin(gameClock * 2.4 + e.phase) * 0.55
+        let radius = displayMode == .modern ? 3.7 : 3.1
+        func ring(_ angle: Double, radius r: Double, elevation: Double) -> WorldPoint {
+            WorldPoint(e.center.x + cos(angle) * r, elevation,
+                       e.center.z + sin(angle) * r)
+        }
         for i in 0..<n {
-            let a = Double(i) * 2 * .pi / Double(n)
-            let b = Double(i+1) * 2 * .pi / Double(n)
-            let outer1 = WorldPoint(e.center.x + cos(a)*3.1, height, e.center.z + sin(a)*3.1)
-            let outer2 = WorldPoint(e.center.x + cos(b)*3.1, height, e.center.z + sin(b)*3.1)
-            let cup1 = WorldPoint(e.center.x + cos(a)*1.4, height + 1.4, e.center.z + sin(a)*1.4)
-            let cup2 = WorldPoint(e.center.x + cos(b)*1.4, height + 1.4, e.center.z + sin(b)*1.4)
-            line(path, outer1, outer2, c)
-            line(path, cup1, cup2, c)
-            if i.isMultiple(of: 2) { line(path, outer1, cup1, c) }
+            let a = spin + Double(i) * 2 * .pi / Double(n)
+            let b = spin + Double(i + 1) * 2 * .pi / Double(n)
+            let rimA = ring(a, radius: radius, elevation: hover)
+            let rimB = ring(b, radius: radius, elevation: hover)
+            let lowerA = ring(a, radius: radius * 0.73, elevation: hover - 0.54)
+            let lowerB = ring(b, radius: radius * 0.73, elevation: hover - 0.54)
+            let domeA = ring(a, radius: radius * 0.44, elevation: hover + 1.27)
+            let domeB = ring(b, radius: radius * 0.44, elevation: hover + 1.27)
+            line(path, rimA, rimB, c)
+            line(path, lowerA, lowerB, c)
+            line(path, domeA, domeB, c)
+            if i.isMultiple(of: 2) {
+                line(path, rimA, domeA, c)
+                line(path, rimA, lowerA, c)
+                line(path, rimA,
+                     WorldPoint(e.center.x, hover + 0.33, e.center.z), c)
+            }
+            if displayMode == .modern && i.isMultiple(of: 3) {
+                // Rotating elevated light bar and undercarriage facet.
+                line(path, domeA, ring(a, radius: radius * 0.16, elevation: hover + 1.63), c)
+                line(path, lowerA, ring(a, radius: radius * 0.24, elevation: hover - 0.77), c)
+            }
+        }
+        if displayMode == .modern {
+            let crown = WorldPoint(e.center.x, hover + 1.70, e.center.z)
+            for i in 0..<8 {
+                let a = spin + Double(i) * .pi / 4
+                line(path, crown,
+                     ring(a, radius: radius * 0.16, elevation: hover + 1.63), c)
+            }
         }
     }
 
