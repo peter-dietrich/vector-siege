@@ -1722,47 +1722,72 @@ final class BattlefieldScene: SKScene {
         let hp = CGMutablePath()
         let rp = CGMutablePath()
         let sight = CGMutablePath()
-        // Center map, with two independent telemetry banks to either side.
-        let radarX = w / 2 - 104.0
-        let rearX = w / 2 + 103.0
-        // Nearly inscribed dial: just a slim border inside the square monitor.
-        let radarY = h - 103.0
-        let radarRadius = 79.0
+        let modernHUD = displayMode == .modern
         let radarRange = 165.0
-        let bankWidth = min(316.0, max(202.0, (w - 530.0) / 2))
-        let panelHeight = 154.0
+        let panelHeight = modernHUD ? min(236.0, max(184.0, h * 0.265)) : 154.0
+        let outerMargin = modernHUD ? 14.0 : 14.0
+        let panelGap = modernHUD ? 10.0 : 12.0
+        let available = w - outerMargin * 2 - panelGap * 3
+        let modernBankWidth = max(175.0, available / 4.0)
+        let bankWidth = modernHUD ? modernBankWidth
+            : min(316.0, max(202.0, (w - 530.0) / 2))
+        let topCenterY = modernHUD ? h - 16 - panelHeight / 2 : h - 94.0
+        let leftCenterX = modernHUD ? outerMargin + bankWidth / 2 : 14 + bankWidth / 2
+        let radarX = modernHUD
+            ? outerMargin + bankWidth + panelGap + bankWidth / 2
+            : w / 2 - 104.0
+        let rearX = modernHUD
+            ? outerMargin + bankWidth * 2 + panelGap * 2 + bankWidth / 2
+            : w / 2 + 103.0
+        let rightCenterX = modernHUD
+            ? w - outerMargin - bankWidth / 2
+            : w - 14 - bankWidth / 2
+        let radarY = modernHUD ? topCenterY - 6 : h - 103.0
+        let radarRadius = modernHUD
+            ? min((bankWidth - 30) / 2, (panelHeight - 46) / 2)
+            : 79.0
+        let leftX = modernHUD ? leftCenterX - bankWidth / 2 + 18 : 34.0
+        let rightX = modernHUD ? rightCenterX + bankWidth / 2 - 18 : w - 34
         func panelRect(width: Double) -> CGPath {
             CGPath(roundedRect: CGRect(x: -width / 2, y: -panelHeight / 2,
                                        width: width, height: panelHeight),
-                   cornerWidth: 9, cornerHeight: 9, transform: nil)
+                   cornerWidth: 12, cornerHeight: 12, transform: nil)
         }
         telemetryLeftPanel.path = panelRect(width: bankWidth)
         telemetryRightPanel.path = panelRect(width: bankWidth)
-        radarPanel.path = CGPath(
-            roundedRect: CGRect(x: -89, y: -89, width: 178, height: 178),
-            cornerWidth: 11, cornerHeight: 11, transform: nil)
-        rearPanel.path = CGPath(
-            roundedRect: CGRect(x: -91, y: -88, width: 182, height: 176),
-            cornerWidth: 11, cornerHeight: 11, transform: nil)
-        telemetryLeftPanel.position = point(14 + bankWidth / 2, h - 84)
-        telemetryRightPanel.position = point(w - 14 - bankWidth / 2, h - 84)
-        radarPanel.position = point(radarX, h - 94)
-        rearPanel.position = point(rearX, h - 94)
-        // Crop node uses bottom-left local coordinates in a 172 x 108 viewport.
-        rearView.position = point(rearX - 86, h - 143)
-        rearLabel.position = point(rearX, h - 19)
-        rearLabel.text = "REAR VIEW / 180°"
-        renderRearView()
-        telemetryLeftAccent.position = point(20, h - 84)
-        telemetryRightAccent.position = point(w - 20, h - 84)
-        telemetryLeftHeading.position = point(34, h - 33)
-        telemetryRightHeading.position = point(w - 34, h - 33)
-        telemetryLeftDetail.position = point(34, h - 82)
-        telemetryLeftFootnote.position = point(34, h - 107)
-        telemetryCoordinates.position = point(34, h - 134)
-        telemetryRightDetail.position = point(w - 34, h - 82)
-        telemetryRightFootnote.position = point(w - 34, h - 107)
-        telemetryAmmo.position = point(w - 34, h - 134)
+        radarPanel.path = panelRect(width: modernHUD ? bankWidth : 178)
+        rearPanel.path = panelRect(width: modernHUD ? bankWidth : 182)
+        telemetryLeftPanel.position = point(leftCenterX, topCenterY)
+        telemetryRightPanel.position = point(rightCenterX, topCenterY)
+        radarPanel.position = point(radarX, topCenterY)
+        rearPanel.position = point(rearX, topCenterY)
+        telemetryLeftAccent.position = point(leftCenterX - bankWidth / 2 + 6, topCenterY)
+        telemetryRightAccent.position = point(rightCenterX + bankWidth / 2 - 6, topCenterY)
+        telemetryLeftHeading.position = point(leftX, h - (modernHUD ? 41 : 33))
+        telemetryRightHeading.position = point(rightX, h - (modernHUD ? 41 : 33))
+        telemetryLeftDetail.position = point(leftX, h - (modernHUD ? 133 : 82))
+        telemetryLeftFootnote.position = point(leftX, h - (modernHUD ? 168 : 107))
+        telemetryCoordinates.position = point(leftX, h - (modernHUD ? 202 : 134))
+        telemetryRightDetail.position = point(rightX, h - (modernHUD ? 137 : 82))
+        telemetryRightFootnote.position = point(rightX, h - (modernHUD ? 174 : 107))
+        telemetryAmmo.position = point(rightX, h - (modernHUD ? 207 : 134))
+        telemetryLeftAccent.setScale(modernHUD ? 1.45 : 1)
+        telemetryRightAccent.setScale(modernHUD ? 1.45 : 1)
+
+        // Resize the actual rear camera's crop region and projection together.
+        // Classic retains the original narrow rear monitor.
+        let rearWidth = modernHUD ? max(120.0, bankWidth - 20) : 172.0
+        let rearHeight = modernHUD ? panelHeight - 53 : 108.0
+        rearMask.path = CGPath(
+            roundedRect: CGRect(x: 0, y: 0, width: rearWidth, height: rearHeight),
+            cornerWidth: 8, cornerHeight: 8, transform: nil)
+        rearView.position = modernHUD
+            ? point(rearX - rearWidth / 2, topCenterY - rearHeight / 2 - 13)
+            : point(rearX - 86, h - 143)
+        rearLabel.position = point(rearX, h - (modernHUD ? 35 : 19))
+        rearLabel.text = modernHUD ? "REAR VIEW  //  180°" : "REAR VIEW / 180°"
+        rearLabel.fontSize = modernHUD ? 12 : 10
+        renderRearView(width: rearWidth, height: rearHeight)
         hudLines.path = hp
 
         // Circular range rings and bearing grid; contacts are player-relative.
