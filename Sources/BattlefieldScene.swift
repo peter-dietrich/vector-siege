@@ -1054,7 +1054,8 @@ final class BattlefieldScene: SKScene {
         }
         for label in [telemetryLeftDetail, telemetryLeftFootnote, telemetryCoordinates,
                       telemetryRightDetail, telemetryRightFootnote, telemetryAmmo] {
-            label.fontColor = green.withAlphaComponent(0.86)
+            label.fontColor = modern ? cyan.withAlphaComponent(0.94)
+                                     : green.withAlphaComponent(0.86)
         }
         stagePanel.fillColor = NSColor(calibratedRed: 0.02, green: 0.05, blue: 0.05, alpha: 0.94)
         stagePanel.strokeColor = amber.withAlphaComponent(0.55)
@@ -2173,11 +2174,11 @@ final class BattlefieldScene: SKScene {
             : String(format: "SCORE %06d  BEST %06d", score, bestScore)
         telemetryRightHeading.text = modernHUD
             ? "COMBAT SYSTEMS  //  STATUS" : "SYSTEMS  //  COMBAT STATUS"
-        telemetryLeftDetail.fontSize = modernHUD ? 13 : 12
-        telemetryLeftFootnote.fontSize = modernHUD ? 12 : 11
-        telemetryCoordinates.fontSize = modernHUD ? 12 : 10.5
-        telemetryRightDetail.fontSize = modernHUD ? 12 : 12
-        telemetryRightFootnote.fontSize = modernHUD ? 12 : 11
+        telemetryLeftDetail.fontSize = modernHUD ? 14 : 12
+        telemetryLeftFootnote.fontSize = modernHUD ? 13 : 11
+        telemetryCoordinates.fontSize = modernHUD ? 13 : 10.5
+        telemetryRightDetail.fontSize = modernHUD ? 13 : 12
+        telemetryRightFootnote.fontSize = modernHUD ? 13 : 11
         telemetryRightDetail.text = String(format: "WAVE %02d   LIVES %d   %@", wave, lives, threatLevel.rawValue.uppercased())
         let shieldName = shieldDuration > 0
             ? String(format: "SHIELD ACTIVE %.1fs", shieldDuration)
@@ -2185,7 +2186,7 @@ final class BattlefieldScene: SKScene {
                 ? String(format: "RECHARGING %.1fs", shieldCooldown)
                 : "SHIELD READY [SHIFT]"
         telemetryRightFootnote.text = shieldName
-        telemetryAmmo.fontSize = modernHUD ? 15 : (w < 1050 ? 12 : 15)
+        telemetryAmmo.fontSize = modernHUD ? 16 : (w < 1050 ? 12 : 15)
         telemetryAmmo.text = String(format: "AMMO %02d/%02d   %@", cannon.roundsRemaining,
                                            cannon.maxRounds, cannon.statusText)
         telemetryAmmo.fontColor = cannon.isEmpty ? accent : green
@@ -2232,7 +2233,15 @@ final class BattlefieldScene: SKScene {
                 rearPanelWidth: rearPanelWidth, topHeight: panelHeight)
         }
 
-        stagePanel.position = point(w / 2, h * 0.61)
+        // Center game-state messaging inside its panel; keep title and
+        // secondary line clear of the border at normal window dimensions.
+        let dialogCenterY = h * 0.58
+        stagePanel.path = CGPath(
+            roundedRect: CGRect(x: -min(260.0, w * 0.25),
+                                y: -82, width: 2 * min(260.0, w * 0.25),
+                                height: 164),
+            cornerWidth: 12, cornerHeight: 12, transform: nil)
+        stagePanel.position = point(w / 2, dialogCenterY)
         stagePanel.strokeColor = modernHUD
             ? NSColor(calibratedRed: 0.18, green: 0.85, blue: 0.88, alpha: 0.8)
             : accent.withAlphaComponent(0.55)
@@ -2240,12 +2249,13 @@ final class BattlefieldScene: SKScene {
             ? NSColor(calibratedRed: 0.006, green: 0.028, blue: 0.045, alpha: 0.88)
             : NSColor(calibratedRed: 0.02, green: 0.05, blue: 0.05, alpha: 0.94)
         stagePanel.isHidden = round == .title || (round == .playing && pendingWave <= 0)
-        banner.position = point(w/2, h*0.67)
-        banner.fontSize = min(42, w*0.052)
-        titleLogo.position = point(w/2, h*0.66)
+        banner.position = point(w / 2, dialogCenterY + 33)
+        banner.fontSize = min(38, w * 0.042)
+        titleLogo.position = point(w / 2, h * 0.66)
         titleLogo.isHidden = round != .title
-        subtitle.position = point(w/2, round == .title ? h*0.42 : h*0.59)
-        subtitle.fontSize = 15
+        subtitle.position = point(w / 2,
+                                  round == .title ? h * 0.42 : dialogCenterY - 26)
+        subtitle.fontSize = modernHUD ? 14 : 15
         switch round {
         case .title:
             banner.text = ""
