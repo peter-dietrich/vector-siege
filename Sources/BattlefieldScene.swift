@@ -936,7 +936,9 @@ final class BattlefieldScene: SKScene {
             (shotLines, accent, 2.5, displayMode == .classic ? 0.8 : 5),
             (flashLines, accent, 2.0, displayMode == .classic ? 1 : 5),
             (reticle, accent, 1.1, displayMode == .classic ? 0.25 : 2),
-            (radar, accent, 1.5, displayMode == .classic ? 0.2 : 2),
+            (radar, displayMode == .modern
+             ? NSColor(calibratedRed: 0.17, green: 0.96, blue: 0.74, alpha: 1)
+             : accent, 1.5, displayMode == .classic ? 0.2 : 2),
             (hudLines, muted, 1.0, 0)
         ] {
             node.strokeColor = color
@@ -2012,13 +2014,45 @@ final class BattlefieldScene: SKScene {
 
         let cx = w / 2
         let cy = c.horizon + 18
-        segment(sight, point(cx - 33, cy), point(cx - 8, cy))
-        segment(sight, point(cx + 8, cy), point(cx + 33, cy))
-        segment(sight, point(cx, cy - 30), point(cx, cy - 9))
-        segment(sight, point(cx, cy + 9), point(cx, cy + 30))
-        let corner = 60.0
-        for sign in [-1.0, 1.0] {
-            segment(sight, point(cx+sign*corner, cy-13), point(cx+sign*corner, cy+13))
+        if modernHUD {
+            // Commander's sight: framing brackets, calibrated ticks, center
+            // aiming aperture, and a stable horizon reference. Purely cosmetic.
+            let spread = min(86.0, w * 0.09)
+            let rise = 45.0
+            for signX in [-1.0, 1.0] {
+                for signY in [-1.0, 1.0] {
+                    let x = cx + signX * spread
+                    let y = cy + signY * rise
+                    segment(sight, point(x, y), point(x - signX * 25, y))
+                    segment(sight, point(x, y), point(x, y - signY * 19))
+                }
+            }
+            for side in [-1.0, 1.0] {
+                segment(sight, point(cx + side * 42, cy),
+                        point(cx + side * 9, cy))
+                segment(sight, point(cx, cy + side * 32),
+                        point(cx, cy + side * 8))
+            }
+            sight.addEllipse(in: CGRect(x: cx - 8, y: cy - 8, width: 16, height: 16))
+            for offset in [-4, -3, -2, -1, 1, 2, 3, 4] {
+                let tickX = cx + Double(offset) * 27.0
+                segment(sight, point(tickX, cy - 73),
+                        point(tickX, cy - (abs(offset).isMultiple(of: 2) ? 61 : 65)))
+            }
+            for delta in [-1.0, 1.0] {
+                segment(sight, point(cx + delta * 106, cy),
+                        point(cx + delta * 118, cy))
+            }
+        } else {
+            segment(sight, point(cx - 33, cy), point(cx - 8, cy))
+            segment(sight, point(cx + 8, cy), point(cx + 33, cy))
+            segment(sight, point(cx, cy - 30), point(cx, cy - 9))
+            segment(sight, point(cx, cy + 9), point(cx, cy + 30))
+            let corner = 60.0
+            for sign in [-1.0, 1.0] {
+                segment(sight, point(cx+sign*corner, cy-13),
+                        point(cx+sign*corner, cy+13))
+            }
         }
         if shieldDuration > 0 {
             sight.addEllipse(in: CGRect(x: cx-68, y: cy-68, width: 136, height: 136))
