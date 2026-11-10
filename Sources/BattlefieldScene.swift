@@ -796,21 +796,20 @@ final class BattlefieldScene: SKScene {
 
     private func makeObstacles() {
         obstacles.removeAll()
-        for i in 0..<rules.obstacleCount {
-            let angle = Double(i) * 2.39996 + Double.random(in: -0.4...0.4)
-            let distance = Double.random(in: 24...145)
-            let p = GroundPoint(sin(angle) * distance, cos(angle) * distance)
-            let size = Double.random(in: 3.0...6.7)
-            let style = i % 8
+        // Layout the connected street grid first. Then fill a minority of
+        // city-block interiors with small clusters, leaving broad empty blocks.
+        let seed = UInt64.random(in: 1...UInt64.max)
+        for site in CityLayout.buildings(count: rules.obstacleCount, seed: seed) {
             let kind: Obstacle.Kind
-            switch style {
+            switch site.variant {
             case 0, 5: kind = .pyramid
             case 2, 6: kind = .tower
             case 3: kind = .building
             case 7: kind = .monolith
             default: kind = .block
             }
-            obstacles.append(Obstacle(center: p, size: size, kind: kind))
+            obstacles.append(Obstacle(center: site.center,
+                                      size: site.size, kind: kind))
         }
     }
 
