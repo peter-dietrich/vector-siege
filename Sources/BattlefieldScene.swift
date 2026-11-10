@@ -1960,3 +1960,53 @@ private final class TankMotionAudio {
         return bytes
     }
 }
+
+
+/// Short synthesized two-tone warning; never plays if Sound is disabled.
+/// Repeats only while an enemy tank is within roughly two hull lengths.
+private final class TankProximityAudio {
+    private var player: AVAudioPlayer?
+
+    init() {
+        player = try? AVAudioPlayer(data: Self.makeAlert())
+        player?.volume = 0.33
+        player?.prepareToPlay()
+    }
+
+    func beep() {
+        player?.stop()
+        player?.currentTime = 0
+        player?.play()
+    }
+
+    private static func makeAlert() -> Data {
+        let sampleRate = 22_050
+        let sampleCount = Int(Double(sampleRate) * 0.18)
+        var bytes = Data(capacity: 44 + sampleCount * 2)
+        func append16(_ n: UInt16) {
+            bytes.append(UInt8(truncatingIfNeeded: n))
+            bytes.append(UInt8(truncatingIfNeeded: n >> 8))
+        }
+        func append32(_ n: UInt32) {
+            append16(UInt16(truncatingIfNeeded: n))
+            append16(UInt16(truncatingIfNeeded: n >> 16))
+        }
+        bytes.append(contentsOf: [82,73,70,70]) // RIFF
+        append32(UInt32(36 + sampleCount * 2))
+        bytes.append(contentsOf: [87,65,86,69,102,109,116,32]) // WAVEfmt
+        append32(16); append16(1); append16(1)
+        append32(UInt32(sampleRate)); append32(UInt32(sampleRate * 2))
+        append16(2); append16(16)
+        bytes.append(contentsOf: [100,97,116,97])
+        append32(UInt32(sampleCount * 2))
+        for i in 0..<sampleCount {
+            let time = Double(i) / Double(sampleRate)
+            let edge = min(1, Double(min(i, sampleCount - 1 - i)) / 220)
+            let tone = sin(2 * .pi * 650 * time) * 0.48
+                       + sin(2 * .pi * 940 * time) * 0.24
+            let value = Int16((max(-1, min(1, tone * edge)) * 32767).rounded())
+            append16(UInt16(bitPattern: value))
+        }
+        return bytes
+    }
+}
