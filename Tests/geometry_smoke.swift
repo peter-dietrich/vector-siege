@@ -122,11 +122,13 @@ struct GeometrySmoke {
         let cityOther = CityLayout.buildings(count: 23, seed: 8743)
         precondition(cityA.count == 23, "Generate the configured building count")
         precondition(cityB.count == cityA.count)
-        precondition(zip(cityA, cityB).allSatisfy {
-            $0.center.x == $1.center.x && $0.center.z == $1.center.z
+        precondition(zip(cityA, cityB).allSatisfy { pair in
+            pair.0.center.x == pair.1.center.x &&
+            pair.0.center.z == pair.1.center.z
         }, "Same seed must reproduce the same town")
-        precondition(zip(cityA, cityOther).contains {
-            $0.center.x != $1.center.x || $0.center.z != $1.center.z
+        precondition(zip(cityA, cityOther).contains { pair in
+            pair.0.center.x != pair.1.center.x ||
+            pair.0.center.z != pair.1.center.z
         }, "Different games should not use the same city blocks")
         let occupiedBlocks = Set(cityA.map { "\($0.blockX),\($0.blockZ)" })
         precondition(occupiedBlocks.count <= 9,
