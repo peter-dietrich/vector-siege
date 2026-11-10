@@ -258,62 +258,90 @@ enum CityLayout {
                     (Double(z) + 0.5) * streetSpacing)
     }
 
-    /// Deterministically choose sparse occupied blocks, then cluster 2–4
-    /// buildings in each selected interior. Most blocks are intentionally empty.
-    /// A seed lets each newly deployed game receive a fresh city while making
-    /// layout/tests reproducible.
+    /// Downtown grows denser toward the center of the same street-first grid:
+    /// 4 core blocks (up to 9 buildings each), 12 middle-ring blocks (up to
+    /// 4 each), and mostly open outer neighborhoods (up to 2 per selected block).
+    /// The seed randomizes lots and developed districts while keeping streets
+    /// free and replayable through the saved obstacle list.
     static func buildings(count: Int, seed: UInt64) -> [CityBuildingSite] {
         guard count > 0 else { return [] }
+        let requested = min(120, count)
         var state = seed == 0 ? 0xA735_9D1C_002F_1869 : seed
         func random() -> Double {
             state = state &* 2_862_933_555_777_941_757 &+ 3_037_000_493
             return Double(state >> 11) / 9_007_199_254_740_992.0
         }
-        var blocks: [(Int, Int)] = []
-        for z in -3...2 {
-            for x in -3...2 { blocks.append((x, z)) }
-        }
-        // Seeded Fisher-Yates produces variation without any seeded RNG SDK.
-        for i in stride(from: blocks.count - 1, through: 1, by: -1) {
-            let j = Int(random() * Double(i + 1))
-            blocks.swapAt(i, j)
-        }
-        let selectedCount = min(blocks.count, max(1, (count + 2) / 3))
-        var selected: [(Int, Int)] = []
-        // Spread built-up districts; leave wide neighborhoods undeveloped.
-        for block in blocks {
-            if selected.count == selectedCount { break }
-            if selected.allSatisfy({
-                abs($0.0 - block.0) + abs($0.1 - block.1) >= 2
-            }) { selected.append(block) }
-        }
-        for block in blocks where selected.count < selectedCount {
-            if !selected.contains(where: { $0.0 == block.0 && $0.1 == block.1 }) {
-                selected.append(block)
+        func shuffled(_ original: [(Int, Int)]) -> [(Int, Int)] {
+            var result = original
+            if result.count > 1 {
+                for i in stride(from: result.count - 1, through: 1, by: -1) {
+                    let j = Int(random() * Double(i + 1))
+                    result.swapAt(i, j)
+                }
             }
+            return result
         }
-
-        let lots: [(Double, Double)] = [(-10.5, -10.5), (10.5, 10.5),
-                                        (-10.5, 10.5), (10.5, -10.5),
-                                        (0, 0)]
-        var placements: [CityBuildingSite] = []
-        for (district, block) in selected.enumerated() {
-            let center = blockCenter(x: block.0, z: block.1)
-            let number = min(5, (count / selectedCount) +
-                             (district < count % selectedCount ? 1 : 0))
-            let rotation = Int(random() * 4)
-            for lot in 0..<number {
-                let offset = lots[(lot + rotation) % lots.count]
-                let size = 3.1 + random() * 1.9
-                let p = GroundPoint(center.x + offset.0, center.z + offset.1)
-                if isBuildable(p, radius: size * 0.9 + 2.7) {
-                    placements.append(CityBuildingSite(
-                        center: p, size: size,
-                        variant: (district * 5 + lot * 3) % 8,
-                        blockX: block.0, blockZ: block.1))
+        var downtown: [(Int, Int)] = []
+        var middle: [(Int, Int)] = []
+        var outer: [(Int, Int)] = []
+        for z in -3...2 {
+            for x in -3...2 {
+                if (-1...0).contains(x) && (-1...0).contains(z) {
+                    downtown.append((x,z))
+                } else if (-2...1).contains(x) && (-2...1).contains(z) {
+                    middle.append((x,z))
+                } else {
+                    outer.append((x,z))
                 }
             }
         }
+
+        let coreQuota = min(36, Int((Double(requested) * 0.50).rounded(.up)))
+        let middleQuota = min(48, requested - coreQuota,
+                              Int((Double(requested) * 0.38).rounded(.up)))
+        let outerQuota = min(40, requested - coreQuota - middleQuota)
+
+        // Interior lots are 12 units apart. The maximum building footprint
+        // plus navigation collision clearance is smaller than that interval.
+        let allLots: [(Double, Double)] = [
+            (-12,-12), (0,-12), (12,-12),
+            (-12,0), (0,0), (12,0),
+            (-12,12), (0,12), (12,12)
+        ]
+        var placements: [CityBuildingSite] = []
+        func allocate(_ districts: [(Int, Int)], quota: Int,
+                      maxPerBlock: Int, zone: Int) {
+            guard quota > 0 else { return }
+            let blocks = shuffled(districts)
+            let active = min(blocks.count, (quota + maxPerBlock - 1) / maxPerBlock)
+            guard active > 0 else { return }
+            for index in 0..<active {
+                let block = blocks[index]
+                let number = quota / active + (index < quota % active ? 1 : 0)
+                let lots = shuffled(allLots)
+                let center = blockCenter(x: block.0, z: block.1)
+                for lot in 0..<number {
+                    let offset = lots[lot]
+                    let size: Double
+                    switch zone {
+                    case 0: size = 2.8 + random() * 0.9
+                    case 1: size = 3.0 + random() * 0.9
+                    default: size = 3.2 + random() * 0.7
+                    }
+                    let location = GroundPoint(center.x + offset.0,
+                                               center.z + offset.1)
+                    if isBuildable(location, radius: size * 0.9 + 2.7) {
+                        placements.append(CityBuildingSite(
+                            center: location, size: size,
+                            variant: Int(random() * 1000),
+                            blockX: block.0, blockZ: block.1))
+                    }
+                }
+            }
+        }
+        allocate(downtown, quota: coreQuota, maxPerBlock: 9, zone: 0)
+        allocate(middle, quota: middleQuota, maxPerBlock: 4, zone: 1)
+        allocate(outer, quota: outerQuota, maxPerBlock: 2, zone: 2)
         return placements
     }
 }
@@ -329,7 +357,7 @@ struct SiegeRules: Codable, Equatable {
     var startingEnemies: Int = 2
     var extraEnemiesPerWave: Int = 1
     var maxEnemies: Int = 8
-    var obstacleCount: Int = 23
+    var obstacleCount: Int = 80
     var enemySpeed: Double = 1.0
     var enemyReload: Double = 1.0
     var enemyAccuracy: Double = 1.0
@@ -347,7 +375,7 @@ struct SiegeRules: Codable, Equatable {
         r.startingEnemies = min(12, max(1, startingEnemies))
         r.extraEnemiesPerWave = min(4, max(0, extraEnemiesPerWave))
         r.maxEnemies = min(16, max(r.startingEnemies, maxEnemies))
-        r.obstacleCount = min(55, max(0, obstacleCount))
+        r.obstacleCount = min(120, max(0, obstacleCount))
         r.enemySpeed = min(2.5, max(0.25, enemySpeed))
         r.enemyReload = min(3, max(0.4, enemyReload))
         r.enemyAccuracy = min(3, max(0.25, enemyAccuracy))
