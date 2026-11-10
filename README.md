@@ -43,6 +43,20 @@ Vector Siege now has **Vector Drift-inspired cockpit telemetry panels** with sub
 
 Use **Copy Feedback** in the toolbar to copy a plaintext playtest snapshot (mode, difficulty, game state, wave, score, position, heading, speed, target offset, shots, hits, FPS, enemy/projectile counts, shield, and elapsed gameplay). Paste the snapshot into a bug report or this chat. **No telemetry is automatically uploaded or transmitted**; copying only accesses the local clipboard. A crash cannot be captured by the in-app button after the game has terminated; macOS crash diagnostics are separate.
 
+## v1.1 — Modern cockpit dashboard
+
+Modern mode now uses a **fully live Vector Drift-inspired armored-vehicle instrument suite** instead of the older compact row of floating instruments:
+
+- **Top four-panel layout:** responsive left targeting/navigation bank, central tactical radar with bearing ticks and moving contacts, a wider 180° live rear camera, and a right-hand combat status bank. Glass-black panels, cyan illuminated frame traces and small orange accents mirror the updated design concept.
+- **Reading hierarchy:** enlarged heading/drive speed, live score, best score, hit/miss ratio, position, target bearing, ammunition and reload. Smaller details are deliberately secondary; panel widths adapt with the game window.
+- **Bottom instrument deck:** a persistent dark-glass utility strip shows actual lives, active enemies/wave, a circular resolved hit-rate gauge, live heading with calibrated ticks, and battlefield coordinates.
+- **Readiness gauges:** live horizontal shield/recharge and remaining-ammunition bars track the underlying game state; low ammunition changes the bar color.
+- **Targeting optics:** improved Modern-only crosshair with a central aperture, four aiming brackets, reference ticks and the existing shield ring.
+- **Threat response:** a glass/red-orange warning bar frames the existing two-tank-length proximity alert without changing collision, shield or enemy behavior.
+- **Classic mode:** the original vintage green arcade HUD, reticle and gameplay remain available, separate from the Modern cockpit decoration.
+
+All instrument graphics are drawn from SpriteKit paths and actual game values, not a static image. The design mockup is a visual reference only; the macOS app renders its own HUD. Saved games and Custom Game settings are unchanged.
+
 ## v1.0 — rear camera, HUD readability and proximity defense
 
 - **Twin center instruments:** the circular 165-unit radar dial still rotates inside a **rectangular panel**, paired with an adjacent **live rear-view camera**. The rear inset uses a real 180° reverse perspective: a rear-facing ground grid, distant horizon, battlefield structures, tanks, flying disks and moving projectiles. Camera content is cropped to its own rectangular monitor and works in Classic and Modern.
