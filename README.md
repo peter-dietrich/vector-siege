@@ -47,6 +47,14 @@ Xcode may need to create the scheme when the project first opens; it normally ge
 
 The two tread controls can be used simultaneously, arcade-style: **I+O** moves forward, **K+L** reverses, **I+L** turns right in place, and **K+O** turns left in place. Standard arrow/WASD controls work as a simpler alternative.
 
+## v1.5 — reference cockpit telemetry and downtown density gradient
+
+- **Modern-only upper HUD redesign:** the left and right top telemetry panels are now built with real, independent SpriteKit labels, split rows and thin illuminated dividers inspired by the approved cockpit references. Navigation shows oversized heading and speed, followed by target heading, aim offset, range, confirmed hits/misses, resolved accuracy, rounds in flight and X/Z coordinates. Combat shows oversized score, best score, current wave, remaining lives and difficulty, a shield-status panel, ammunition and reload timer, plus actual shield/ammo progress bars. Cyan digital typography, green readiness values, icon outlines and orange cut-corner details keep the instrument hierarchy readable. The tactical radar and rear-facing camera continue updating live between the two panels.
+- **No logo:** the splash-image sprite is no longer displayed and the toolbar emblem is removed. The application name remains as text for identification.
+- **Dense center, quieter outskirts:** the default city now creates **80 structures**, rather than 23, with about **36 in four downtown blocks**, **31 in middle neighborhoods**, and **13 in peripheral blocks**. Taller wireframe towers and buildings dominate the center, with more mixed forms outward. All structures remain in designated block interiors, away from open road corridors.
+- **Custom city size:** Custom Game now supports 0–120 structures. Existing named presets retain their chosen values; the new 80-building default applies to new built-in-rule games.
+- **Compatibility:** source-rendered classic instruments and saved games remain supported. Previously saved cities load their prior exact obstacle arrangement; regenerating a city on a new deployment uses the new density.
+
 ## v1.4 — street-first city and square tactical map
 
 - **Roads before buildings:** the battlefield is now organized as an orthogonal **60-unit city-block grid**, with **18-unit-wide streets**. The main 3D viewport draws continuous curb edges and dashed road centerlines in both Classic and Modern. Streets remain clear for tank travel and enemy pathfinding.
