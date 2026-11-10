@@ -33,7 +33,7 @@ private struct Spark {
     var maxLife: Double
 }
 
-private enum RoundState { case title, playing, paused, gameOver }
+private enum RoundState { case title, levelReady, playing, paused, gameOver }
 
 // Render-only face; the existing world obstacle geometry still owns collisions.
 private struct GlassFace {
@@ -130,6 +130,7 @@ final class BattlefieldScene: SKScene {
     private let midHUD = SKLabelNode(fontNamed: "Menlo-Bold")
     private let warning = SKLabelNode(fontNamed: "Menlo-Bold")
     private let banner = SKLabelNode(fontNamed: "Menlo-Bold")
+    private let levelFrame = SKShapeNode()
     private let titleLogo = SKSpriteNode(imageNamed: "VectorSiegeLogo")
     private let subtitle = SKLabelNode(fontNamed: "Menlo")
     private let message = SKLabelNode(fontNamed: "Menlo")
@@ -264,6 +265,10 @@ final class BattlefieldScene: SKScene {
         stagePanel.zPosition = 18
         stagePanel.lineWidth = 1.2
         addChild(stagePanel)
+        levelFrame.zPosition = 19
+        levelFrame.fillColor = .clear
+        levelFrame.lineWidth = 2
+        addChild(levelFrame)
         modernCockpit.zPosition = 11.5
         addChild(modernCockpit)
         for (node, z) in [(modernTrim, 0.6), (modernLowerDash, 0.0),
@@ -392,6 +397,14 @@ final class BattlefieldScene: SKScene {
         let newlyPressed = !pressedKeys.contains(code)
         pressedKeys.insert(code)
         if repeatEvent || !newlyPressed { return }
+        // A level-intro is a true simulation pause: *any* key starts the wave,
+        // without also steering, firing, or consuming ammunition on that press.
+        if round == .levelReady {
+            pressedKeys.removeAll()
+            round = .playing
+            lastUpdateTime = 0
+            return
+        }
         switch code {
         case 123, 0: // Left arrow / A: 0.5-degree tap
             if round == .playing { heading = wrapAngle(heading - PrecisionSteering.tapAngle) }
@@ -459,7 +472,7 @@ final class BattlefieldScene: SKScene {
         sparks.removeAll()
         makeObstacles()
         spawnWave()
-        round = .playing
+        round = .levelReady
         lastUpdateTime = 0
     }
 
@@ -470,8 +483,8 @@ final class BattlefieldScene: SKScene {
         }
         let dt = lastUpdateTime == 0 ? 0.0 : min(0.04, max(0, currentTime - lastUpdateTime))
         lastUpdateTime = currentTime
-        if round != .paused { gameClock += dt }
-        if round == .playing { tick(dt) }
+        if round == .playing { gameClock += dt; tick(dt) }
+        if round == .levelReady { pulse += dt }
         if round == .title {
             pulse += dt
             // Gently pulse existing atmospheric bands during attract mode.
@@ -553,7 +566,10 @@ final class BattlefieldScene: SKScene {
             enemies[idx].reload -= dt
             enemies[idx].phase += dt
             let type = enemies[idx].kind
-            let movement = (type == .hunter ? 4.6 : (type == .saucer ? 5.4 : 2.55)) * threatLevel.enemyVelocity * rules.enemySpeed
+            // Flying disks travel slowly to preserve their ominous, floating
+            // appearance. Their visual rotation speed is independent.
+            let movement = (type == .hunter ? 4.6 : (type == .saucer ? 1.10 : 2.55))
+                * threatLevel.enemyVelocity * rules.enemySpeed
             let aim = atan2(diff.x, diff.z)
             if type == .saucer {
                 let tangent = GroundPoint(cos(enemies[idx].phase * 0.8), sin(enemies[idx].phase * 0.8))
@@ -563,8 +579,28 @@ final class BattlefieldScene: SKScene {
                 enemies[idx].heading = wrapAngle(aim + wobble)
                 if distance > (type == .hunter ? 13 : 18) {
                     let proposed = enemies[idx].center + facing(enemies[idx].heading) * (movement * dt)
-                    if !blocked(proposed, radius: 2.7) && proposed.distance(to: tankPosition) > 5 {
+                    // Do not allow AI tanks to converge into overlapping piles.
+                    // A nearby neighbor forces a sidestep instead of moving
+                    // directly into its occupied space.
+                    let occupied = enemies.indices
+                        .filter { $0 != idx && enemies[$0].kind != .saucer }
+                        .map { enemies[$0].center }
+                    if !blocked(proposed, radius: 2.7) &&
+                        proposed.distance(to: tankPosition) > 5 &&
+                        EnemySpawnLayout.isSeparated(
+                            proposed, from: occupied,
+                            minimum: EnemySpawnLayout.movementSpacing) {
                         enemies[idx].center = proposed
+                    } else {
+                        let side = facing(enemies[idx].heading + (idx.isMultiple(of: 2) ? 1.30 : -1.30))
+                        let sidestep = enemies[idx].center + side * (movement * dt * 0.7)
+                        if !blocked(sidestep, radius: 2.7) &&
+                            sidestep.distance(to: tankPosition) > 5 &&
+                            EnemySpawnLayout.isSeparated(
+                                sidestep, from: occupied,
+                                minimum: EnemySpawnLayout.movementSpacing) {
+                            enemies[idx].center = sidestep
+                        }
                     }
                 }
             }
@@ -645,6 +681,11 @@ final class BattlefieldScene: SKScene {
                 shells.removeAll()
                 shieldCooldown = 0
                 invulnerability = 1.0
+                pressedKeys.removeAll()
+                driveSpeed = 0
+                // Do not advance simulation until the player acknowledges
+                // the wireframe LEVEL banner.
+                round = .levelReady
             }
         }
     }
@@ -735,17 +776,20 @@ final class BattlefieldScene: SKScene {
         enemies.removeAll()
         let count = rules.enemies(forWave: wave)
         for n in 0..<count {
-            let angle = heading + (n == 0 ? Double.random(in: -0.20...0.20) : Double.random(in: -3.0...3.0))
-            let dist = Double.random(in: 35...88)
-            var target = tankPosition + facing(angle) * dist
-            var tries = 0
-            while blocked(target, radius: 4) && tries < 20 {
-                target = tankPosition + facing(Double.random(in: -3.1...3.1)) * Double.random(in: 30...110)
-                tries += 1
+            let occupied = enemies.map { $0.center }
+            guard let target = EnemySpawnLayout.choosePosition(
+                player: tankPosition, heading: heading, index: n, count: count,
+                existing: occupied,
+                isOpen: { !self.blocked($0, radius: 4) }) else {
+                // Never spawn a pile of tanks: an obstructed sector produces
+                // fewer enemies rather than falling back to an occupied cell.
+                continue
             }
             let kind: FoeType = (rules.huntersEnabled && wave >= 3 && n % 4 == 2)
                 ? .hunter : ((rules.saucersEnabled && wave >= 2 && n % 6 == 5) ? .saucer : .tank)
-            enemies.append(Foe(center: target, heading: angle + .pi, kind: kind,
+            let initialHeading = atan2(tankPosition.x - target.x,
+                                       tankPosition.z - target.z)
+            enemies.append(Foe(center: target, heading: initialHeading, kind: kind,
                                reload: Double.random(in: 2.0...4.0),
                                phase: Double.random(in: 0...6.0),
                                hitPoints: kind == .hunter ? 2 : 1))
