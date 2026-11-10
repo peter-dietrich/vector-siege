@@ -366,3 +366,18 @@ struct SaucerPatrolClock: Codable {
         secondsUntilArrival = max(0.001, min(Self.interval, value))
     }
 }
+
+
+/// Radar/proximity units are world units; the standard tank is about 6 long.
+enum TankProximity {
+    static let tankLength = 6.0
+    static let alertRadius = tankLength * 2.0
+
+    static func isClose(_ distance: Double) -> Bool {
+        distance.isFinite && distance <= alertRadius && distance >= 0
+    }
+
+    static func repeatInterval(for distance: Double) -> Double {
+        distance <= tankLength ? 0.30 : 0.65
+    }
+}
