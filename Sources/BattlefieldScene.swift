@@ -1904,13 +1904,14 @@ final class BattlefieldScene: SKScene {
                 : String(format: "SHIELD ACTIVE  %.1fS", shieldDuration)
         }
 
-        leftHUD.position = point(radarX, h - 16)
+        leftHUD.position = point(radarX, h - (modernHUD ? 34 : 16))
         leftHUD.horizontalAlignmentMode = .center
-        leftHUD.fontSize = 10
-        leftHUD.text = "RADAR / 165"
-        midHUD.position = point(34, h - 57)
+        leftHUD.fontSize = modernHUD ? 12 : 10
+        leftHUD.text = modernHUD ? "TACTICAL RADAR  //  165" : "RADAR / 165"
+        midHUD.position = point(leftX, h - (modernHUD ? 86 : 57))
         midHUD.horizontalAlignmentMode = .left
-        midHUD.fontSize = w < 1050 ? 13 : 17
+        midHUD.fontSize = modernHUD ? (w < 1060 ? 15 : 21)
+            : (w < 1050 ? 13 : 17)
         let compass = Int((heading * 180 / .pi + 360).truncatingRemainder(dividingBy: 360).rounded()) % 360
         midHUD.text = String(format: "HDG %03d°   SPD %05.1f", compass, driveSpeed)
         let target = targetTelemetry()
@@ -1922,11 +1923,23 @@ final class BattlefieldScene: SKScene {
         telemetryLeftFootnote.text = String(
             format: "H/M %02d:%02d   HIT %.0f%%   F %02d",
             shotTally.hits, shotTally.misses, accuracy, shotTally.pending)
+        telemetryLeftHeading.text = modernHUD
+            ? "TARGETING  //  NAVIGATION" : "VECTOR SIEGE  //  TARGETING"
         telemetryCoordinates.text = String(format: "POSITION   X %+.1f   Z %+.1f", tankPosition.x, tankPosition.z)
-        rightHUD.position = point(w - 34, h - 57)
+        rightHUD.position = point(rightX, h - (modernHUD ? 87 : 57))
         rightHUD.horizontalAlignmentMode = .right
-        rightHUD.fontSize = w < 1050 ? 11 : 15
-        rightHUD.text = String(format: "SCORE %06d  BEST %06d", score, bestScore)
+        rightHUD.fontSize = modernHUD ? (w < 1060 ? 17 : 24)
+            : (w < 1050 ? 11 : 15)
+        rightHUD.text = modernHUD
+            ? String(format: "SCORE %06d", score)
+            : String(format: "SCORE %06d  BEST %06d", score, bestScore)
+        telemetryRightHeading.text = modernHUD
+            ? "COMBAT SYSTEMS  //  STATUS" : "SYSTEMS  //  COMBAT STATUS"
+        telemetryLeftDetail.fontSize = modernHUD ? 13 : 12
+        telemetryLeftFootnote.fontSize = modernHUD ? 12 : 11
+        telemetryCoordinates.fontSize = modernHUD ? 12 : 10.5
+        telemetryRightDetail.fontSize = modernHUD ? 12 : 12
+        telemetryRightFootnote.fontSize = modernHUD ? 12 : 11
         telemetryRightDetail.text = String(format: "WAVE %02d   LIVES %d   %@", wave, lives, threatLevel.rawValue.uppercased())
         let shieldName = shieldDuration > 0
             ? String(format: "SHIELD ACTIVE %.1fs", shieldDuration)
@@ -1934,21 +1947,25 @@ final class BattlefieldScene: SKScene {
                 ? String(format: "RECHARGING %.1fs", shieldCooldown)
                 : "SHIELD READY [SHIFT]"
         telemetryRightFootnote.text = shieldName
-        telemetryAmmo.fontSize = w < 1050 ? 12 : 15
+        telemetryAmmo.fontSize = modernHUD ? 15 : (w < 1050 ? 12 : 15)
         telemetryAmmo.text = String(format: "AMMO %02d/%02d   %@", cannon.roundsRemaining,
                                            cannon.maxRounds, cannon.statusText)
         telemetryAmmo.fontColor = cannon.isEmpty ? accent : green
-        warning.position = point(w / 2, h - 213)
+        warning.position = modernHUD ? point(w / 2, 178) : point(w / 2, h - 213)
         let closeEnemy = nearestTankDistance.flatMap {
             TankProximity.isClose($0) ? $0 : nil
         }
         if let distance = closeEnemy, round == .playing {
             let urgency = distance <= TankProximity.tankLength
-            warning.fontSize = urgency ? 20 : 17
+            warning.fontSize = modernHUD ? (urgency ? 21 : 18) : (urgency ? 20 : 17)
             warning.fontColor = urgency ? .red : NSColor.systemOrange
             warning.alpha = CGFloat(0.70 + 0.30 * abs(sin(gameClock * 8.0)))
-            warning.text = String(format: "⚠  ENEMY PROXIMITY  %.0f", distance)
+            warning.text = modernHUD
+                ? String(format: "⚠  PROXIMITY ALERT   //   ENEMY %.1f TANK LENGTHS",
+                         distance / TankProximity.tankLength)
+                : String(format: "⚠  ENEMY PROXIMITY  %.0f", distance)
         } else {
+            warning.position = modernHUD ? point(w / 2, c.horizon + 100) : warning.position
             warning.fontSize = 12
             warning.fontColor = accent
             warning.alpha = 1
@@ -1958,8 +1975,9 @@ final class BattlefieldScene: SKScene {
         }
 
         let modeName = displayMode == .classic ? "CLASSIC CRT" : "ENHANCED VECTOR"
-        message.position = point(w / 2, 47)
+        message.position = point(w / 2, modernHUD ? 16 : 47)
         message.fontSize = 11
+        message.isHidden = modernHUD && !showDetailedTelemetry
         if showDetailedTelemetry {
             message.text = String(format: "FPS %.0f  |  POSITION %+.1f, %+.1f  |  ENEMIES %d  |  SHELLS %d  |  [T] MINIMIZE",
                                   observedFPS, tankPosition.x, tankPosition.z, enemies.count, shells.count)
@@ -1968,7 +1986,20 @@ final class BattlefieldScene: SKScene {
         }
         message.fontColor = shieldDuration > 0 ? green : accent
 
+        if modernHUD {
+            renderModernCockpit(
+                width: w, height: h, bankWidth: bankWidth,
+                leftX: leftX, rightX: rightX, radarX: radarX,
+                rearX: rearX, topHeight: panelHeight)
+        }
+
         stagePanel.position = point(w / 2, h * 0.61)
+        stagePanel.strokeColor = modernHUD
+            ? NSColor(calibratedRed: 0.18, green: 0.85, blue: 0.88, alpha: 0.8)
+            : accent.withAlphaComponent(0.55)
+        stagePanel.fillColor = modernHUD
+            ? NSColor(calibratedRed: 0.006, green: 0.028, blue: 0.045, alpha: 0.88)
+            : NSColor(calibratedRed: 0.02, green: 0.05, blue: 0.05, alpha: 0.94)
         stagePanel.isHidden = round == .title || (round == .playing && pendingWave <= 0)
         banner.position = point(w/2, h*0.67)
         banner.fontSize = min(42, w*0.052)
