@@ -1716,6 +1716,153 @@ final class BattlefieldScene: SKScene {
         rearShots.path = projectilePath
     }
 
+    /// Vector Drift-inspired Modern cockpit. All gauges are driven by actual
+    /// battle data; Classic keeps its original arcade readouts.
+    private func renderModernCockpit(
+        width w: Double, height h: Double, bankWidth: Double,
+        leftX: Double, rightX: Double, radarX: Double,
+        rearX: Double, topHeight: Double
+    ) {
+        let cyan = NSColor(calibratedRed: 0.21, green: 0.98, blue: 0.94, alpha: 1)
+        let amber = NSColor(calibratedRed: 1, green: 0.52, blue: 0.22, alpha: 1)
+        let unit = min(1.0, max(0.68, w / 1320))
+        let bottomY = 29.0
+        let bottomHeight = max(96.0, min(119.0, h * 0.145))
+        modernLowerDash.path = CGPath(
+            roundedRect: CGRect(x: 12, y: bottomY, width: max(1, w - 24),
+                                height: bottomHeight),
+            cornerWidth: 12, cornerHeight: 12, transform: nil)
+
+        let leftDivider = w * 0.24
+        let rightDivider = w * 0.71
+        let compassX = w * 0.53
+        let ringX = w * 0.33
+        let midY = bottomY + bottomHeight * 0.53
+        let deco = CGMutablePath()
+        // Deck segments, circuit-board traces, subtle index and compass ticks.
+        segment(deco, point(24, bottomY + bottomHeight - 10),
+                point(w - 24, bottomY + bottomHeight - 10))
+        for x in [leftDivider, w * 0.42, rightDivider] {
+            segment(deco, point(x, bottomY + 13),
+                    point(x, bottomY + bottomHeight - 15))
+        }
+        let halfScale = min(150.0, (rightDivider - w * 0.42) * 0.43)
+        for step in -6...6 {
+            let x = compassX + Double(step) * halfScale / 6
+            let major = step.isMultiple(of: 3)
+            segment(deco, point(x, bottomY + 23),
+                    point(x, bottomY + (major ? 44 : 34)))
+        }
+        modernLowerLines.path = deco
+
+        // Corner brackets and linking traces visually tie the top four panels
+        // together without obstructing the live radar or rear camera image.
+        let trim = CGMutablePath()
+        let panelTop = h - 16.0
+        let panelBottom = panelTop - topHeight
+        for (x, direction) in [(14.0, 1.0), (w - 14.0, -1.0)] {
+            segment(trim, point(x, panelTop - 28),
+                    point(x + direction * 22, panelTop))
+            segment(trim, point(x + direction * 22, panelTop),
+                    point(x + direction * 90, panelTop))
+            segment(trim, point(x, panelBottom + 28),
+                    point(x + direction * 22, panelBottom))
+            segment(trim, point(x + direction * 22, panelBottom),
+                    point(x + direction * 90, panelBottom))
+        }
+        let bridgeStart = radarX - bankWidth / 2 + 15
+        let bridgeEnd = rearX + bankWidth / 2 - 15
+        segment(trim, point(bridgeStart, panelBottom + 7),
+                point(bridgeEnd, panelBottom + 7))
+        modernTrim.path = trim
+
+        // A circular percent gauge highlights accuracy without relying solely
+        // on tiny text in the upper targeting panel.
+        let hitCenter = point(ringX, midY)
+        let hitRadius = max(18.0, 24 * unit)
+        let track = CGMutablePath()
+        track.addEllipse(in: CGRect(x: hitCenter.x - hitRadius,
+                                    y: hitCenter.y - hitRadius,
+                                    width: hitRadius * 2, height: hitRadius * 2))
+        modernHitTrack.path = track
+        let hitArc = CGMutablePath()
+        let fraction = min(1, max(0, shotTally.hitPercentage / 100))
+        if fraction > 0 {
+            hitArc.addArc(center: hitCenter, radius: hitRadius,
+                          startAngle: -.pi / 2,
+                          endAngle: -.pi / 2 + CGFloat(Double.pi * 2 * fraction),
+                          clockwise: false)
+        }
+        modernHitRing.path = hitArc
+
+        modernTankStatus.position = point(31, bottomY + bottomHeight - 32)
+        modernTankStatus.text = "TANK SYSTEMS"
+        modernIntegrity.position = point(31, bottomY + bottomHeight - 60)
+        modernIntegrity.text = String(format: "%02d LIVES  //  %@", lives,
+                                      round == .gameOver ? "OFFLINE" : "ONLINE")
+        modernHitCaption.position = point(leftDivider + 15, bottomY + bottomHeight - 29)
+        modernHitCaption.text = "HIT RATE"
+        modernHitValue.position = point(leftDivider + 15, bottomY + 40)
+        modernHitValue.text = String(format: "%.0f%%", shotTally.hitPercentage)
+        modernHitValue.fontSize = CGFloat(28 * unit)
+
+        modernHeadingValue.position = point(compassX, bottomY + bottomHeight - 35)
+        let bearing = Int((heading * 180 / .pi + 360)
+                          .truncatingRemainder(dividingBy: 360).rounded()) % 360
+        modernHeadingValue.text = String(format: "%03d°", bearing)
+        modernCompassLabel.position = point(compassX, bottomY + 13)
+        modernCompassLabel.text = "DRIVE HEADING  //  LIVE"
+
+        modernTerrainLabel.position = point(w - 35, bottomY + bottomHeight - 28)
+        modernTerrainLabel.text = "BATTLEFIELD POSITION"
+        modernSectorValue.position = point(w - 35, bottomY + bottomHeight - 56)
+        modernSectorValue.text = String(format: "X %+.0f   Z %+.0f",
+                                        tankPosition.x, tankPosition.z)
+        modernStatusText.position = point(31, bottomY + 18)
+        modernStatusText.text = String(format: "WAVE %02d   //   %02d ENEMIES",
+                                        wave, enemies.count)
+
+        // Tank-style horizontal readiness bars in the right upper display.
+        let barLeft = rightX - bankWidth * 0.75
+        let barWidth = max(48.0, bankWidth * 0.72)
+        let barHeight = 5.0
+        let shieldY = h - 188.0
+        let ammoY = h - 221.0
+        func bar(_ x: Double, _ y: Double, _ width: Double) -> CGPath {
+            CGPath(roundedRect: CGRect(x: x, y: y,
+                                        width: max(0.1, width), height: barHeight),
+                   cornerWidth: 2.5, cornerHeight: 2.5, transform: nil)
+        }
+        modernShieldTrack.path = bar(barLeft, shieldY, barWidth)
+        let shieldValue = shieldDuration > 0
+            ? shieldDuration / max(1, rules.shieldDuration)
+            : max(0, 1 - shieldCooldown / max(0.01, rules.shieldCooldown))
+        modernShieldFill.path = bar(barLeft, shieldY,
+                                    max(0.1, barWidth * min(1, max(0, shieldValue))))
+        modernShieldFill.fillColor = shieldDuration > 0 ? cyan : amber
+        modernAmmoTrack.path = bar(barLeft, ammoY, barWidth)
+        modernAmmoFill.path = bar(barLeft, ammoY,
+                                  max(0.1, barWidth * Double(cannon.roundsRemaining)
+                                      / Double(max(1, cannon.maxRounds))))
+        modernAmmoFill.fillColor = cannon.roundsRemaining < max(4, cannon.maxRounds / 5)
+            ? amber : cyan
+
+        let close = nearestTankDistance.flatMap {
+            TankProximity.isClose($0) ? $0 : nil
+        }
+        modernThreatPanel.isHidden = close == nil || round != .playing
+        if let distance = close, round == .playing {
+            let threatWidth = min(570.0, w * 0.60)
+            modernThreatPanel.path = CGPath(
+                roundedRect: CGRect(x: w / 2 - threatWidth / 2, y: 152,
+                                    width: threatWidth, height: 49),
+                cornerWidth: 8, cornerHeight: 8, transform: nil)
+            modernThreatPanel.alpha = CGFloat(0.80 + 0.20 * abs(sin(gameClock * 7)))
+            modernThreatPanel.strokeColor = distance <= TankProximity.tankLength
+                ? NSColor.systemRed : amber
+        }
+    }
+
     private func renderHUD(_ c: CameraProjection) {
         let w = c.viewportWidth
         let h = c.viewportHeight
