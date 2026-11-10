@@ -1890,6 +1890,159 @@ final class BattlefieldScene: SKScene {
         rearShots.path = projectilePath
     }
 
+    /// Reference-style upper instrumentation. All values come from the live
+    /// game simulation and are positioned relative to their actual panel widths.
+    /// The background art is still native SpriteKit vector geometry.
+    private func renderModernUpperHUD(
+        width w: Double, height h: Double,
+        leftCenter: Double, rightCenter: Double,
+        bankWidth: Double, panelHeight: Double
+    ) {
+        let cyan = NSColor(calibratedRed: 0.25, green: 0.95, blue: 0.98, alpha: 1)
+        let greenBright = NSColor(calibratedRed: 0.43, green: 1.0, blue: 0.66, alpha: 1)
+        let pale = NSColor(calibratedRed: 0.70, green: 0.97, blue: 0.98, alpha: 1)
+        let amber = NSColor(calibratedRed: 1, green: 0.49, blue: 0.16, alpha: 1)
+        let left = leftCenter - bankWidth / 2
+        let right = rightCenter - bankWidth / 2
+        let top = h - 16
+        let scale = max(0.69, min(1, bankWidth / 310))
+        func item(_ id: Int, _ text: String, _ x: Double, _ y: Double,
+                  _ size: Double, _ color: NSColor = pale) {
+            let label = modernUpperText[id]
+            label.text = text
+            label.position = point(x, y)
+            label.fontSize = CGFloat(size * scale)
+            label.fontColor = color
+        }
+        let bearing = Int((heading * 180 / .pi + 360)
+                           .truncatingRemainder(dividingBy: 360).rounded()) % 360
+        let target = targetTelemetry()
+        let range = target?.range
+        let targetBearing: Int? = target.map {
+            Int((Double(bearing) + $0.error * 180 / .pi + 720)
+                .truncatingRemainder(dividingBy: 360).rounded()) % 360
+        }
+        item(0, "TARGETING  //  NAVIGATION",
+             left + 15, top - 23, 12, cyan)
+        item(1, String(format: "HDG %03d°", bearing),
+             left + 17, top - 79, 26, cyan)
+        item(2, String(format: "SPD %+.1f", driveSpeed),
+             left + bankWidth * 0.57, top - 79, 23, cyan)
+        item(3, targetBearing.map { String(format: "TGT %03d", $0) } ?? "TGT ---",
+             left + 16, top - 126, 15)
+        item(4, target.map { String(format: "AIM %+.1f°", $0.error * 180 / .pi) }
+                ?? "AIM ---",
+             left + bankWidth * 0.34, top - 126, 14)
+        item(5, range.map { String(format: "RNG %.0f", $0) } ?? "RNG ---",
+             left + bankWidth * 0.73, top - 126, 14)
+        item(6, String(format: "H/M %02d:%02d", shotTally.hits, shotTally.misses),
+             left + 16, top - 166, 14)
+        item(7, String(format: "HIT %.0f%%", shotTally.hitPercentage),
+             left + bankWidth * 0.40, top - 166, 14, greenBright)
+        item(8, String(format: "F %02d", shotTally.pending),
+             left + bankWidth * 0.78, top - 166, 14)
+        item(9, "POSITION", left + 16, top - 211, 14)
+        item(10, String(format: "X %+.1f", tankPosition.x),
+             left + bankWidth * 0.39, top - 211, 14)
+        item(11, String(format: "Z %+.1f", tankPosition.z),
+             left + bankWidth * 0.72, top - 211, 14)
+
+        item(12, "COMBAT SYSTEMS  //  STATUS",
+             right + 15, top - 23, 12, cyan)
+        item(13, "SCORE", right + 17, top - 59, 13)
+        item(14, String(format: "%06d", score),
+             right + 17, top - 93, 33, cyan)
+        item(15, "BEST", right + bankWidth * 0.72, top - 59, 13)
+        item(16, String(format: "%06d", bestScore),
+             right + bankWidth * 0.72, top - 92, 19, pale)
+        item(17, String(format: "WAVE %02d", wave),
+             right + 16, top - 128, 14)
+        item(18, String(format: "LIVES %d", lives),
+             right + bankWidth * 0.36, top - 128, 14)
+        item(19, "LEVEL " + threatLevel.rawValue.uppercased(),
+             right + bankWidth * 0.64, top - 128, 13, greenBright)
+        item(20, "SHIELD", right + 52, top - 162, 14)
+        let shieldStatus = shieldDuration > 0
+            ? String(format: "ACTIVE %.1f", shieldDuration)
+            : shieldCooldown > 0
+                ? String(format: "CHARGING %.1f", shieldCooldown)
+                : "READY [SHIFT]"
+        item(21, shieldStatus, right + bankWidth * 0.49, top - 162,
+             14, shieldDuration > 0 ? cyan : (shieldCooldown > 0 ? amber : greenBright))
+        item(22, String(format: "AMMO %02d/%02d",
+                         cannon.roundsRemaining, cannon.maxRounds),
+             right + 52, top - 208, 14, cyan)
+        item(23, String(format: "RELOAD %.1fs", cannon.reloadRemaining),
+             right + bankWidth * 0.64, top - 208, 13)
+        item(24, "◆", right + 24, top - 162, 14, greenBright)
+        // A light panel hierarchy: header rule and three instrument rows.
+        let dividers = CGMutablePath()
+        func hline(_ x: Double, _ y: Double, _ length: Double) {
+            segment(dividers, point(x, y), point(x + length, y))
+        }
+        func vline(_ x: Double, _ y1: Double, _ y2: Double) {
+            segment(dividers, point(x, y1), point(x, y2))
+        }
+        for x in [left, right] {
+            hline(x + 12, top - 42, bankWidth - 24)
+            hline(x + 12, top - 106, bankWidth - 24)
+            hline(x + 12, top - 145, bankWidth - 24)
+            if x == left { hline(x + 12, top - 185, bankWidth - 24) }
+            else { hline(x + 12, top - 146, bankWidth - 24) }
+        }
+        vline(left + bankWidth * 0.55, top - 98, top - 58)
+        for fraction in [0.31, 0.70] {
+            vline(left + bankWidth * fraction, top - 139, top - 114)
+            vline(left + bankWidth * fraction, top - 179, top - 153)
+        }
+        vline(right + bankWidth * 0.66, top - 104, top - 53)
+        for fraction in [0.32, 0.62] {
+            vline(right + bankWidth * fraction, top - 139, top - 114)
+        }
+        modernUpperDividers.path = dividers
+        modernUpperDividers.strokeColor = cyan.withAlphaComponent(0.32)
+        modernUpperDividers.lineWidth = 0.9
+
+        // Tiny armoured shield outline and a three-round magazine symbol.
+        let icons = CGMutablePath()
+        let shieldCenter = point(right + 29, top - 166)
+        icons.move(to: point(shieldCenter.x - 10, shieldCenter.y + 11))
+        icons.addLine(to: point(shieldCenter.x + 10, shieldCenter.y + 11))
+        icons.addLine(to: point(shieldCenter.x + 9, shieldCenter.y - 3))
+        icons.addLine(to: point(shieldCenter.x, shieldCenter.y - 14))
+        icons.addLine(to: point(shieldCenter.x - 9, shieldCenter.y - 3))
+        icons.closeSubpath()
+        segment(icons, point(shieldCenter.x, shieldCenter.y + 7),
+                point(shieldCenter.x, shieldCenter.y - 8))
+        for bullet in 0..<3 {
+            let x = right + 18 + Double(bullet) * 11
+            let y = top - 215
+            segment(icons, point(x, y - 5), point(x, y + 10))
+            segment(icons, point(x + 6, y - 5), point(x + 6, y + 10))
+            segment(icons, point(x, y + 10), point(x + 3, y + 16))
+            segment(icons, point(x + 3, y + 16), point(x + 6, y + 10))
+        }
+        modernUpperIcons.path = icons
+        modernUpperIcons.strokeColor = greenBright
+        modernUpperIcons.lineWidth = 1.5
+        modernUpperIcons.glowWidth = 2
+
+        // Amber cut-corner accents distinguish the military display from
+        // four ordinary rounded cards without relying on a raster background.
+        let corners = CGMutablePath()
+        for (x, sign) in [(left, 1.0), (right + bankWidth, -1.0)] {
+            segment(corners, point(x, top - 26), point(x + sign * 14, top - 10))
+            segment(corners, point(x + sign * 14, top - 10),
+                    point(x + sign * 55, top - 10))
+            segment(corners, point(x, top - panelHeight + 26),
+                    point(x + sign * 14, top - panelHeight + 10))
+        }
+        modernOrangeCorners.path = corners
+        modernOrangeCorners.strokeColor = amber
+        modernOrangeCorners.lineWidth = 2.1
+        modernOrangeCorners.glowWidth = 3.5
+    }
+
     /// Vector Drift-inspired Modern cockpit. All gauges are driven by actual
     /// battle data; Classic keeps its original arcade readouts.
     private func renderModernCockpit(
