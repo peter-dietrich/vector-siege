@@ -144,6 +144,30 @@ struct GeometrySmoke {
         precondition(restored.snapshot.shells.count == 1)
         precondition(restored.snapshot.customRules == validated)
 
-        print("Perspective, steering, ammo, suspension, save-state and custom-rule checks passed.")
+        // Patrol arrival is based on active time, not wall clock or wave number.
+        var patrol = SaucerPatrolClock()
+        precondition(patrol.secondsUntilArrival == 120)
+        precondition(!patrol.advance(by: 60))
+        precondition(patrol.secondsUntilArrival == 60)
+        precondition(!patrol.advance(by: 59.95))
+        precondition(patrol.advance(by: 0.05))
+        precondition(abs(patrol.secondsUntilArrival - 120) < 0.0001)
+        precondition(!patrol.advance(by: 119.99))
+        precondition(patrol.advance(by: 0.01))
+        patrol.restore(secondsRemaining: 23.5)
+        precondition(patrol.secondsUntilArrival == 23.5)
+        patrol.restore(secondsRemaining: nil)
+        precondition(patrol.secondsUntilArrival == 120)
+        patrol.restore(secondsRemaining: .infinity)
+        precondition(patrol.secondsUntilArrival == 120)
+        precondition(!patrol.advance(by: 0), "Pause must not advance timer")
+
+        let migratedSave = try! JSONDecoder().decode(
+            SiegeSaveSlot.self,
+            from: JSONEncoder().encode(slot))
+        precondition(migratedSave.snapshot.secondsUntilSaucerPatrol == nil,
+                     "Old save slots must decode without the patrol field")
+
+        print("Perspective, steering, ammo, suspension, saves and 120s patrol checks passed.")
     }
 }
