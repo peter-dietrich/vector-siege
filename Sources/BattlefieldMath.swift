@@ -276,6 +276,8 @@ struct SiegeSnapshot: Codable {
     var enemies: [SavedSiegeFoe]
     var shells: [SavedSiegeShell]
     var sparks: [SavedSiegeSpark]
+    // Optional for backwards compatibility with v0.8 game saves.
+    var secondsUntilSaucerPatrol: Double? = nil
 }
 
 struct SiegeSaveSlot: Codable, Identifiable {
