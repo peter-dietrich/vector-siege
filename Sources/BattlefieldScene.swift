@@ -115,6 +115,7 @@ final class BattlefieldScene: SKScene {
     private let shieldBorder = SKShapeNode()
     private let shieldNotice = SKLabelNode(fontNamed: "Menlo-Bold")
     private let radar = SKShapeNode()
+    private let radarSweepBeam = SKShapeNode()
     private let radarSweepGlow = (0..<24).map { _ in SKShapeNode() }
     private let radarCompassLabels = (0..<4).map { _ in SKLabelNode(fontNamed: "Menlo-Bold") }
     private let radarPanel = SKShapeNode()
@@ -225,6 +226,10 @@ final class BattlefieldScene: SKScene {
             node.zPosition = layer
             addChild(node)
         }
+        radarSweepBeam.zPosition = 13.15
+        radarSweepBeam.fillColor = .clear
+        radarSweepBeam.lineWidth = 2.3
+        addChild(radarSweepBeam)
         for wedge in radarSweepGlow {
             wedge.zPosition = 12.9
             wedge.strokeColor = .clear
@@ -1170,6 +1175,8 @@ final class BattlefieldScene: SKScene {
         radarSaucerContacts.fillColor = NSColor(calibratedRed: 0.30, green: 1, blue: 0.56, alpha: 0.58)
         radarSaucerContacts.lineWidth = 1.2
         radarSaucerContacts.glowWidth = 3
+        radarSweepBeam.strokeColor = NSColor(calibratedRed: 0.22, green: 1, blue: 0.48, alpha: 1)
+        radarSweepBeam.glowWidth = displayMode == .modern ? 4.0 : 1.8
         for wedge in radarSweepGlow {
             wedge.fillColor = NSColor(calibratedRed: 0.05, green: 1, blue: 0.36, alpha: 1)
         }
@@ -2563,22 +2570,60 @@ final class BattlefieldScene: SKScene {
                 point(radarX, radarY+radarRadius))
         segment(rp, point(radarX-radarRadius, radarY),
                 point(radarX+radarRadius, radarY))
-        for i in 0..<12 {
-            let angle = Double(i) * Double.pi / 6
-            let inner = radarRadius - (i.isMultiple(of: 3) ? 9.0 : 4.0)
+        // Every five degrees, with longer 30-degree cardinal bearings.
+        for i in 0..<72 {
+            let angle = Double(i) * Double.pi / 36
+            let major = i.isMultiple(of: 6)
+            let mid = i.isMultiple(of: 3)
+            let inner = radarRadius - (major ? 12.0 : (mid ? 7.0 : 3.6))
             segment(rp, point(radarX + sin(angle)*inner, radarY + cos(angle)*inner),
                     point(radarX + sin(angle)*radarRadius,
                           radarY + cos(angle)*radarRadius))
         }
-        let sweepAngle = gameClock * 1.45
-        let directionX = sin(sweepAngle)
-        let directionY = cos(sweepAngle)
-        let sweepReach = radarRadius / max(abs(directionX), abs(directionY), 0.001)
-        segment(rp, point(radarX, radarY),
-                point(radarX + directionX * sweepReach,
-                      radarY + directionY * sweepReach))
-        segment(rp, point(radarX-3.6, radarY-3), point(radarX, radarY+5.5))
-        segment(rp, point(radarX, radarY+5.5), point(radarX+3.6, radarY-3))
+        // Semi-transparent radial sectors trail the sweep beam. Twenty-four
+        // thin wedges form a gradual fade, clipped exactly at the square.
+        let sweepAngle = gameClock * 1.18
+        let wedgeCount = radarSweepGlow.count
+        let trailWidth = Double.pi * 0.57
+        for index in 0..<wedgeCount {
+            let age0 = Double(index) / Double(wedgeCount)
+            let age1 = Double(index + 1) / Double(wedgeCount)
+            let a0 = sweepAngle - age0 * trailWidth
+            let a1 = sweepAngle - age1 * trailWidth
+            let extent0 = TacticalRadarGeometry.squareReach(
+                angle: a0, halfSide: radarRadius)
+            let extent1 = TacticalRadarGeometry.squareReach(
+                angle: a1, halfSide: radarRadius)
+            let triangle = CGMutablePath()
+            triangle.move(to: point(radarX, radarY))
+            triangle.addLine(to: point(radarX + sin(a0)*extent0,
+                                       radarY + cos(a0)*extent0))
+            triangle.addLine(to: point(radarX + sin(a1)*extent1,
+                                       radarY + cos(a1)*extent1))
+            triangle.closeSubpath()
+            let wedge = radarSweepGlow[index]
+            wedge.path = triangle
+            wedge.alpha = CGFloat(0.36 * TacticalRadarGeometry.intensity(
+                trailingFraction: (age0 + age1) / 2))
+        }
+        let sweepReach = TacticalRadarGeometry.squareReach(
+            angle: sweepAngle, halfSide: radarRadius)
+        let beamPath = CGMutablePath()
+        segment(beamPath, point(radarX, radarY),
+                point(radarX + sin(sweepAngle) * sweepReach,
+                      radarY + cos(sweepAngle) * sweepReach))
+        radarSweepBeam.path = beamPath
+        // Cardinal letters and small white/green bearing symbols follow the
+        // actual tank heading, while the player's nose remains screen-up.
+        for (i, letter) in ["N", "E", "S", "W"].enumerated() {
+            let angle = Double(i) * .pi / 2 - heading
+            let r = radarRadius - 14.0
+            radarCompassLabels[i].text = letter
+            radarCompassLabels[i].position = point(
+                radarX + sin(angle) * r, radarY + cos(angle) * r)
+        }
+        segment(rp, point(radarX-5, radarY-5), point(radarX, radarY+8))
+        segment(rp, point(radarX, radarY+8), point(radarX+5, radarY-5))
 
         func projectedRadar(_ center: GroundPoint) -> CGPoint {
             let dx = center.x - tankPosition.x
