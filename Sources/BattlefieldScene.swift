@@ -151,6 +151,11 @@ final class BattlefieldScene: SKScene {
     private let telemetryRightDetail = SKLabelNode(fontNamed: "Menlo")
     private let telemetryRightFootnote = SKLabelNode(fontNamed: "Menlo")
     private let telemetryAmmo = SKLabelNode(fontNamed: "Menlo-Bold")
+    // Separate Modern instrument labels, not a screenshot or an image overlay.
+    private let modernUpperText = (0..<25).map { _ in SKLabelNode(fontNamed: "Menlo-Bold") }
+    private let modernUpperDividers = SKShapeNode()
+    private let modernUpperIcons = SKShapeNode()
+    private let modernOrangeCorners = SKShapeNode()
 
     // Modern-mode cockpit treatment. Separate decoration and text nodes make
     // every value live and keep Classic independent of the premium layout.
@@ -268,6 +273,20 @@ final class BattlefieldScene: SKScene {
             rail.zPosition = 12
             rail.strokeColor = .clear
             addChild(rail)
+        }
+        for (shape, depth) in [
+            (modernUpperDividers, 12.7), (modernUpperIcons, 14.0),
+            (modernOrangeCorners, 12.9)
+        ] {
+            shape.zPosition = depth
+            shape.fillColor = .clear
+            addChild(shape)
+        }
+        for label in modernUpperText {
+            label.zPosition = 14.3
+            label.horizontalAlignmentMode = .left
+            label.verticalAlignmentMode = .center
+            addChild(label)
         }
         stagePanel.zPosition = 18
         stagePanel.lineWidth = 1.2
@@ -1980,6 +1999,7 @@ final class BattlefieldScene: SKScene {
         }
         modernHitRing.path = hitArc
 
+        modernBest.isHidden = true
         modernBest.position = point(rightX, h - 110)
         modernBest.text = String(format: "BEST %06d", bestScore)
         modernBest.fontSize = CGFloat(11 * unit)
@@ -2011,11 +2031,11 @@ final class BattlefieldScene: SKScene {
                                         wave, enemies.count)
 
         // Tank-style horizontal readiness bars in the right upper display.
-        let barLeft = rightX - bankWidth * 0.75
-        let barWidth = max(48.0, bankWidth * 0.72)
-        let barHeight = 5.0
-        let shieldY = h - 188.0
-        let ammoY = h - 221.0
+        let barLeft = rightX - bankWidth + 70
+        let barWidth = max(46.0, bankWidth - 91)
+        let barHeight = 7.0
+        let shieldY = h - 16 - 185.0
+        let ammoY = h - 16 - 229.0
         func bar(_ x: Double, _ y: Double, _ width: Double) -> CGPath {
             CGPath(roundedRect: CGRect(x: x, y: y,
                                         width: max(0.1, width), height: barHeight),
@@ -2059,7 +2079,7 @@ final class BattlefieldScene: SKScene {
         let sight = CGMutablePath()
         let modernHUD = displayMode == .modern
         let radarRange = 165.0
-        let panelHeight = modernHUD ? min(268.0, max(200.0, h * 0.295)) : 154.0
+        let panelHeight = modernHUD ? min(278.0, max(248.0, h * 0.34)) : 154.0
         let outerMargin = modernHUD ? 14.0 : 14.0
         let panelGap = modernHUD ? 10.0 : 12.0
         let available = w - outerMargin * 2 - panelGap * 3
@@ -2415,12 +2435,25 @@ final class BattlefieldScene: SKScene {
         }
         message.fontColor = shieldDuration > 0 ? green : accent
 
+        let legacyTexts: [SKLabelNode] = [
+            midHUD, rightHUD, telemetryLeftHeading, telemetryRightHeading,
+            telemetryLeftDetail, telemetryLeftFootnote, telemetryCoordinates,
+            telemetryRightDetail, telemetryRightFootnote, telemetryAmmo
+        ]
+        for label in legacyTexts { label.isHidden = modernHUD }
+        for label in modernUpperText { label.isHidden = !modernHUD }
+        for shape in [modernUpperDividers, modernUpperIcons, modernOrangeCorners] {
+            shape.isHidden = !modernHUD
+        }
         if modernHUD {
             renderModernCockpit(
                 width: w, height: h, bankWidth: bankWidth,
                 leftX: leftX, rightX: rightX, radarX: radarX,
                 rearX: rearX, radarPanelWidth: radarPanelWidth,
                 rearPanelWidth: rearPanelWidth, topHeight: panelHeight)
+            renderModernUpperHUD(width: w, height: h,
+                                 leftCenter: leftCenterX, rightCenter: rightCenterX,
+                                 bankWidth: bankWidth, panelHeight: panelHeight)
         }
 
         // Center game-state messaging inside its panel; keep title and
