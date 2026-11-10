@@ -49,6 +49,8 @@ struct GeometrySmoke {
         precondition(!cannon.fire(reloadDuration: 1))
         cannon = CannonMagazine()
         precondition(cannon.canFire && cannon.roundsRemaining == 40)
+        precondition(abs(EnemyMotion.saucerBaseSpeed - 1.10 * 0.30) < 0.000001,
+                     "Saucers must cruise 70% more slowly than the prior tuning")
         // Vehicle camera motion is visual only; the simulated tank aim remains
         // independent of suspension pitch and lateral shudder.
         var suspension = TankSuspension()
