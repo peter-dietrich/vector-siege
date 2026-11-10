@@ -1159,8 +1159,23 @@ final class BattlefieldScene: SKScene {
         scanlines.lineWidth = 0.5
         let enemyOrange = NSColor(calibratedRed: 1, green: 0.49, blue: 0.12, alpha: 1)
         radarEnemyContacts.strokeColor = enemyOrange
-        radarEnemyContacts.fillColor = enemyOrange.withAlphaComponent(0.90)
-        radarEnemyContacts.lineWidth = 0.5
+        radarEnemyContacts.fillColor = enemyOrange.withAlphaComponent(0.85)
+        radarEnemyContacts.lineWidth = 1.4
+        radarEnemyContacts.glowWidth = 3
+        radarHunterContacts.strokeColor = NSColor(calibratedRed: 1, green: 0.18, blue: 0.23, alpha: 1)
+        radarHunterContacts.fillColor = NSColor(calibratedRed: 1, green: 0.24, blue: 0.20, alpha: 0.38)
+        radarHunterContacts.lineWidth = 1.8
+        radarHunterContacts.glowWidth = 4
+        radarSaucerContacts.strokeColor = NSColor(calibratedRed: 0.30, green: 1, blue: 0.56, alpha: 1)
+        radarSaucerContacts.fillColor = NSColor(calibratedRed: 0.30, green: 1, blue: 0.56, alpha: 0.58)
+        radarSaucerContacts.lineWidth = 1.2
+        radarSaucerContacts.glowWidth = 3
+        for wedge in radarSweepGlow {
+            wedge.fillColor = NSColor(calibratedRed: 0.05, green: 1, blue: 0.36, alpha: 1)
+        }
+        for compass in radarCompassLabels {
+            compass.fontColor = NSColor(calibratedRed: 0.73, green: 1, blue: 0.83, alpha: 1)
+        }
         radarProjectileGlow.strokeColor = .clear
         radarProjectileGlow.fillColor = NSColor(calibratedRed: 1, green: 0.81, blue: 0.11, alpha: 0.24)
         radarProjectileGlow.glowWidth = 9
@@ -1251,9 +1266,10 @@ final class BattlefieldScene: SKScene {
             : muted.withAlphaComponent(0.62)
         radarStreetGrid.fillColor = .clear
         radarStreetGrid.lineWidth = 0.8
-        radarObstacleContacts.strokeColor = muted.withAlphaComponent(0.95)
-        radarObstacleContacts.fillColor = muted.withAlphaComponent(0.55)
-        radarObstacleContacts.lineWidth = 0.7
+        radarObstacleContacts.strokeColor = NSColor(calibratedRed: 0.22, green: 0.95, blue: 0.68, alpha: 0.93)
+        radarObstacleContacts.fillColor = NSColor(calibratedRed: 0.25, green: 0.98, blue: 0.67, alpha: 0.50)
+        radarObstacleContacts.lineWidth = 0.9
+        radarObstacleContacts.glowWidth = 1.7
         for rail in [telemetryLeftAccent, telemetryRightAccent] { rail.fillColor = amber }
         for label in [telemetryLeftHeading, telemetryRightHeading] {
             label.fontColor = modern ? cyan : amber
@@ -1379,6 +1395,21 @@ final class BattlefieldScene: SKScene {
     private func renderGround(_ c: CameraProjection) {
         let roads = CGMutablePath()
         let markings = CGMutablePath()
+        let mesh = CGMutablePath()
+        // Six-unit faint subdivisions make the flat landscape legible at
+        // distance. Roads and building blocks remain the stronger geometry.
+        let meshStep = 6.0
+        let meshRadius = 144.0
+        let anchorX = floor(tankPosition.x / meshStep) * meshStep
+        let anchorZ = floor(tankPosition.z / meshStep) * meshStep
+        for index in -24...24 {
+            let x = anchorX + Double(index) * meshStep
+            let z = anchorZ + Double(index) * meshStep
+            line(mesh, WorldPoint(x, 0.018, anchorZ - meshRadius),
+                 WorldPoint(x, 0.018, anchorZ + meshRadius), c)
+            line(mesh, WorldPoint(anchorX - meshRadius, 0.018, z),
+                 WorldPoint(anchorX + meshRadius, 0.018, z), c)
+        }
         // Wide, continuous orthogonal streets frame 60-unit city blocks.
         // World-space layout matches obstacle placement and the square radar.
         let halfStreet = CityLayout.streetHalfWidth
@@ -1409,6 +1440,7 @@ final class BattlefieldScene: SKScene {
             }
         }
         ground.path = roads
+        groundMesh.path = mesh
         streetMarks.path = markings
     }
 
