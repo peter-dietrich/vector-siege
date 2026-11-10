@@ -43,6 +43,12 @@ Vector Siege now has **Vector Drift-inspired cockpit telemetry panels** with sub
 
 Use **Copy Feedback** in the toolbar to copy a plaintext playtest snapshot (mode, difficulty, game state, wave, score, position, heading, speed, target offset, shots, hits, FPS, enemy/projectile counts, shield, and elapsed gameplay). Paste the snapshot into a bug report or this chat. **No telemetry is automatically uploaded or transmitted**; copying only accesses the local clipboard. A crash cannot be captured by the in-app button after the game has terminated; macOS crash diagnostics are separate.
 
+## v0.9 — central tactical radar, modern architecture and rotating disk patrols
+
+- **Central tactical radar:** enlarged to a **138-point diameter**, located at the top center between independent left targeting/position telemetry and right combat/ammo telemetry panels. The map now covers **165 world units** and includes inner range rings, twelve bearing marks, an animated sweep, a nose-direction marker, small obstacle footprints, red enemies, diamond-shaped disk contacts, and the previous yellow glowing projectile blips.
+- **Modern architecture:** mixed tall wireframe towers, multi-story faceted buildings with window/deck details, narrow monoliths and classic blocks/pyramids. They have different heights and dimensions, with glass-like shaded surfaces; collision detection still uses their original horizontal footprint. Classic keeps the simple wireframe obstacles rather than rendering the architectural details.
+- **Rotating disks:** a flying saucer patrol now enters at least once every **120 seconds of active, unpaused play** in either display mode, independently of regular wave spawns. The rotating disk has animated spokes, rims and dome facets; Modern has more detail than Classic. The scheduled patrol follows the Custom Game setting **Enable flying saucers**; turning that off intentionally disables them. The countdown persists across Save Game / Resume, and older saves continue to load.
+
 ## v0.8 — Custom Game presets and saved game slots
 
 Vector Siege now includes the **Custom Game**, **Save Game**, and **Resume** controls from Vector Drift.
