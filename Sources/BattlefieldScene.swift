@@ -2674,6 +2674,8 @@ final class BattlefieldScene: SKScene {
 
         let obstaclesOnRadar = CGMutablePath()
         let enemyContacts = CGMutablePath()
+        let hunterContacts = CGMutablePath()
+        let saucerContacts = CGMutablePath()
         let projectileHalos = CGMutablePath()
         let projectileDots = CGMutablePath()
         func radarPoint(_ center: GroundPoint) -> CGPoint? {
@@ -2694,17 +2696,27 @@ final class BattlefieldScene: SKScene {
         }
         for foe in enemies {
             guard let contact = radarPoint(foe.center) else { continue }
-            if foe.kind == .saucer {
-                let size = 5.0
-                enemyContacts.move(to: point(contact.x, contact.y+size))
-                enemyContacts.addLine(to: point(contact.x+size, contact.y))
-                enemyContacts.addLine(to: point(contact.x, contact.y-size))
-                enemyContacts.addLine(to: point(contact.x-size, contact.y))
-                enemyContacts.closeSubpath()
-            } else {
-                let radius = foe.kind == .hunter ? 3.8 : 2.7
-                enemyContacts.addEllipse(in: CGRect(x: contact.x-radius, y: contact.y-radius,
-                                                     width: radius*2, height: radius*2))
+            switch foe.kind {
+            case .saucer:
+                // Green diamond distinguishes the aerial patrol.
+                let r = 4.6
+                saucerContacts.move(to: point(contact.x, contact.y + r))
+                saucerContacts.addLine(to: point(contact.x + r, contact.y))
+                saucerContacts.addLine(to: point(contact.x, contact.y - r))
+                saucerContacts.addLine(to: point(contact.x - r, contact.y))
+                saucerContacts.closeSubpath()
+            case .hunter:
+                // Red outline triangle: high-priority pursuit armor.
+                let r = 5.2
+                hunterContacts.move(to: point(contact.x, contact.y + r))
+                hunterContacts.addLine(to: point(contact.x - r, contact.y - r))
+                hunterContacts.addLine(to: point(contact.x + r, contact.y - r))
+                hunterContacts.closeSubpath()
+            case .tank:
+                // Bright orange square marks the standard enemy tank.
+                enemyContacts.addRect(CGRect(x: contact.x - 3.2,
+                                             y: contact.y - 3.2,
+                                             width: 6.4, height: 6.4))
             }
         }
         for shell in shells {
@@ -2718,6 +2730,8 @@ final class BattlefieldScene: SKScene {
         radar.path = rp
         radarObstacleContacts.path = obstaclesOnRadar
         radarEnemyContacts.path = enemyContacts
+        radarHunterContacts.path = hunterContacts
+        radarSaucerContacts.path = saucerContacts
         radarProjectileGlow.path = projectileHalos
         radarProjectileCore.path = projectileDots
 
