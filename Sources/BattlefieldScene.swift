@@ -117,6 +117,7 @@ final class BattlefieldScene: SKScene {
     private let midHUD = SKLabelNode(fontNamed: "Menlo-Bold")
     private let warning = SKLabelNode(fontNamed: "Menlo-Bold")
     private let banner = SKLabelNode(fontNamed: "Menlo-Bold")
+    private let titleLogo = SKSpriteNode(imageNamed: "VectorSiegeLogo")
     private let subtitle = SKLabelNode(fontNamed: "Menlo")
     private let message = SKLabelNode(fontNamed: "Menlo")
     private let scanlines = SKShapeNode()
@@ -196,6 +197,14 @@ final class BattlefieldScene: SKScene {
         stagePanel.zPosition = 18
         stagePanel.lineWidth = 1.2
         addChild(stagePanel)
+        titleLogo.size = CGSize(width: 245, height: 245)
+        titleLogo.zPosition = 21
+        titleLogo.isHidden = true
+        addChild(titleLogo)
+        titleLogo.run(.repeatForever(.sequence([
+            .fadeAlpha(to: 0.78, duration: 2.2),
+            .fadeAlpha(to: 1.0, duration: 2.2)
+        ])))
         shieldBorder.zPosition = 9.0
         shieldBorder.fillColor = .clear
         shieldBorder.lineWidth = 3.0
@@ -344,7 +353,13 @@ final class BattlefieldScene: SKScene {
         lastUpdateTime = currentTime
         if round != .paused { gameClock += dt }
         if round == .playing { tick(dt) }
-        if round == .title { pulse += dt }
+        if round == .title {
+            pulse += dt
+            // Gently pulse existing atmospheric bands during attract mode.
+            for (index, band) in skyBands.enumerated() {
+                band.alpha = 0.82 + 0.14 * sin(pulse * 0.6 + Double(index) * 0.65)
+            }
+        }
         let playing = round == .playing
         movementAudio.update(
             moving: playing ? min(1, abs(driveSpeed) / 16.5) : 0,
@@ -1658,14 +1673,16 @@ final class BattlefieldScene: SKScene {
         message.fontColor = shieldDuration > 0 ? green : accent
 
         stagePanel.position = point(w / 2, h * 0.61)
-        stagePanel.isHidden = round == .playing && pendingWave <= 0
+        stagePanel.isHidden = round == .title || (round == .playing && pendingWave <= 0)
         banner.position = point(w/2, h*0.67)
         banner.fontSize = min(42, w*0.052)
-        subtitle.position = point(w/2, h*0.59)
+        titleLogo.position = point(w/2, h*0.66)
+        titleLogo.isHidden = round != .title
+        subtitle.position = point(w/2, round == .title ? h*0.42 : h*0.59)
         subtitle.fontSize = 15
         switch round {
         case .title:
-            banner.text = "VECTOR SIEGE"
+            banner.text = ""
             subtitle.text = "PRESS RETURN TO DEPLOY"
         case .paused:
             banner.text = "PAUSED"
