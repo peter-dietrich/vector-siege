@@ -2086,145 +2086,271 @@ final class BattlefieldScene: SKScene {
 
     /// Vector Drift-inspired Modern cockpit. All gauges are driven by actual
     /// battle data; Classic keeps its original arcade readouts.
+    /// Instrument panel modeled as a military tank command dashboard.
+    /// Gauges, compass, and status are SpriteKit vectors linked to live state.
     private func renderModernCockpit(
         width w: Double, height h: Double, bankWidth: Double,
         leftX: Double, rightX: Double, radarX: Double,
         rearX: Double, radarPanelWidth: Double,
         rearPanelWidth: Double, topHeight: Double
     ) {
-        let cyan = NSColor(calibratedRed: 0.21, green: 0.98, blue: 0.94, alpha: 1)
-        let amber = NSColor(calibratedRed: 1, green: 0.52, blue: 0.22, alpha: 1)
-        let unit = min(1.0, max(0.68, w / 1320))
-        let bottomY = 29.0
-        let bottomHeight = max(96.0, min(119.0, h * 0.145))
-        modernLowerDash.path = CGPath(
-            roundedRect: CGRect(x: 12, y: bottomY, width: max(1, w - 24),
-                                height: bottomHeight),
-            cornerWidth: 12, cornerHeight: 12, transform: nil)
+        let cyan = NSColor(calibratedRed: 0.22, green: 0.97, blue: 0.97, alpha: 1)
+        let greenLight = NSColor(calibratedRed: 0.24, green: 1.0, blue: 0.54, alpha: 1)
+        let amber = NSColor(calibratedRed: 1, green: 0.54, blue: 0.13, alpha: 1)
+        let scale = min(1.0, max(0.72, w / 1450))
+        let bottomY = 27.0
+        let bottomHeight = max(113.0, min(152.0, h * 0.177))
+        let topY = bottomY + bottomHeight
+        let x0 = 12.0
+        let x1 = w * 0.225
+        let x2 = w * 0.370
+        let x3 = w * 0.670
+        let x4 = w * 0.830
+        let x5 = w - 12
+        let middleY = bottomY + bottomHeight * 0.51
 
-        let leftDivider = w * 0.24
-        let rightDivider = w * 0.71
-        let compassX = w * 0.53
-        let ringX = w * 0.33
-        let midY = bottomY + bottomHeight * 0.53
-        let deco = CGMutablePath()
-        // Deck segments, circuit-board traces, subtle index and compass ticks.
-        segment(deco, point(24, bottomY + bottomHeight - 10),
-                point(w - 24, bottomY + bottomHeight - 10))
-        for x in [leftDivider, w * 0.42, rightDivider] {
-            segment(deco, point(x, bottomY + 13),
-                    point(x, bottomY + bottomHeight - 15))
+        // Continuous beveled panel, with small orange accent plates.
+        let border = CGMutablePath()
+        let cut = 14.0
+        border.move(to: point(x0 + cut, bottomY))
+        border.addLine(to: point(x5 - cut, bottomY))
+        border.addLine(to: point(x5, bottomY + cut))
+        border.addLine(to: point(x5, topY - cut))
+        border.addLine(to: point(x5 - cut, topY))
+        border.addLine(to: point(x0 + cut, topY))
+        border.addLine(to: point(x0, topY - cut))
+        border.addLine(to: point(x0, bottomY + cut))
+        border.closeSubpath()
+        modernLowerDash.path = border
+        modernLowerDash.strokeColor = cyan
+        modernLowerDash.fillColor = NSColor(
+            calibratedRed: 0.008, green: 0.041, blue: 0.055, alpha: 0.97)
+
+        let strokes = CGMutablePath()
+        segment(strokes, point(x0 + 32, topY - 8), point(x5 - 32, topY - 8))
+        segment(strokes, point(x0 + 32, bottomY + 7), point(x5 - 32, bottomY + 7))
+        for divider in [x1, x2, x3, x4] {
+            segment(strokes, point(divider, bottomY + 15),
+                    point(divider, topY - 15))
         }
-        let halfScale = min(150.0, (rightDivider - w * 0.42) * 0.43)
+        modernLowerLines.path = strokes
+
+        let trim = CGMutablePath()
+        for (x, direction) in [(x0, 1.0), (x5, -1.0)] {
+            segment(trim, point(x, topY - 29), point(x + direction * 20, topY - 9))
+            segment(trim, point(x + direction * 20, topY - 9),
+                    point(x + direction * 65, topY - 9))
+            segment(trim, point(x, bottomY + 29),
+                    point(x + direction * 20, bottomY + 9))
+        }
+        modernLowerCorners.path = trim
+
+        // Stylized side-view tank, drawn from independently projected lines.
+        let tankPath = CGMutablePath()
+        let tankX = x0 + 16
+        let tankWidth = min(104.0, (x1 - x0) * 0.39)
+        let tankY = middleY - 5
+        let leftEdge = tankX
+        let rightEdge = tankX + tankWidth
+        let wheelY = tankY - 20
+        segment(tankPath, point(leftEdge + 7, wheelY + 19),
+                point(rightEdge - 7, wheelY + 19))
+        segment(tankPath, point(rightEdge - 7, wheelY + 19),
+                point(rightEdge, wheelY + 11))
+        segment(tankPath, point(rightEdge, wheelY + 11),
+                point(rightEdge - 10, wheelY - 3))
+        segment(tankPath, point(rightEdge - 10, wheelY - 3),
+                point(leftEdge + 9, wheelY - 3))
+        segment(tankPath, point(leftEdge + 9, wheelY - 3),
+                point(leftEdge, wheelY + 11))
+        segment(tankPath, point(leftEdge, wheelY + 11),
+                point(leftEdge + 7, wheelY + 19))
+        for wheel in 0..<5 {
+            let x = leftEdge + 17 + Double(wheel) * (tankWidth - 34) / 4
+            tankPath.addEllipse(in: CGRect(x: x - 5, y: wheelY + 2,
+                                           width: 10, height: 10))
+        }
+        segment(tankPath, point(leftEdge + 24, wheelY + 19),
+                point(leftEdge + 35, wheelY + 39))
+        segment(tankPath, point(leftEdge + 35, wheelY + 39),
+                point(leftEdge + 73, wheelY + 39))
+        segment(tankPath, point(leftEdge + 73, wheelY + 39),
+                point(leftEdge + 83, wheelY + 19))
+        segment(tankPath, point(leftEdge + 41, wheelY + 40),
+                point(leftEdge + 41, wheelY + 48))
+        segment(tankPath, point(leftEdge + 39, wheelY + 48),
+                point(leftEdge + 63, wheelY + 48))
+        segment(tankPath, point(leftEdge + 63, wheelY + 48),
+                point(leftEdge + 63, wheelY + 40))
+        segment(tankPath, point(leftEdge + 77, wheelY + 31),
+                point(rightEdge + 12, wheelY + 31))
+        modernTankIcon.path = tankPath
+
+        // Tank integrity is a readiness proxy based on remaining lives; the
+        // game doesn't yet simulate component-by-component armor damage.
+        let integrity = 100.0 * Double(max(0, lives)) /
+                        Double(max(1, rules.startingLives))
+        let statusLeft = leftEdge + tankWidth + 22
+        func setExtra(_ id: Int, _ value: String,
+                      x: Double, y: Double, size: Double,
+                      color: NSColor, alignedRight: Bool = false) {
+            let label = modernLowerExtra[id]
+            label.text = value
+            label.position = point(x, y)
+            label.fontSize = CGFloat(size * scale)
+            label.fontColor = color
+            label.horizontalAlignmentMode = alignedRight ? .right : .left
+        }
+        modernTankStatus.position = point(statusLeft, topY - 31)
+        modernTankStatus.fontColor = greenLight
+        modernTankStatus.fontSize = CGFloat(14 * scale)
+        modernTankStatus.text = "• TANK STATUS"
+        modernIntegrity.position = point(statusLeft, topY - 61)
+        modernIntegrity.fontSize = CGFloat(12 * scale)
+        modernIntegrity.text = "INTEGRITY"
+        setExtra(0, String(format: "%.0f%%", max(0, min(100, integrity))),
+                 x: x1 - 16, y: topY - 61,
+                 size: 12, color: greenLight, alignedRight: true)
+        modernStatusText.position = point(statusLeft, topY - 87)
+        modernStatusText.fontSize = CGFloat(12 * scale)
+        modernStatusText.text = "SYSTEMS"
+        setExtra(1, round == .gameOver ? "OFFLINE" : "ONLINE",
+                 x: x1 - 16, y: topY - 87,
+                 size: 12, color: greenLight, alignedRight: true)
+        setExtra(2, round == .playing ? "MODE  COMBAT" :
+                       round == .paused ? "MODE  PAUSED" :
+                       round == .levelReady ? "MODE  STANDBY" : "MODE  OFFLINE",
+                 x: statusLeft, y: topY - 111, size: 11, color: cyan)
+
+        // Hit ratio is backed by the existing resolved shot tally.
+        modernHitCaption.position = point(x1 + 17, topY - 29)
+        modernHitCaption.fontSize = CGFloat(13 * scale)
+        modernHitCaption.text = "HIT RATIO"
+        modernHitValue.position = point(x1 + 17, middleY - 12)
+        modernHitValue.fontSize = CGFloat(35 * scale)
+        modernHitValue.fontColor = cyan
+        modernHitValue.text = String(format: "%.0f%%", shotTally.hitPercentage)
+        let hitRadius = min(33.0, (x2 - x1) * 0.19)
+        let hitPoint = point(x2 - hitRadius - 18, middleY - 4)
+        let track = CGMutablePath()
+        track.addEllipse(in: CGRect(x: hitPoint.x - hitRadius,
+                                   y: hitPoint.y - hitRadius,
+                                   width: hitRadius * 2, height: hitRadius * 2))
+        modernHitTrack.path = track
+        let ring = CGMutablePath()
+        let hitFraction = min(1.0, max(0.0, shotTally.hitPercentage / 100))
+        if hitFraction > 0 {
+            ring.addArc(center: hitPoint, radius: hitRadius,
+                        startAngle: -.pi / 2,
+                        endAngle: -.pi / 2 + CGFloat(2.0 * .pi * hitFraction),
+                        clockwise: false)
+        }
+        modernHitRing.path = ring
+
+        // Calibrated moving compass tape: fine ticks and a fixed amber nose.
+        let compassX = (x2 + x3) / 2
+        let compassSpan = (x3 - x2) * 0.45
+        let tapeY = bottomY + 49
         let headingDegrees = (heading * 180 / .pi + 360)
                              .truncatingRemainder(dividingBy: 360)
-        let tickStep = halfScale / 6
-        let tickShift = headingDegrees.truncatingRemainder(dividingBy: 10) / 10
-                        * tickStep
+        let offset = headingDegrees.truncatingRemainder(dividingBy: 10) / 10
+        let stepWidth = compassSpan / 6
+        let tickPath = CGMutablePath()
         for step in -7...7 {
-            let x = compassX + Double(step) * tickStep - tickShift
-            if x < compassX - halfScale || x > compassX + halfScale { continue }
-            let major = step.isMultiple(of: 2)
-            segment(deco, point(x, bottomY + 23),
-                    point(x, bottomY + (major ? 40 : 32)))
+            let x = compassX + (Double(step) - offset) * stepWidth
+            guard x >= compassX - compassSpan,
+                  x <= compassX + compassSpan else { continue }
+            let height = step.isMultiple(of: 2) ? 18.0 : 10.0
+            segment(tickPath, point(x, tapeY), point(x, tapeY + height))
         }
-        let baseHeading = Int(floor(headingDegrees / 10)) * 10
+        modernLowerLines.path = {
+            let combined = CGMutablePath()
+            combined.addPath(strokes)
+            combined.addPath(tickPath)
+            return combined
+        }()
+        let centerDegrees = Int(floor(headingDegrees / 10)) * 10
         for (index, label) in modernHeadingTicks.enumerated() {
-            let offset = (index - 3) * 2
-            let x = compassX + Double(offset) * tickStep - tickShift
-            label.position = point(x, bottomY + 51)
-            let bearing = (baseHeading + offset * 10 + 360) % 360
-            label.text = String(format: "%03d°", bearing)
-            label.isHidden = abs(x - compassX) > halfScale - 8
+            let step = (index - 3) * 2
+            let x = compassX + (Double(step) - offset) * stepWidth
+            label.position = point(x, bottomY + 30)
+            label.text = String(format: "%03d°", (centerDegrees + step * 10 + 360) % 360)
+            label.fontSize = CGFloat(11 * scale)
+            label.isHidden = abs(x - compassX) > compassSpan - 8
+        }
+        let pointer = CGMutablePath()
+        let pointerTip = bottomY + 66
+        pointer.move(to: point(compassX, pointerTip))
+        pointer.addLine(to: point(compassX - 7, pointerTip + 17))
+        pointer.addLine(to: point(compassX + 7, pointerTip + 17))
+        pointer.closeSubpath()
+        modernHeadingPointer.path = pointer
+        modernHeadingValue.position = point(compassX, topY - 28)
+        modernHeadingValue.fontColor = amber
+        modernHeadingValue.fontSize = CGFloat(25 * scale)
+        modernHeadingValue.text = String(
+            format: "%03d°", Int(headingDegrees.rounded()) % 360)
+        modernCompassLabel.position = point(compassX, bottomY + 14)
+        modernCompassLabel.fontSize = CGFloat(9 * scale)
+        modernCompassLabel.text = "HEADING  //  LIVE"
+
+        // Skyline terrain signature moves with tank heading. Flat-ground
+        // elevation is zero: no nonexistent height sensor is implied.
+        let plotStart = x3 + 19
+        let plotEnd = x4 - 17
+        let plotBottom = bottomY + 31
+        let plotWidth = max(20.0, plotEnd - plotStart)
+        let terrain = CGMutablePath()
+        var old = point(plotStart, plotBottom)
+        for i in 0...48 {
+            let t = Double(i) / 48
+            let bearing = heading + (t - 0.5) * 1.05
+            let y = plotBottom + 16 + min(25.0, ridge(bearing, multiplier: 0.48))
+            let next = point(plotStart + plotWidth * t, y)
+            if i > 0 { segment(terrain, old, next) }
+            old = next
+        }
+        segment(terrain, point(plotStart, plotBottom),
+                point(plotEnd, plotBottom))
+        for fraction in [0.25, 0.5, 0.75] {
+            let x = plotStart + plotWidth * fraction
+            segment(terrain, point(x, plotBottom),
+                    point(x, plotBottom + 10))
+        }
+        modernTerrainProfile.path = terrain
+        modernTerrainLabel.position = point(x4 - 17, topY - 28)
+        modernTerrainLabel.text = "TERRAIN"
+        modernTerrainLabel.fontSize = CGFloat(12 * scale)
+
+        // Sector readout uses actual 60-unit city blocks, not fabricated
+        // location labels. X maps A-F, Z maps 01-06.
+        let sectorX = min(5, max(0,
+            Int(floor((tankPosition.x + CityLayout.cityExtent)
+                      / CityLayout.streetSpacing))))
+        let sectorZ = min(5, max(0,
+            Int(floor((tankPosition.z + CityLayout.cityExtent)
+                      / CityLayout.streetSpacing))))
+        let sectorLetter = String(UnicodeScalar(65 + sectorX)!)
+        modernSectorValue.position = point(x5 - 25, topY - 64)
+        modernSectorValue.text = String(format: "SECTOR %@-%02d",
+                                       sectorLetter, sectorZ + 1)
+        modernSectorValue.fontSize = CGFloat(14 * scale)
+        modernSectorValue.fontColor = cyan
+        setExtra(3, "TERRAIN", x: x5 - 25, y: topY - 27,
+                 size: 12, color: cyan, alignedRight: true)
+        setExtra(4, "ELEV   +0.0 m", x: x5 - 25, y: topY - 97,
+                 size: 12, color: cyan, alignedRight: true)
+        setExtra(5, String(format: "X %+.0f   Z %+.0f",
+                           tankPosition.x, tankPosition.z),
+                 x: x5 - 25, y: bottomY + 18,
+                 size: 10, color: cyan.withAlphaComponent(0.80),
+                 alignedRight: true)
+        for unused in 6..<modernLowerExtra.count {
+            modernLowerExtra[unused].text = ""
         }
 
-        // Small real-time terrain signature at the far right of the lower deck.
-        let terrainLeft = w * 0.735
-        let terrainWidth = max(30, w * 0.10)
-        let terrainBase = bottomY + 25
-        var previousTerrain = point(terrainLeft, terrainBase)
-        for i in 0...24 {
-            let t = Double(i) / 24
-            let angle = heading + (t - 0.5) * 0.9
-            let y = terrainBase + min(27, ridge(angle, multiplier: 0.23))
-            let current = point(terrainLeft + t * terrainWidth, y)
-            if i > 0 { segment(deco, previousTerrain, current) }
-            previousTerrain = current
-        }
-        modernLowerLines.path = deco
-
-        // Corner brackets and linking traces visually tie the top four panels
-        // together without obstructing the live radar or rear camera image.
-        let trim = CGMutablePath()
-        let panelTop = h - 16.0
-        let panelBottom = panelTop - topHeight
-        for (x, direction) in [(14.0, 1.0), (w - 14.0, -1.0)] {
-            segment(trim, point(x, panelTop - 28),
-                    point(x + direction * 22, panelTop))
-            segment(trim, point(x + direction * 22, panelTop),
-                    point(x + direction * 90, panelTop))
-            segment(trim, point(x, panelBottom + 28),
-                    point(x + direction * 22, panelBottom))
-            segment(trim, point(x + direction * 22, panelBottom),
-                    point(x + direction * 90, panelBottom))
-        }
-        let bridgeStart = radarX - radarPanelWidth / 2 + 15
-        let bridgeEnd = rearX + rearPanelWidth / 2 - 15
-        segment(trim, point(bridgeStart, panelBottom + 7),
-                point(bridgeEnd, panelBottom + 7))
-        modernTrim.path = trim
-
-        // A circular percent gauge highlights accuracy without relying solely
-        // on tiny text in the upper targeting panel.
-        let hitCenter = point(ringX, midY)
-        let hitRadius = max(18.0, 24 * unit)
-        let track = CGMutablePath()
-        track.addEllipse(in: CGRect(x: hitCenter.x - hitRadius,
-                                    y: hitCenter.y - hitRadius,
-                                    width: hitRadius * 2, height: hitRadius * 2))
-        modernHitTrack.path = track
-        let hitArc = CGMutablePath()
-        let fraction = min(1, max(0, shotTally.hitPercentage / 100))
-        if fraction > 0 {
-            hitArc.addArc(center: hitCenter, radius: hitRadius,
-                          startAngle: -.pi / 2,
-                          endAngle: -.pi / 2 + CGFloat(Double.pi * 2 * fraction),
-                          clockwise: false)
-        }
-        modernHitRing.path = hitArc
-
-        modernBest.isHidden = true
-        modernBest.position = point(rightX, h - 110)
-        modernBest.text = String(format: "BEST %06d", bestScore)
-        modernBest.fontSize = CGFloat(11 * unit)
-        modernTankStatus.position = point(31, bottomY + bottomHeight - 32)
-        modernTankStatus.text = "TANK SYSTEMS"
-        modernIntegrity.position = point(31, bottomY + bottomHeight - 60)
-        modernIntegrity.text = String(format: "%02d LIVES  //  %@", lives,
-                                      round == .gameOver ? "OFFLINE" : "ONLINE")
-        modernHitCaption.position = point(leftDivider + 15, bottomY + bottomHeight - 29)
-        modernHitCaption.text = "HIT RATE"
-        modernHitValue.position = point(leftDivider + 15, bottomY + 40)
-        modernHitValue.text = String(format: "%.0f%%", shotTally.hitPercentage)
-        modernHitValue.fontSize = CGFloat(28 * unit)
-
-        modernHeadingValue.position = point(compassX, bottomY + bottomHeight - 35)
-        let bearing = Int((heading * 180 / .pi + 360)
-                          .truncatingRemainder(dividingBy: 360).rounded()) % 360
-        modernHeadingValue.text = String(format: "%03d°", bearing)
-        modernCompassLabel.position = point(compassX, bottomY + 13)
-        modernCompassLabel.text = "DRIVE HEADING  //  LIVE"
-
-        modernTerrainLabel.position = point(w - 35, bottomY + bottomHeight - 28)
-        modernTerrainLabel.text = "BATTLEFIELD POSITION"
-        modernSectorValue.position = point(w - 35, bottomY + bottomHeight - 56)
-        modernSectorValue.text = String(format: "X %+.0f   Z %+.0f",
-                                        tankPosition.x, tankPosition.z)
-        modernStatusText.position = point(31, bottomY + 18)
-        modernStatusText.text = String(format: "WAVE %02d   //   %02d ENEMIES",
-                                        wave, enemies.count)
-
-        // Tank-style horizontal readiness bars in the right upper display.
+        // Upper combat bank: preserve actual five-second shield readiness and
+        // magazine depletion while keeping independent vector progress bars.
         let barLeft = rightX - bankWidth + 70
         let barWidth = max(46.0, bankWidth - 91)
         let barHeight = 7.0
@@ -2232,36 +2358,51 @@ final class BattlefieldScene: SKScene {
         let ammoY = h - 16 - 229.0
         func bar(_ x: Double, _ y: Double, _ width: Double) -> CGPath {
             CGPath(roundedRect: CGRect(x: x, y: y,
-                                        width: max(0.1, width), height: barHeight),
-                   cornerWidth: 2.5, cornerHeight: 2.5, transform: nil)
+                                        width: max(0.1, width),
+                                        height: barHeight),
+                   cornerWidth: 2.5, cornerHeight: 2.5,
+                   transform: nil)
         }
         modernShieldTrack.path = bar(barLeft, shieldY, barWidth)
         let shieldValue = shieldDuration > 0
             ? shieldDuration / max(1, rules.shieldDuration)
             : max(0, 1 - shieldCooldown / max(0.01, rules.shieldCooldown))
-        modernShieldFill.path = bar(barLeft, shieldY,
-                                    max(0.1, barWidth * min(1, max(0, shieldValue))))
-        modernShieldFill.fillColor = shieldDuration > 0 ? cyan : amber
+        modernShieldFill.path = bar(
+            barLeft, shieldY,
+            barWidth * min(1, max(0, shieldValue)))
+        modernShieldFill.fillColor = shieldDuration > 0 ? greenLight : amber
         modernAmmoTrack.path = bar(barLeft, ammoY, barWidth)
-        modernAmmoFill.path = bar(barLeft, ammoY,
-                                  max(0.1, barWidth * Double(cannon.roundsRemaining)
-                                      / Double(max(1, cannon.maxRounds))))
-        modernAmmoFill.fillColor = cannon.roundsRemaining < max(4, cannon.maxRounds / 5)
-            ? amber : cyan
+        modernAmmoFill.path = bar(
+            barLeft, ammoY,
+            barWidth * Double(cannon.roundsRemaining)
+                / Double(max(1, cannon.maxRounds)))
+        modernAmmoFill.fillColor = cannon.roundsRemaining <
+            max(4, cannon.maxRounds / 5) ? amber : cyan
+
+        let decoration = CGMutablePath()
+        let top = h - 16.0
+        let topBottom = top - topHeight
+        let radarFrom = radarX - radarPanelWidth / 2 + 15
+        let rearTo = rearX + rearPanelWidth / 2 - 15
+        segment(decoration, point(radarFrom, topBottom + 7),
+                point(rearTo, topBottom + 7))
+        modernTrim.path = decoration
 
         let close = nearestTankDistance.flatMap {
             TankProximity.isClose($0) ? $0 : nil
         }
         modernThreatPanel.isHidden = close == nil || round != .playing
         if let distance = close, round == .playing {
-            let threatWidth = min(570.0, w * 0.60)
+            let width = min(570.0, w * 0.60)
             modernThreatPanel.path = CGPath(
-                roundedRect: CGRect(x: w / 2 - threatWidth / 2, y: 152,
-                                    width: threatWidth, height: 49),
+                roundedRect: CGRect(x: w / 2 - width / 2,
+                                    y: bottomY + bottomHeight + 18,
+                                    width: width, height: 49),
                 cornerWidth: 8, cornerHeight: 8, transform: nil)
-            modernThreatPanel.alpha = CGFloat(0.80 + 0.20 * abs(sin(gameClock * 7)))
-            modernThreatPanel.strokeColor = distance <= TankProximity.tankLength
-                ? NSColor.systemRed : amber
+            modernThreatPanel.alpha = CGFloat(
+                0.80 + 0.20 * abs(sin(gameClock * 7)))
+            modernThreatPanel.strokeColor =
+                distance <= TankProximity.tankLength ? NSColor.systemRed : amber
         }
     }
 
