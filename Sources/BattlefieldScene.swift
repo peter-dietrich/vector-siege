@@ -105,6 +105,7 @@ final class BattlefieldScene: SKScene {
     private let streetMarks = SKShapeNode()
     private let structures = SKShapeNode()
     private let opponentLines = SKShapeNode()
+    private let opponentSaucerLines = SKShapeNode()
     private let shotLines = SKShapeNode()
     private let modernFriendlyShells = SKShapeNode()
     private let modernHostileShells = SKShapeNode()
@@ -120,6 +121,7 @@ final class BattlefieldScene: SKScene {
     private let rearGround = SKShapeNode()
     private let rearEnvironment = SKShapeNode()
     private let rearEnemies = SKShapeNode()
+    private let rearSaucers = SKShapeNode()
     private let rearShots = SKShapeNode()
     private let rearBackground = SKShapeNode()
     private let rearLabel = SKLabelNode(fontNamed: "Menlo-Bold")
@@ -216,7 +218,7 @@ final class BattlefieldScene: SKScene {
         for (layer, z) in [
             (farSkyline, 1.0), (skyline, 2.0), (ground, 3.0),
             (streetMarks, 3.2), (structures, 4.0),
-            (opponentLines, 5.0), (shotLines, 6.0),
+            (opponentLines, 5.0), (opponentSaucerLines, 5.1), (shotLines, 6.0),
             (modernFriendlyShells, 6.2), (modernHostileShells, 6.3),
             (flashLines, 7.0),
             (scanlines, 8.0), (reticle, 10.0), (hudLines, 12.0), (radar, 13.0)
@@ -244,7 +246,7 @@ final class BattlefieldScene: SKScene {
         rearView.maskNode = rearMask
         for (shape, depth) in [(rearBackground, 0.0), (rearGround, 1.0),
                                (rearEnvironment, 2.0), (rearEnemies, 3.0),
-                               (rearShots, 4.0)] {
+                               (rearSaucers, 3.1), (rearShots, 4.0)] {
             shape.zPosition = depth
             rearView.addChild(shape)
         }
@@ -1066,7 +1068,10 @@ final class BattlefieldScene: SKScene {
              displayMode == .classic ? 1.05 : 1.2,
              displayMode == .classic ? 0 : 1.3),
             (structures, green.withAlphaComponent(0.82), 1.5, displayMode == .classic ? 0.35 : 2.6),
-            (opponentLines, green, 2.0, displayMode == .classic ? 0.7 : 4.0),
+            // Enemy armor is always orange for immediate identification.
+            (opponentLines, NSColor(calibratedRed: 1, green: 0.49, blue: 0.12, alpha: 1),
+             2.0, displayMode == .classic ? 0.9 : 4.6),
+            (opponentSaucerLines, green, 1.8, displayMode == .classic ? 0.7 : 3.1),
             (shotLines, accent, 2.5, displayMode == .classic ? 0.8 : 5),
             (flashLines, accent, 2.0, displayMode == .classic ? 1 : 5),
             (reticle, accent, 1.1, displayMode == .classic ? 0.25 : 2),
@@ -1111,8 +1116,9 @@ final class BattlefieldScene: SKScene {
         message.fontColor = accent
         scanlines.strokeColor = green.withAlphaComponent(displayMode == .classic ? 0.035 : 0.025)
         scanlines.lineWidth = 0.5
-        radarEnemyContacts.strokeColor = accent
-        radarEnemyContacts.fillColor = accent.withAlphaComponent(0.82)
+        let enemyOrange = NSColor(calibratedRed: 1, green: 0.49, blue: 0.12, alpha: 1)
+        radarEnemyContacts.strokeColor = enemyOrange
+        radarEnemyContacts.fillColor = enemyOrange.withAlphaComponent(0.90)
         radarEnemyContacts.lineWidth = 0.5
         radarProjectileGlow.strokeColor = .clear
         radarProjectileGlow.fillColor = NSColor(calibratedRed: 1, green: 0.81, blue: 0.11, alpha: 0.24)
@@ -1171,9 +1177,12 @@ final class BattlefieldScene: SKScene {
         rearGround.lineWidth = 0.6
         rearEnvironment.strokeColor = green.withAlphaComponent(0.82)
         rearEnvironment.lineWidth = 1.15
-        rearEnemies.strokeColor = accent
+        rearEnemies.strokeColor = enemyOrange
         rearEnemies.lineWidth = 1.9
-        rearEnemies.glowWidth = displayMode == .modern ? 3.0 : 0.8
+        rearEnemies.glowWidth = displayMode == .modern ? 3.3 : 0.8
+        rearSaucers.strokeColor = green
+        rearSaucers.lineWidth = 1.5
+        rearSaucers.glowWidth = displayMode == .modern ? 2.5 : 0.7
         rearShots.strokeColor = amber
         rearShots.glowWidth = 2.6
         rearBackground.strokeColor = .clear
@@ -1363,13 +1372,15 @@ final class BattlefieldScene: SKScene {
         structures.path = structurePath
         updateGlassFaces(facets, camera: c)
 
-        let enemyPath = CGMutablePath()
+        let tankPath = CGMutablePath()
+        let saucerPath = CGMutablePath()
         for enemy in enemies {
             if enemy.center.distance(to: tankPosition) > 170 { continue }
-            if enemy.kind == .saucer { drawSaucer(enemy, on: enemyPath, camera: c) }
-            else { drawTank(enemy, on: enemyPath, camera: c) }
+            if enemy.kind == .saucer { drawSaucer(enemy, on: saucerPath, camera: c) }
+            else { drawTank(enemy, on: tankPath, camera: c) }
         }
-        opponentLines.path = enemyPath
+        opponentLines.path = tankPath
+        opponentSaucerLines.path = saucerPath
     }
 
     // Filled translucent polygons are rendered back-to-front beneath the vector
@@ -1871,15 +1882,17 @@ final class BattlefieldScene: SKScene {
         }
         rearEnvironment.path = obstaclePath
 
-        let enemyPath = CGMutablePath()
+        let tankPath = CGMutablePath()
+        let saucerPath = CGMutablePath()
         for foe in enemies where foe.center.distance(to: tankPosition) < 120 {
             if foe.kind == .saucer {
-                drawSaucer(foe, on: enemyPath, camera: backCamera)
+                drawSaucer(foe, on: saucerPath, camera: backCamera)
             } else {
-                drawTank(foe, on: enemyPath, camera: backCamera)
+                drawTank(foe, on: tankPath, camera: backCamera)
             }
         }
-        rearEnemies.path = enemyPath
+        rearEnemies.path = tankPath
+        rearSaucers.path = saucerPath
         let projectilePath = CGMutablePath()
         for shell in shells {
             let height = shell.hostile ? 1.5 : 1.65
