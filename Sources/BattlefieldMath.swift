@@ -271,7 +271,7 @@ enum CityLayout {
             state = state &* 2_862_933_555_777_941_757 &+ 3_037_000_493
             return Double(state >> 11) / 9_007_199_254_740_992.0
         }
-        func shuffled(_ original: [(Int, Int)]) -> [(Int, Int)] {
+        func shuffled<T>(_ original: [T]) -> [T] {
             var result = original
             if result.count > 1 {
                 for i in stride(from: result.count - 1, through: 1, by: -1) {
