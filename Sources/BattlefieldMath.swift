@@ -221,6 +221,103 @@ enum EnemySpawnLayout {
     }
 }
 
+/// Street-first, world-aligned city layout shared by world generation, drawing
+/// and the tactical radar. Streets are wide enough for full-sized tanks and are
+/// never populated with procedural building obstacles.
+struct CityBuildingSite {
+    var center: GroundPoint
+    var size: Double
+    var variant: Int
+    var blockX: Int
+    var blockZ: Int
+}
+
+enum CityLayout {
+    static let streetSpacing = 60.0
+    static let streetHalfWidth = 9.0
+    static let cityExtent = 180.0
+    static let blockHalfWidth = streetSpacing / 2 - streetHalfWidth - 1.5
+
+    /// True for roads running north/south or east/west, including junctions.
+    static func isStreet(_ p: GroundPoint, clearance: Double = 0) -> Bool {
+        let xRoad = abs(p.x - (p.x / streetSpacing).rounded() * streetSpacing)
+        let zRoad = abs(p.z - (p.z / streetSpacing).rounded() * streetSpacing)
+        return xRoad <= streetHalfWidth + clearance ||
+               zRoad <= streetHalfWidth + clearance
+    }
+
+    static func isBuildable(_ p: GroundPoint, radius: Double) -> Bool {
+        guard abs(p.x) <= cityExtent - 2, abs(p.z) <= cityExtent - 2 else {
+            return false
+        }
+        return !isStreet(p, clearance: radius + 2.0)
+    }
+
+    static func blockCenter(x: Int, z: Int) -> GroundPoint {
+        GroundPoint((Double(x) + 0.5) * streetSpacing,
+                    (Double(z) + 0.5) * streetSpacing)
+    }
+
+    /// Deterministically choose sparse occupied blocks, then cluster 2–4
+    /// buildings in each selected interior. Most blocks are intentionally empty.
+    /// A seed lets each newly deployed game receive a fresh city while making
+    /// layout/tests reproducible.
+    static func buildings(count: Int, seed: UInt64) -> [CityBuildingSite] {
+        guard count > 0 else { return [] }
+        var state = seed == 0 ? 0xA735_9D1C_002F_1869 : seed
+        func random() -> Double {
+            state = state &* 2_862_933_555_777_941_757 &+ 3_037_000_493
+            return Double(state >> 11) / 9_007_199_254_740_992.0
+        }
+        var blocks: [(Int, Int)] = []
+        for z in -3...2 {
+            for x in -3...2 { blocks.append((x, z)) }
+        }
+        // Seeded Fisher-Yates produces variation without any seeded RNG SDK.
+        for i in stride(from: blocks.count - 1, through: 1, by: -1) {
+            let j = Int(random() * Double(i + 1))
+            blocks.swapAt(i, j)
+        }
+        let selectedCount = min(blocks.count, max(1, (count + 2) / 3))
+        var selected: [(Int, Int)] = []
+        // Spread built-up districts; leave wide neighborhoods undeveloped.
+        for block in blocks {
+            if selected.count == selectedCount { break }
+            if selected.allSatisfy({
+                abs($0.0 - block.0) + abs($0.1 - block.1) >= 2
+            }) { selected.append(block) }
+        }
+        for block in blocks where selected.count < selectedCount {
+            if !selected.contains(where: { $0.0 == block.0 && $0.1 == block.1 }) {
+                selected.append(block)
+            }
+        }
+
+        let lots: [(Double, Double)] = [(-10.5, -10.5), (10.5, 10.5),
+                                        (-10.5, 10.5), (10.5, -10.5),
+                                        (0, 0)]
+        var placements: [CityBuildingSite] = []
+        for (district, block) in selected.enumerated() {
+            let center = blockCenter(x: block.0, z: block.1)
+            let number = min(5, (count / selectedCount) +
+                             (district < count % selectedCount ? 1 : 0))
+            let rotation = Int(random() * 4)
+            for lot in 0..<number {
+                let offset = lots[(lot + rotation) % lots.count]
+                let size = 3.1 + random() * 1.9
+                let p = GroundPoint(center.x + offset.0, center.z + offset.1)
+                if isBuildable(p, radius: size * 0.9 + 2.7) {
+                    placements.append(CityBuildingSite(
+                        center: p, size: size,
+                        variant: (district * 5 + lot * 3) % 8,
+                        blockX: block.0, blockZ: block.1))
+                }
+            }
+        }
+        return placements
+    }
+}
+
 // Custom tank-game rules. These do not mutate the built-in difficulty presets.
 struct SiegeRules: Codable, Equatable {
     var ammoCapacity: Int = 40
