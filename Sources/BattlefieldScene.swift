@@ -102,6 +102,7 @@ final class BattlefieldScene: SKScene {
     private let glassLayer = SKNode()
     private var glassFacePool: [SKShapeNode] = []
     private let ground = SKShapeNode()
+    private let streetMarks = SKShapeNode()
     private let structures = SKShapeNode()
     private let opponentLines = SKShapeNode()
     private let shotLines = SKShapeNode()
@@ -208,7 +209,8 @@ final class BattlefieldScene: SKScene {
         }
 
         for (layer, z) in [
-            (farSkyline, 1.0), (skyline, 2.0), (ground, 3.0), (structures, 4.0),
+            (farSkyline, 1.0), (skyline, 2.0), (ground, 3.0),
+            (streetMarks, 3.2), (structures, 4.0),
             (opponentLines, 5.0), (shotLines, 6.0),
             (modernFriendlyShells, 6.2), (modernHostileShells, 6.3),
             (flashLines, 7.0),
@@ -1033,9 +1035,9 @@ final class BattlefieldScene: SKScene {
         for (node, color, width, glow) in [
             (farSkyline, muted.withAlphaComponent(0.55), 1.0, 0.0),
             (skyline, green.withAlphaComponent(0.75), 1.25, displayMode == .classic ? 0.35 : 2.2),
-            (ground, displayMode == .classic ? muted.withAlphaComponent(0.34) : muted,
-             displayMode == .classic ? 0.65 : 0.85,
-             displayMode == .classic ? 0.0 : 0.7),
+            (ground, displayMode == .classic ? muted.withAlphaComponent(0.67) : muted,
+             displayMode == .classic ? 1.05 : 1.2,
+             displayMode == .classic ? 0 : 1.3),
             (structures, green.withAlphaComponent(0.82), 1.5, displayMode == .classic ? 0.35 : 2.6),
             (opponentLines, green, 2.0, displayMode == .classic ? 0.7 : 4.0),
             (shotLines, accent, 2.5, displayMode == .classic ? 0.8 : 5),
@@ -1133,6 +1135,11 @@ final class BattlefieldScene: SKScene {
         }
         rearLabel.fontColor = amber
         proximityLabel.fontColor = amber
+        streetMarks.strokeColor = modern
+            ? NSColor(calibratedRed: 0.70, green: 0.84, blue: 0.74, alpha: 0.29)
+            : green.withAlphaComponent(0.31)
+        streetMarks.lineWidth = modern ? 0.9 : 0.65
+        streetMarks.glowWidth = 0
         rearGround.strokeColor = green.withAlphaComponent(0.55)
         rearGround.lineWidth = 0.6
         rearEnvironment.strokeColor = green.withAlphaComponent(0.82)
@@ -1270,24 +1277,39 @@ final class BattlefieldScene: SKScene {
     }
 
     private func renderGround(_ c: CameraProjection) {
-        let path = CGMutablePath()
-        // A world-anchored perspective grid in both modes. Classic uses wider,
-        // dimmer green lines while Modern preserves its existing denser grid.
-        let classic = displayMode == .classic
-        let spacing = classic ? 18.0 : 12.0
-        let extent = classic ? 144.0 : 156.0
-        let count = classic ? 8 : 13
-        let baseX = floor(tankPosition.x / spacing) * spacing
-        let baseZ = floor(tankPosition.z / spacing) * spacing
-        for k in -count...count {
-            let x = baseX + Double(k) * spacing
-            line(path, WorldPoint(x, 0, baseZ - extent),
-                 WorldPoint(x, 0, baseZ + extent), c)
-            let z = baseZ + Double(k) * spacing
-            line(path, WorldPoint(baseX - extent, 0, z),
-                 WorldPoint(baseX + extent, 0, z), c)
+        let roads = CGMutablePath()
+        let markings = CGMutablePath()
+        // Wide, continuous orthogonal streets frame 60-unit city blocks.
+        // World-space layout matches obstacle placement and the square radar.
+        let halfStreet = CityLayout.streetHalfWidth
+        let roadStep = CityLayout.streetSpacing
+        let extent = CityLayout.cityExtent
+        let roadOriginX = Int((tankPosition.x / roadStep).rounded())
+        let roadOriginZ = Int((tankPosition.z / roadStep).rounded())
+        for offset in -3...3 {
+            let x = Double(roadOriginX + offset) * roadStep
+            let z = Double(roadOriginZ + offset) * roadStep
+            for side in [-1.0, 1.0] {
+                let roadX = x + side * halfStreet
+                line(roads, WorldPoint(roadX, 0.025, -extent),
+                     WorldPoint(roadX, 0.025, extent), c)
+                let roadZ = z + side * halfStreet
+                line(roads, WorldPoint(-extent, 0.025, roadZ),
+                     WorldPoint(extent, 0.025, roadZ), c)
+            }
+            // Dashed lane markings: only the road centerlines, so the
+            // empty blocks stay visually distinct from the paved corridors.
+            for segmentIndex in -18...17 {
+                let start = Double(segmentIndex) * 10.0 + 1.3
+                let end = start + 5.8
+                line(markings, WorldPoint(x, 0.028, start),
+                     WorldPoint(x, 0.028, end), c)
+                line(markings, WorldPoint(start, 0.028, z),
+                     WorldPoint(end, 0.028, z), c)
+            }
         }
-        ground.path = path
+        ground.path = roads
+        streetMarks.path = markings
     }
 
     private func renderObjects(_ c: CameraProjection) {
