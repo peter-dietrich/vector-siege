@@ -321,6 +321,8 @@ struct SiegeSnapshot: Codable {
     var sparks: [SavedSiegeSpark]
     // Optional for backwards compatibility with v0.8 game saves.
     var secondsUntilSaucerPatrol: Double? = nil
+    // Backwards compatible with snapshots saved before level-intro screens.
+    var awaitingLevelStart: Bool? = nil
 }
 
 struct SiegeSaveSlot: Codable, Identifiable {
