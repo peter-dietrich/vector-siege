@@ -2171,7 +2171,7 @@ final class BattlefieldScene: SKScene {
         let cyan = NSColor(calibratedRed: 0.22, green: 0.97, blue: 0.97, alpha: 1)
         let greenLight = NSColor(calibratedRed: 0.24, green: 1.0, blue: 0.54, alpha: 1)
         let amber = NSColor(calibratedRed: 1, green: 0.54, blue: 0.13, alpha: 1)
-        let scale = min(1.0, max(0.72, w / 1450))
+        let scale = min(1.10, max(0.80, w / 1380))
         let bottomY = 27.0
         let bottomHeight = max(113.0, min(152.0, h * 0.177))
         let topY = bottomY + bottomHeight
@@ -2277,7 +2277,7 @@ final class BattlefieldScene: SKScene {
         }
         modernTankStatus.position = point(statusLeft, topY - 31)
         modernTankStatus.fontColor = greenLight
-        modernTankStatus.fontSize = CGFloat(14 * scale)
+        modernTankStatus.fontSize = CGFloat(14.5 * scale)
         modernTankStatus.text = "• TANK STATUS"
         modernIntegrity.position = point(statusLeft, topY - 61)
         modernIntegrity.fontSize = CGFloat(12 * scale)
@@ -2301,7 +2301,7 @@ final class BattlefieldScene: SKScene {
         modernHitCaption.fontSize = CGFloat(13 * scale)
         modernHitCaption.text = "HIT RATIO"
         modernHitValue.position = point(x1 + 17, middleY - 12)
-        modernHitValue.fontSize = CGFloat(35 * scale)
+        modernHitValue.fontSize = CGFloat(36 * scale)
         modernHitValue.fontColor = cyan
         modernHitValue.text = String(format: "%.0f%%", shotTally.hitPercentage)
         let hitRadius = min(33.0, (x2 - x1) * 0.19)
@@ -2361,7 +2361,7 @@ final class BattlefieldScene: SKScene {
         modernHeadingPointer.path = pointer
         modernHeadingValue.position = point(compassX, topY - 28)
         modernHeadingValue.fontColor = amber
-        modernHeadingValue.fontSize = CGFloat(25 * scale)
+        modernHeadingValue.fontSize = CGFloat(26 * scale)
         modernHeadingValue.text = String(
             format: "%03d°", Int(headingDegrees.rounded()) % 360)
         modernCompassLabel.position = point(compassX, bottomY + 14)
