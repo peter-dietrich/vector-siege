@@ -47,6 +47,15 @@ Xcode may need to create the scheme when the project first opens; it normally ge
 
 The two tread controls can be used simultaneously, arcade-style: **I+O** moves forward, **K+L** reverses, **I+L** turns right in place, and **K+O** turns left in place. Standard arrow/WASD controls work as a simpler alternative.
 
+## v1.7 — sharp vectors, randomized spawns and gradient tactical radar
+
+- **Sharper vehicle and aiming wires:** less excessive glow and thinner, brighter orange enemy-tank outlines in the main and rear cameras, with a clearer, narrower central targeting reticle. Flying disks retain their distinct green presentation.
+- **Tighter ground mesh:** adds a subdued world-anchored **six-unit ground grid** beneath the existing wider city streets, curbs and dashed road markings. Both Classic and Modern modes get more depth cues without placing geometry on the roads.
+- **Less predictable level starts:** enemy waves use a fresh random angular phase each time rather than always placing the first unit at the commander's heading. Initial spawn points must stay outside the forward 36-degree half-angle cone, while respecting safe separation and building collision buffers; if none is legal, the enemy is skipped instead of stacked or placed directly in the sightline. Existing enemy navigation remains in effect once play resumes.
+- **Tactical radar enhancement:** preserves the square full-panel map with **72 ticks at five-degree increments**, cardinal bearings moving with tank heading, extra green circular range rings, and a bright rotating green beam with a **24-slice fading trail** clipped to the square border.
+- **Distinct colored contacts:** orange squares for ordinary tanks, red triangles for hunters, green diamonds for saucers, mint-green blocks/buildings, and yellow-glowing projectile locations. The transparent sweep and contacts are constructed from live SpriteKit geometry rather than imported images.
+- **Compatibility:** no changes to current saved-game format or ammunition, shield, level, or enemy collision rules. A newly started wave receives newly randomized spawn sectors.
+
 ## v1.6 — military dashboard lower telemetry and orange enemy tanks
 
 - **Modern lower dash:** replaced the older utility-strip presentation with a beveled, illuminated military dashboard drawn entirely in SpriteKit, following the approved reference composition. The left tank-silhouette section shows tank readiness and systems/mode status; the adjacent HIT RATIO section uses a live percentage and bright green circular progress ring. The center holds a dynamic heading tape, calibrated scale and orange bearing pointer. At right are a heading-responsive terrain profile and a sector ID calculated from actual city-grid coordinates, elevation (flat-ground baseline 0.0 m), and live position. These are native shapes/labels rather than an image overlay.
