@@ -1797,6 +1797,9 @@ final class BattlefieldScene: SKScene {
         }
         modernHitRing.path = hitArc
 
+        modernBest.position = point(rightX, h - 110)
+        modernBest.text = String(format: "BEST %06d", bestScore)
+        modernBest.fontSize = CGFloat(11 * unit)
         modernTankStatus.position = point(31, bottomY + bottomHeight - 32)
         modernTankStatus.text = "TANK SYSTEMS"
         modernIntegrity.position = point(31, bottomY + bottomHeight - 60)
@@ -2094,7 +2097,9 @@ final class BattlefieldScene: SKScene {
         midHUD.fontSize = modernHUD ? (w < 1060 ? 15 : 21)
             : (w < 1050 ? 13 : 17)
         let compass = Int((heading * 180 / .pi + 360).truncatingRemainder(dividingBy: 360).rounded()) % 360
-        midHUD.text = String(format: "HDG %03d°   SPD %05.1f", compass, driveSpeed)
+        midHUD.text = modernHUD && w < 1060
+            ? String(format: "HDG %03d°  %+.1f", compass, driveSpeed)
+            : String(format: "HDG %03d°   SPD %05.1f", compass, driveSpeed)
         let target = targetTelemetry()
         telemetryLeftDetail.text = target.map {
             String(format: "TGT %03.0f   AIM %+05.1f°", $0.range, $0.error * 180 / .pi)
