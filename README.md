@@ -47,6 +47,15 @@ Xcode may need to create the scheme when the project first opens; it normally ge
 
 The two tread controls can be used simultaneously, arcade-style: **I+O** moves forward, **K+L** reverses, **I+L** turns right in place, and **K+O** turns left in place. Standard arrow/WASD controls work as a simpler alternative.
 
+## v1.8 — readable telemetry, slower saucers and crisp radar
+
+- **Saucers:** slow aerial movement by another **70%** from the prior 1.10 base speed to **0.33 world units/second**, before difficulty/Custom Game multipliers. Spin animation and two-minute encounter timing are unchanged.
+- **Upper and lower instrumentation:** slightly larger responsive label fonts, with emphasis on heading, speed and score, to take better advantage of the available cockpit space. Narrow windows retain responsive font limits.
+- **Radar framing:** reduce gaps between upper dashboard panels and expand the radar monitor to the allocated column width while retaining a centered circular dial and square tactical map.
+- **Sharper radar:** remove the core radar line glow, narrow its sweep beam, and use thinner, non-glowing street and dial linework. The separate transparent green sweep-trail sectors, compass bearings, contacts and range rings remain.
+- **Ground grid:** brighten the fine world-anchored ground grid by approximately 10% without changing road or building geometry.
+- **Validation:** a geometry regression check enforces the new saucer base speed; macOS build results must be verified for the final commit.
+
 ## v1.7 — sharp vectors, randomized spawns and gradient tactical radar
 
 - **Sharper vehicle and aiming wires:** less excessive glow and thinner, brighter orange enemy-tank outlines in the main and rear cameras, with a clearer, narrower central targeting reticle. Flying disks retain their distinct green presentation.
