@@ -47,6 +47,13 @@ Xcode may need to create the scheme when the project first opens; it normally ge
 
 The two tread controls can be used simultaneously, arcade-style: **I+O** moves forward, **K+L** reverses, **I+L** turns right in place, and **K+O** turns left in place. Standard arrow/WASD controls work as a simpler alternative.
 
+## v1.4 — street-first city and square tactical map
+
+- **Roads before buildings:** the battlefield is now organized as an orthogonal **60-unit city-block grid**, with **18-unit-wide streets**. The main 3D viewport draws continuous curb edges and dashed road centerlines in both Classic and Modern. Streets remain clear for tank travel and enemy pathfinding.
+- **Mostly empty city blocks:** the generator selects a minority of the 36 possible interior blocks to develop. Each selected block receives a small cluster of about 2–4 different wireframe structures (buildings, towers, monoliths, blocks and pyramids); the remainder stay open. Structures are placed in buildable interiors, with collision clearance from road corridors and neighbors. A newly deployed game receives a different seed; saved games retain their generated structures.
+- **Square radar:** the radar's actual instrument frame is square, and its map fills that area instead of leaving unused corners around a circular dial. The city road grid is shown on the map in player-relative orientation, with clipping at all four square edges. The rotating sweep extends to the square edge; circular range rings, buildings, enemies and yellow projectile contacts remain visible.
+- **Gameplay:** ammo, waves, shield, enemy navigation, rear camera and custom-game options are unchanged. The existing obstacle-count custom rule controls how many buildings populate the designated blocks.
+
 ## v1.3 — five-length proximity detection and smart enemy cover navigation
 
 - **Earlier warning:** the enemy-tank proximity perimeter expands to **five tank lengths / 30 world units** (previously two lengths). Both Classic and Modern continue showing the visual warning, with a softer alert every 1.4 seconds in the outer zone, every 0.65 seconds inside two tank lengths, and every 0.30 seconds inside one tank length. The existing Sound switch controls alarm audio.
