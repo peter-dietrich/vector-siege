@@ -337,3 +337,29 @@ enum SiegeGameStore {
         persist(saves().filter { $0.id != id }, at: savesKey)
     }
 }
+
+
+/// Guarantees one patrol arrival per 120 seconds of active, unpaused play.
+/// Codable so the clock survives Save Game / Resume without restarting.
+struct SaucerPatrolClock: Codable {
+    static let interval = 120.0
+    private(set) var secondsUntilArrival = interval
+
+    mutating func advance(by elapsed: Double) -> Bool {
+        guard elapsed > 0 else { return false }
+        secondsUntilArrival -= elapsed
+        if secondsUntilArrival <= 0 {
+            secondsUntilArrival = min(interval, secondsUntilArrival + interval)
+            return true
+        }
+        return false
+    }
+
+    mutating func restore(secondsRemaining: Double?) {
+        guard let value = secondsRemaining, value.isFinite else {
+            secondsUntilArrival = Self.interval
+            return
+        }
+        secondsUntilArrival = max(0.001, min(Self.interval, value))
+    }
+}
