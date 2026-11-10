@@ -147,6 +147,33 @@ struct GeometrySmoke {
         }
         precondition(CityLayout.buildings(count: 0, seed: 1).isEmpty)
         precondition(CityLayout.buildings(count: 55, seed: 555).count == 55)
+        let urban = CityLayout.buildings(count: 80, seed: 8526)
+        precondition(urban.count == 80, "Default game should have a true city")
+        let core = urban.filter { abs($0.blockX) <= 1 && abs($0.blockZ) <= 1 &&
+                                  (-1...0).contains($0.blockX) &&
+                                  (-1...0).contains($0.blockZ) }
+        let mid = urban.filter { (-2...1).contains($0.blockX) &&
+                                 (-2...1).contains($0.blockZ) &&
+                                 !((-1...0).contains($0.blockX) &&
+                                   (-1...0).contains($0.blockZ)) }
+        let outside = urban.count - core.count - mid.count
+        precondition(core.count == 36 && mid.count >= 28 && outside >= 10,
+                     "High-density core, medium ring, and sparse outskirts")
+        for building in urban {
+            precondition(CityLayout.isBuildable(
+                building.center, radius: building.size * 0.9 + 2.7),
+                "No city building may block a street")
+        }
+        for index in urban.indices {
+            for other in urban.indices where other > index {
+                precondition(urban[index].center.distance(to: urban[other].center) >
+                             urban[index].size * 0.78 +
+                             urban[other].size * 0.78 + 5.4,
+                             "City buildings must not overlap collision buffers")
+            }
+        }
+        precondition(CityLayout.buildings(count: 120, seed: 123).count == 120,
+                     "Maximum custom-city density remains supported")
 
         // Wave positions must fan out around the tank with a safe minimum
         // distance. Even if the preferred sector is blocked, never pile units.
