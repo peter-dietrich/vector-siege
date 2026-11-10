@@ -106,6 +106,8 @@ final class BattlefieldScene: SKScene {
     private let shieldBorder = SKShapeNode()
     private let shieldNotice = SKLabelNode(fontNamed: "Menlo-Bold")
     private let radar = SKShapeNode()
+    private let radarPanel = SKShapeNode()
+    private let radarObstacleContacts = SKShapeNode()
     private let radarProjectileGlow = SKShapeNode()
     private let radarProjectileCore = SKShapeNode()
     private let radarEnemyContacts = SKShapeNode()
@@ -176,6 +178,11 @@ final class BattlefieldScene: SKScene {
             addChild(layer)
         }
 
+        radarPanel.zPosition = 11
+        radarPanel.lineWidth = 0.8
+        addChild(radarPanel)
+        radarObstacleContacts.zPosition = 13.1
+        addChild(radarObstacleContacts)
         for panel in [telemetryLeftPanel, telemetryRightPanel] {
             panel.zPosition = 11
             panel.lineWidth = 0.8
@@ -833,10 +840,13 @@ final class BattlefieldScene: SKScene {
 
         let amber = NSColor(calibratedRed: 1, green: 0.72, blue: 0.40, alpha: 1)
         let panelFill = NSColor(calibratedRed: 0.018, green: 0.045, blue: 0.044, alpha: 0.90)
-        for panel in [telemetryLeftPanel, telemetryRightPanel] {
+        for panel in [telemetryLeftPanel, telemetryRightPanel, radarPanel] {
             panel.fillColor = panelFill
             panel.strokeColor = amber.withAlphaComponent(displayMode == .classic ? 0.32 : 0.50)
         }
+        radarObstacleContacts.strokeColor = muted.withAlphaComponent(0.95)
+        radarObstacleContacts.fillColor = muted.withAlphaComponent(0.55)
+        radarObstacleContacts.lineWidth = 0.7
         for rail in [telemetryLeftAccent, telemetryRightAccent] { rail.fillColor = amber }
         for label in [telemetryLeftHeading, telemetryRightHeading] { label.fontColor = amber }
         for label in [telemetryLeftDetail, telemetryLeftFootnote, telemetryCoordinates,
@@ -1423,73 +1433,105 @@ final class BattlefieldScene: SKScene {
         let hp = CGMutablePath()
         let rp = CGMutablePath()
         let sight = CGMutablePath()
-        let radarX = 90.0
-        let radarY = h - 92
-        let radarRadius = 39.0
-
-        // Compact corner instruments: fewer blank vertical gaps, more playfield visible.
-        let leftPanelWidth = 390.0
-        let rightPanelWidth = 330.0
-        let panelHeight = 152.0
+        // Center map, with two independent telemetry banks to either side.
+        let radarX = w / 2
+        let radarY = h - 87.0
+        let radarRadius = 57.0
+        let radarRange = 165.0
+        let bankWidth = min(316.0, max(230.0, (w - 218.0) / 2 - 26.0))
+        let panelHeight = 154.0
         func panelRect(width: Double) -> CGPath {
             CGPath(roundedRect: CGRect(x: -width / 2, y: -panelHeight / 2,
                                        width: width, height: panelHeight),
                    cornerWidth: 9, cornerHeight: 9, transform: nil)
         }
-        telemetryLeftPanel.path = panelRect(width: leftPanelWidth)
-        telemetryRightPanel.path = panelRect(width: rightPanelWidth)
-        telemetryLeftPanel.position = point(14 + leftPanelWidth / 2, h - 81)
-        telemetryRightPanel.position = point(w - 14 - rightPanelWidth / 2, h - 81)
-        telemetryLeftAccent.position = point(20, h - 81)
-        telemetryRightAccent.position = point(w - 20, h - 81)
-        telemetryLeftHeading.position = point(162, h - 33)
+        telemetryLeftPanel.path = panelRect(width: bankWidth)
+        telemetryRightPanel.path = panelRect(width: bankWidth)
+        radarPanel.path = panelRect(width: 152)
+        telemetryLeftPanel.position = point(14 + bankWidth / 2, h - 84)
+        telemetryRightPanel.position = point(w - 14 - bankWidth / 2, h - 84)
+        radarPanel.position = point(radarX, h - 84)
+        telemetryLeftAccent.position = point(20, h - 84)
+        telemetryRightAccent.position = point(w - 20, h - 84)
+        telemetryLeftHeading.position = point(34, h - 33)
         telemetryRightHeading.position = point(w - 34, h - 33)
-        telemetryLeftDetail.position = point(162, h - 81)
-        telemetryLeftFootnote.position = point(162, h - 104)
-        telemetryCoordinates.position = point(162, h - 127)
-        telemetryRightDetail.position = point(w - 34, h - 81)
-        telemetryRightFootnote.position = point(w - 34, h - 104)
-        telemetryAmmo.position = point(w - 34, h - 129)
-        // Slim radar divider, shortened to match the compressed instrument panel.
-        segment(hp, point(149, h - 136), point(149, h - 48))
+        telemetryLeftDetail.position = point(34, h - 82)
+        telemetryLeftFootnote.position = point(34, h - 107)
+        telemetryCoordinates.position = point(34, h - 134)
+        telemetryRightDetail.position = point(w - 34, h - 82)
+        telemetryRightFootnote.position = point(w - 34, h - 107)
+        telemetryAmmo.position = point(w - 34, h - 134)
         hudLines.path = hp
 
+        // Circular range rings and bearing grid; contacts are player-relative.
         let circle = CGRect(x: radarX - radarRadius, y: radarY - radarRadius,
-                            width: radarRadius*2, height: radarRadius*2)
+                            width: radarRadius * 2, height: radarRadius * 2)
         rp.addEllipse(in: circle)
+        for fraction in [1.0/3.0, 2.0/3.0] {
+            let rad = radarRadius * fraction
+            rp.addEllipse(in: CGRect(x: radarX - rad, y: radarY - rad,
+                                     width: rad * 2, height: rad * 2))
+        }
         segment(rp, point(radarX, radarY-radarRadius), point(radarX, radarY+radarRadius))
         segment(rp, point(radarX-radarRadius, radarY), point(radarX+radarRadius, radarY))
+        for i in 0..<12 {
+            let a = Double(i) * Double.pi / 6
+            let inner = radarRadius - (i.isMultiple(of: 3) ? 9.0 : 4.0)
+            segment(rp, point(radarX + sin(a)*inner, radarY + cos(a)*inner),
+                    point(radarX + sin(a)*radarRadius, radarY + cos(a)*radarRadius))
+        }
         let sweepAngle = gameClock * 1.45
         segment(rp, point(radarX, radarY),
-                point(radarX+sin(sweepAngle)*radarRadius, radarY+cos(sweepAngle)*radarRadius))
+                point(radarX + sin(sweepAngle)*radarRadius,
+                      radarY + cos(sweepAngle)*radarRadius))
+        // Fixed nose-direction chevron identifies the center of the map.
+        segment(rp, point(radarX-3.6, radarY-3), point(radarX, radarY+5.5))
+        segment(rp, point(radarX, radarY+5.5), point(radarX+3.6, radarY-3))
+
+        let obstaclesOnRadar = CGMutablePath()
         let enemyContacts = CGMutablePath()
         let projectileHalos = CGMutablePath()
         let projectileDots = CGMutablePath()
-        // All contacts share the same player-relative, heading-rotated radar grid.
         func radarPoint(_ center: GroundPoint) -> CGPoint? {
             let dx = center.x - tankPosition.x
             let dz = center.z - tankPosition.z
             let right = dx * cos(heading) - dz * sin(heading)
             let forward = dx * sin(heading) + dz * cos(heading)
-            guard hypot(right, forward) <= 105 else { return nil }
-            return point(radarX + right / 105 * radarRadius,
-                         radarY + forward / 105 * radarRadius)
+            guard hypot(right, forward) <= radarRange else { return nil }
+            return point(radarX + right / radarRange * radarRadius,
+                         radarY + forward / radarRange * radarRadius)
+        }
+        for obstacle in obstacles {
+            guard let contact = radarPoint(obstacle.center) else { continue }
+            let radius = obstacle.kind == .monolith || obstacle.kind == .tower ? 2.9 : 2.1
+            obstaclesOnRadar.addRect(CGRect(x: contact.x-radius, y: contact.y-radius,
+                                            width: radius*2, height: radius*2))
         }
         for foe in enemies {
             guard let contact = radarPoint(foe.center) else { continue }
-            let blip = foe.kind == .hunter ? 3.8 : 2.6
-            enemyContacts.addRect(CGRect(x: contact.x - blip/2, y: contact.y - blip/2,
-                                         width: blip, height: blip))
+            if foe.kind == .saucer {
+                let size = 5.0
+                enemyContacts.move(to: point(contact.x, contact.y+size))
+                enemyContacts.addLine(to: point(contact.x+size, contact.y))
+                enemyContacts.addLine(to: point(contact.x, contact.y-size))
+                enemyContacts.addLine(to: point(contact.x-size, contact.y))
+                enemyContacts.closeSubpath()
+            } else {
+                let radius = foe.kind == .hunter ? 3.8 : 2.7
+                enemyContacts.addEllipse(in: CGRect(x: contact.x-radius, y: contact.y-radius,
+                                                     width: radius*2, height: radius*2))
+            }
         }
         for shell in shells {
             guard let contact = radarPoint(shell.center) else { continue }
             let radius = shell.hostile ? 2.0 : 2.8
-            projectileHalos.addEllipse(in: CGRect(x: contact.x - 4.7, y: contact.y - 4.7,
+            projectileHalos.addEllipse(in: CGRect(x: contact.x-4.7, y: contact.y-4.7,
                                                    width: 9.4, height: 9.4))
-            projectileDots.addEllipse(in: CGRect(x: contact.x - radius, y: contact.y - radius,
-                                                  width: radius * 2, height: radius * 2))
+            projectileDots.addEllipse(in: CGRect(x: contact.x-radius, y: contact.y-radius,
+                                                  width: radius*2, height: radius*2))
         }
         radar.path = rp
+        radarObstacleContacts.path = obstaclesOnRadar
         radarEnemyContacts.path = enemyContacts
         radarProjectileGlow.path = projectileHalos
         radarProjectileCore.path = projectileDots
@@ -1535,11 +1577,11 @@ final class BattlefieldScene: SKScene {
                 : String(format: "SHIELD ACTIVE  %.1fS", shieldDuration)
         }
 
-        leftHUD.position = point(radarX, h - 33)
+        leftHUD.position = point(radarX, h - 18)
         leftHUD.horizontalAlignmentMode = .center
         leftHUD.fontSize = 9
-        leftHUD.text = "RADAR / 105"
-        midHUD.position = point(162, h - 57)
+        leftHUD.text = "RADAR / 165"
+        midHUD.position = point(34, h - 57)
         midHUD.horizontalAlignmentMode = .left
         midHUD.fontSize = 15
         let compass = Int((heading * 180 / .pi + 360).truncatingRemainder(dividingBy: 360).rounded()) % 360
