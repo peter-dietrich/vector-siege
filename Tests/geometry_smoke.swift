@@ -92,7 +92,8 @@ struct GeometrySmoke {
         let standard = SiegeRules()
         precondition(standard.ammoCapacity == 40 && standard.reloadSeconds == 1)
         precondition(standard.shieldDuration == 5 && standard.shieldCooldown == 11)
-        precondition(standard.enemies(forWave: 1) == 3)
+        precondition(standard.enemies(forWave: 1) == 2)
+        precondition(standard.enemies(forWave: 2) == 3)
         precondition(standard.enemies(forWave: 100) == 8)
         var custom = SiegeRules()
         custom.ammoCapacity = 250
@@ -107,6 +108,30 @@ struct GeometrySmoke {
         let rulesData = try! JSONEncoder().encode(validated)
         let decodedRules = try! JSONDecoder().decode(SiegeRules.self, from: rulesData)
         precondition(decodedRules == validated)
+
+        // Wave positions must fan out around the tank with a safe minimum
+        // distance. Even if the preferred sector is blocked, never pile units.
+        let origin = GroundPoint(0, 0)
+        var spawned: [GroundPoint] = []
+        for i in 0..<8 {
+            let candidate = EnemySpawnLayout.choosePosition(
+                player: origin, heading: 0, index: i, count: 8,
+                existing: spawned,
+                isOpen: { abs($0.x) < 185 && abs($0.z) < 185 })
+            precondition(candidate != nil, "Unobstructed 8-way wave should spawn")
+            let point = candidate!
+            precondition(point.distance(to: origin) >= 28)
+            precondition(EnemySpawnLayout.isSeparated(point, from: spawned))
+            spawned.append(point)
+        }
+        precondition(spawned.count == 8)
+        precondition(!EnemySpawnLayout.isSeparated(
+            GroundPoint(spawned[0].x + 1, spawned[0].z + 1),
+            from: spawned))
+        let impossible = EnemySpawnLayout.choosePosition(
+            player: origin, heading: 0, index: 0, count: 2,
+            existing: [], isOpen: { _ in false })
+        precondition(impossible == nil, "Never fall back to a blocked spawn")
 
         // Save files retain exact magazine state, timers, world objects and shot stats.
         var savedAmmo = CannonMagazine(maxRounds: 75, reloadSeconds: 1.7)
@@ -143,6 +168,14 @@ struct GeometrySmoke {
         precondition(restored.snapshot.obstacles.first?.kind == "pyramid")
         precondition(restored.snapshot.shells.count == 1)
         precondition(restored.snapshot.customRules == validated)
+        precondition(restored.snapshot.awaitingLevelStart == nil,
+                     "Older save games should remain compatible")
+        var levelSnapshot = snapshot
+        levelSnapshot.awaitingLevelStart = true
+        let introData = try! JSONEncoder().encode(levelSnapshot)
+        let loadedIntro = try! JSONDecoder().decode(SiegeSnapshot.self, from: introData)
+        precondition(loadedIntro.awaitingLevelStart == true,
+                     "Save/Resume must preserve a pending level-intro")
 
         // Patrol arrival is based on active time, not wall clock or wave number.
         var patrol = SaucerPatrolClock()
@@ -178,6 +211,6 @@ struct GeometrySmoke {
                      TankProximity.repeatInterval(for: 10),
                      "Proximity alerts should accelerate for very close threats")
 
-        print("Perspective, steering, ammo, suspension, saves, patrol and proximity checks passed.")
+        print("Perspective, steering, ammo, spacing, level saves and patrol checks passed.")
     }
 }
