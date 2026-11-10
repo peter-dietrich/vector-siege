@@ -43,6 +43,12 @@ Vector Siege now has **Vector Drift-inspired cockpit telemetry panels** with sub
 
 Use **Copy Feedback** in the toolbar to copy a plaintext playtest snapshot (mode, difficulty, game state, wave, score, position, heading, speed, target offset, shots, hits, FPS, enemy/projectile counts, shield, and elapsed gameplay). Paste the snapshot into a bug report or this chat. **No telemetry is automatically uploaded or transmitted**; copying only accesses the local clipboard. A crash cannot be captured by the in-app button after the game has terminated; macOS crash diagnostics are separate.
 
+## v1.0 — rear camera, HUD readability and proximity defense
+
+- **Twin center instruments:** the circular 165-unit radar dial still rotates inside a **rectangular panel**, paired with an adjacent **live rear-view camera**. The rear inset uses a real 180° reverse perspective: a rear-facing ground grid, distant horizon, battlefield structures, tanks, flying disks and moving projectiles. Camera content is cropped to its own rectangular monitor and works in Classic and Modern.
+- **Readable HUD:** targeting and coordinates stay on the left, combat and ammunition on the right; emphasis shifts to larger speed/heading, score and ammo/reload typography. Smaller supporting text stays legible; the panels adjust their width for narrow windows.
+- **Enemy proximity:** if any enemy **tank** (not saucer) is within **two approximate tank lengths / 12 world units**, a prominent amber warning appears. At closer than one tank length it turns urgent red. When Sound is enabled, a synthesized, subdued two-tone beep repeats every 0.65s and accelerates to 0.30s for very close tanks. The warning is visible even with Sound muted. No proximity sounds occur when paused.
+
 ## v0.9 — central tactical radar, modern architecture and rotating disk patrols
 
 - **Central tactical radar:** enlarged to a **138-point diameter**, located at the top center between independent left targeting/position telemetry and right combat/ammo telemetry panels. The map now covers **165 world units** and includes inner range rings, twelve bearing marks, an animated sweep, a nose-direction marker, small obstacle footprints, red enemies, diamond-shaped disk contacts, and the previous yellow glowing projectile blips.
