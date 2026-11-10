@@ -438,6 +438,12 @@ final class BattlefieldScene: SKScene {
     func setShift(_ isPressed: Bool) {
         if isPressed && !pressedKeys.contains(56) {
             pressedKeys.insert(56)
+            if round == .levelReady {
+                pressedKeys.removeAll()
+                round = .playing
+                lastUpdateTime = 0
+                return
+            }
             triggerShield()
         } else if !isPressed {
             pressedKeys.remove(56)
@@ -462,6 +468,7 @@ final class BattlefieldScene: SKScene {
         previousSteerDirection = 0
         tankPosition = GroundPoint(0, 0)
         gameClock = 0
+        pulse = 0
         cannon = CannonMagazine(maxRounds: rules.ammoCapacity, reloadSeconds: rules.reloadSeconds)
         shieldDuration = 0
         shieldCooldown = 0
@@ -845,7 +852,7 @@ final class BattlefieldScene: SKScene {
 
     // Exact in-progress battle state; displayed next in a paused state when resumed.
     func makeSnapshot() -> SiegeSnapshot? {
-        guard round == .playing || round == .paused else { return nil }
+        guard round == .playing || round == .paused || round == .levelReady else { return nil }
         return SiegeSnapshot(
             version: 1,
             displayMode: displayMode.rawValue,
@@ -869,7 +876,8 @@ final class BattlefieldScene: SKScene {
             sparks: sparks.map { SavedSiegeSpark(
                 position: $0.position, velocity: $0.velocity,
                 timeLeft: $0.timeLeft, maxLife: $0.maxLife) },
-            secondsUntilSaucerPatrol: saucerPatrol.secondsUntilArrival
+            secondsUntilSaucerPatrol: saucerPatrol.secondsUntilArrival,
+            awaitingLevelStart: round == .levelReady
         )
     }
 
@@ -923,7 +931,9 @@ final class BattlefieldScene: SKScene {
         lastUpdateTime = 0
         bestScore = max(bestScore, score)
         UserDefaults.standard.set(bestScore, forKey: "VectorSiegeHighScore")
-        round = .paused // Explicit P resumes, preventing surprise damage on load.
+        round = saved.awaitingLevelStart == true ? .levelReady : .paused
+        // Older saves continue paused and require P; a saved level-intro
+        // remains on its any-key start screen.
         return true
     }
 
@@ -933,6 +943,7 @@ final class BattlefieldScene: SKScene {
         let state: String
         switch round {
         case .title: state = "Title"
+        case .levelReady: state = "Level ready (press any key)"
         case .playing: state = "Playing"
         case .paused: state = "Paused"
         case .gameOver: state = "Game over"
@@ -2293,8 +2304,48 @@ final class BattlefieldScene: SKScene {
             ? NSColor(calibratedRed: 0.006, green: 0.028, blue: 0.045, alpha: 0.88)
             : NSColor(calibratedRed: 0.02, green: 0.05, blue: 0.05, alpha: 0.94)
         stagePanel.isHidden = round == .title || (round == .playing && pendingWave <= 0)
+        let levelReady = round == .levelReady
+        levelFrame.isHidden = !levelReady
+        if levelReady {
+            // Angular, glowing wireframe frame encloses the level label.
+            // It belongs to the overlay, not the 3-D battlefield, and animates
+            // gently without allowing the world simulation to advance.
+            let halfWidth = min(285.0, w * 0.31)
+            let halfHeight = 96.0
+            let cx = w / 2
+            let cy = dialogCenterY
+            let perimeter = CGMutablePath()
+            let corners: [CGPoint] = [
+                point(cx - halfWidth + 22, cy + halfHeight),
+                point(cx + halfWidth - 22, cy + halfHeight),
+                point(cx + halfWidth, cy + halfHeight - 22),
+                point(cx + halfWidth, cy - halfHeight + 22),
+                point(cx + halfWidth - 22, cy - halfHeight),
+                point(cx - halfWidth + 22, cy - halfHeight),
+                point(cx - halfWidth, cy - halfHeight + 22),
+                point(cx - halfWidth, cy + halfHeight - 22)
+            ]
+            perimeter.move(to: corners[0])
+            for vertex in corners.dropFirst() { perimeter.addLine(to: vertex) }
+            perimeter.closeSubpath()
+            for side in [-1.0, 1.0] {
+                for index in 0..<5 {
+                    let x = cx + side * (halfWidth - 28 - Double(index) * 16)
+                    segment(perimeter, point(x, cy + halfHeight - 7),
+                            point(x + side * 5, cy + halfHeight - 17))
+                    segment(perimeter, point(x, cy - halfHeight + 7),
+                            point(x + side * 5, cy - halfHeight + 17))
+                }
+            }
+            levelFrame.path = perimeter
+            levelFrame.strokeColor = modernHUD
+                ? NSColor(calibratedRed: 0.24, green: 0.99, blue: 0.92, alpha: 1)
+                : green
+            levelFrame.glowWidth = modernHUD ? 7 : 2
+            levelFrame.alpha = CGFloat(0.78 + 0.22 * abs(sin(pulse * 2.4)))
+        }
         banner.position = point(w / 2, dialogCenterY + 33)
-        banner.fontSize = min(38, w * 0.042)
+        banner.fontSize = levelReady ? min(49, w * 0.057) : min(38, w * 0.042)
         titleLogo.position = point(w / 2, h * 0.66)
         titleLogo.isHidden = round != .title
         subtitle.position = point(w / 2,
@@ -2304,6 +2355,9 @@ final class BattlefieldScene: SKScene {
         case .title:
             banner.text = ""
             subtitle.text = "PRESS RETURN TO DEPLOY"
+        case .levelReady:
+            banner.text = String(format: "LEVEL %02d", wave)
+            subtitle.text = "PRESS ANY KEY TO BEGIN"
         case .paused:
             banner.text = "PAUSED"
             subtitle.text = "PRESS P TO RESUME"
