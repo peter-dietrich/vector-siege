@@ -201,6 +201,7 @@ final class BattlefieldScene: SKScene {
         let rearMask = SKShapeNode(rectOf: CGSize(width: 172, height: 108), cornerRadius: 6)
         rearMask.fillColor = .white
         rearMask.strokeColor = .clear
+        rearMask.position = CGPoint(x: 86, y: 54)
         rearView.maskNode = rearMask
         for (shape, depth) in [(rearBackground, 0.0), (rearGround, 1.0),
                                (rearEnvironment, 2.0), (rearEnemies, 3.0),
@@ -1619,11 +1620,12 @@ final class BattlefieldScene: SKScene {
         let rp = CGMutablePath()
         let sight = CGMutablePath()
         // Center map, with two independent telemetry banks to either side.
-        let radarX = w / 2
+        let radarX = w / 2 - 104.0
+        let rearX = w / 2 + 103.0
         let radarY = h - 93.0
-        let radarRadius = 69.0
+        let radarRadius = 65.0
         let radarRange = 165.0
-        let bankWidth = min(316.0, max(230.0, (w - 218.0) / 2 - 26.0))
+        let bankWidth = min(316.0, max(202.0, (w - 530.0) / 2))
         let panelHeight = 154.0
         func panelRect(width: Double) -> CGPath {
             CGPath(roundedRect: CGRect(x: -width / 2, y: -panelHeight / 2,
@@ -1633,11 +1635,20 @@ final class BattlefieldScene: SKScene {
         telemetryLeftPanel.path = panelRect(width: bankWidth)
         telemetryRightPanel.path = panelRect(width: bankWidth)
         radarPanel.path = CGPath(
-            roundedRect: CGRect(x: -89, y: -89, width: 178, height: 178),
-            cornerWidth: 12, cornerHeight: 12, transform: nil)
+            roundedRect: CGRect(x: -83, y: -88, width: 166, height: 176),
+            cornerWidth: 11, cornerHeight: 11, transform: nil)
+        rearPanel.path = CGPath(
+            roundedRect: CGRect(x: -91, y: -88, width: 182, height: 176),
+            cornerWidth: 11, cornerHeight: 11, transform: nil)
         telemetryLeftPanel.position = point(14 + bankWidth / 2, h - 84)
         telemetryRightPanel.position = point(w - 14 - bankWidth / 2, h - 84)
         radarPanel.position = point(radarX, h - 94)
+        rearPanel.position = point(rearX, h - 94)
+        // Crop node uses bottom-left local coordinates in a 172 x 108 viewport.
+        rearView.position = point(rearX - 86, h - 143)
+        rearLabel.position = point(rearX, h - 19)
+        rearLabel.text = "REAR VIEW / 180°"
+        renderRearView()
         telemetryLeftAccent.position = point(20, h - 84)
         telemetryRightAccent.position = point(w - 20, h - 84)
         telemetryLeftHeading.position = point(34, h - 33)
@@ -1764,13 +1775,13 @@ final class BattlefieldScene: SKScene {
                 : String(format: "SHIELD ACTIVE  %.1fS", shieldDuration)
         }
 
-        leftHUD.position = point(radarX, h - 12)
+        leftHUD.position = point(radarX, h - 18)
         leftHUD.horizontalAlignmentMode = .center
-        leftHUD.fontSize = 9
+        leftHUD.fontSize = 10
         leftHUD.text = "RADAR / 165"
         midHUD.position = point(34, h - 57)
         midHUD.horizontalAlignmentMode = .left
-        midHUD.fontSize = 15
+        midHUD.fontSize = w < 1050 ? 13 : 17
         let compass = Int((heading * 180 / .pi + 360).truncatingRemainder(dividingBy: 360).rounded()) % 360
         midHUD.text = String(format: "HDG %03d°   SPD %05.1f", compass, driveSpeed)
         let target = targetTelemetry()
@@ -1785,7 +1796,7 @@ final class BattlefieldScene: SKScene {
         telemetryCoordinates.text = String(format: "POSITION   X %+.1f   Z %+.1f", tankPosition.x, tankPosition.z)
         rightHUD.position = point(w - 34, h - 57)
         rightHUD.horizontalAlignmentMode = .right
-        rightHUD.fontSize = 15
+        rightHUD.fontSize = w < 1050 ? 11 : 15
         rightHUD.text = String(format: "SCORE %06d  BEST %06d", score, bestScore)
         telemetryRightDetail.text = String(format: "WAVE %02d   LIVES %d   %@", wave, lives, threatLevel.rawValue.uppercased())
         let shieldName = shieldDuration > 0
@@ -1794,13 +1805,28 @@ final class BattlefieldScene: SKScene {
                 ? String(format: "RECHARGING %.1fs", shieldCooldown)
                 : "SHIELD READY [SHIFT]"
         telemetryRightFootnote.text = shieldName
+        telemetryAmmo.fontSize = w < 1050 ? 12 : 15
         telemetryAmmo.text = String(format: "AMMO %02d/%02d   %@", cannon.roundsRemaining,
                                            cannon.maxRounds, cannon.statusText)
         telemetryAmmo.fontColor = cannon.isEmpty ? accent : green
-        warning.position = point(w / 2, h - 201)
-        warning.fontSize = 12
-        warning.text = target.map { abs($0.error) < 0.055 && $0.range < 68 ? "TARGET ALIGNED" : "" }
-            ?? (pendingWave > 0 ? "AREA SECURE" : "")
+        warning.position = point(w / 2, h - 213)
+        let closeEnemy = nearestTankDistance.flatMap {
+            TankProximity.isClose($0) ? $0 : nil
+        }
+        if let distance = closeEnemy, round == .playing {
+            let urgency = distance <= TankProximity.tankLength
+            warning.fontSize = urgency ? 20 : 17
+            warning.fontColor = urgency ? .red : NSColor.systemOrange
+            warning.alpha = CGFloat(0.70 + 0.30 * abs(sin(gameClock * 8.0)))
+            warning.text = String(format: "⚠  ENEMY PROXIMITY  %.0f", distance)
+        } else {
+            warning.fontSize = 12
+            warning.fontColor = accent
+            warning.alpha = 1
+            warning.text = target.map {
+                abs($0.error) < 0.055 && $0.range < 68 ? "TARGET ALIGNED" : ""
+            } ?? (pendingWave > 0 ? "AREA SECURE" : "")
+        }
 
         let modeName = displayMode == .classic ? "CLASSIC CRT" : "ENHANCED VECTOR"
         message.position = point(w / 2, 47)
