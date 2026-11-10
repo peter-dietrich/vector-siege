@@ -178,6 +178,49 @@ struct TankSuspension {
 }
 
 
+/// Spread initial enemies into angular sectors instead of clustering around
+/// a random heading. Reject any overlap with previous spawns or level geometry.
+enum EnemySpawnLayout {
+    static let minimumSpacing = 30.0
+    static let movementSpacing = 10.5
+
+    static func isSeparated(_ candidate: GroundPoint,
+                            from positions: [GroundPoint],
+                            minimum: Double = minimumSpacing) -> Bool {
+        positions.allSatisfy { candidate.distance(to: $0) >= minimum }
+    }
+
+    static func choosePosition(
+        player: GroundPoint, heading: Double, index: Int, count: Int,
+        existing: [GroundPoint], isOpen: (GroundPoint) -> Bool
+    ) -> GroundPoint? {
+        let sector = heading + 2 * Double.pi * Double(index) / Double(max(1, count))
+        let angleOffsets: [Double] = [0, 0.18, -0.18, 0.36, -0.36,
+                                      0.58, -0.58, 0.83, -0.83]
+        let radii: [Double] = [76, 92, 110, 62, 128, 48, 140]
+        func acceptable(_ point: GroundPoint) -> Bool {
+            point.distance(to: player) >= 28 &&
+            isSeparated(point, from: existing) && isOpen(point)
+        }
+        for offset in angleOffsets {
+            for distance in radii {
+                let position = player + facing(sector + offset) * distance
+                if acceptable(position) { return position }
+            }
+        }
+        // Search the full circle if a sector is blocked by buildings or the
+        // world boundary. Never choose an overlapping fallback position.
+        for offset in 0..<72 {
+            let angle = sector + Double(offset) * (2 * Double.pi / 72)
+            for distance in radii {
+                let position = player + facing(angle) * distance
+                if acceptable(position) { return position }
+            }
+        }
+        return nil
+    }
+}
+
 // Custom tank-game rules. These do not mutate the built-in difficulty presets.
 struct SiegeRules: Codable, Equatable {
     var ammoCapacity: Int = 40
@@ -186,7 +229,7 @@ struct SiegeRules: Codable, Equatable {
     var shieldDuration: Double = 5.0
     var shieldCooldown: Double = 11.0
     var startingLives: Int = 3
-    var startingEnemies: Int = 3
+    var startingEnemies: Int = 2
     var extraEnemiesPerWave: Int = 1
     var maxEnemies: Int = 8
     var obstacleCount: Int = 23
