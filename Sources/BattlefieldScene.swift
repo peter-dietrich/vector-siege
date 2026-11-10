@@ -1670,32 +1670,40 @@ final class BattlefieldScene: SKScene {
         backgroundPath.addRect(CGRect(x: 0, y: 0, width: width, height: height))
         rearBackground.path = backgroundPath
 
+        // Purpose-built inset grid. Projection of long world-space lines that
+        // cross the near plane created full-screen diagonal streaks in the rear
+        // camera; horizon-convergent short segments stay within the monitor.
         let gridPath = CGMutablePath()
         let backHeading = heading + .pi
-        let baseX = floor(tankPosition.x / 20) * 20
-        let baseZ = floor(tankPosition.z / 20) * 20
-        for i in -8...8 {
-            let x = baseX + Double(i) * 20
-            line(gridPath, WorldPoint(x, 0, baseZ-160),
-                 WorldPoint(x, 0, baseZ+160), backCamera)
-            let z = baseZ + Double(i) * 20
-            line(gridPath, WorldPoint(baseX-160, 0, z),
-                 WorldPoint(baseX+160, 0, z), backCamera)
+        let horizon = max(14.0, min(height * 0.63, backCamera.horizon))
+        for row in 1...7 {
+            let normalized = Double(row) / 7.0
+            let y = horizon * (1.0 - normalized * normalized)
+            segment(gridPath, point(0, y), point(width, y))
         }
-        // Distant skyline, viewed from the rear camera instead of mirrored front.
-        let horizon = backCamera.horizon
+        for lane in -6...6 {
+            let t = Double(lane) / 6
+            let nearX = width / 2 + t * width * 0.65
+            let farX = width / 2 + t * width * 0.07
+            segment(gridPath, point(farX, horizon), point(nearX, 0))
+        }
+        // The mountains continue to respond to rear-facing tank heading.
         var previous = point(0, horizon)
-        for i in 0...34 {
-            let x = Double(i) * width / 34
-            let bearing = backHeading + atan2((x - width/2)/backCamera.focal, 1)
-            let top = point(x, horizon + ridge(bearing, multiplier: 0.38))
+        for i in 0...40 {
+            let x = Double(i) * width / 40
+            let bearing = backHeading + atan2((x - width / 2) / backCamera.focal, 1)
+            let top = point(x, horizon + ridge(bearing, multiplier: 0.30))
             if i > 0 { segment(gridPath, previous, top) }
             previous = top
         }
         rearGround.path = gridPath
 
         let obstaclePath = CGMutablePath()
-        for object in obstacles where object.center.distance(to: tankPosition) < 95 {
+        // Structures intersecting the camera used to project giant shards.
+        // Keep nearby rearward objects, but avoid drawing their interior faces.
+        for object in obstacles where
+            object.center.distance(to: tankPosition) < 95 &&
+            object.center.distance(to: tankPosition) > max(5, object.size * 1.25) {
             switch object.kind {
             case .pyramid: drawPyramid(object, on: obstaclePath, camera: backCamera)
             case .block: drawBlock(object, on: obstaclePath, camera: backCamera)
