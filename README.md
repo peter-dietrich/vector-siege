@@ -125,3 +125,6 @@ Enemy attack timing is unchanged.
 
 GitHub repository: https://github.com/peter-dietrich/vector-siege (branch `main`).
 The bundled GitHub Actions workflow performs a macOS Xcode build on commits and pull requests.
+## Arcade title screen
+
+The starting screen now features an animated **Vector Siege** neon arcade logo, a slowly changing atmospheric backdrop and the existing Return-to-deploy prompt. The logo is bundled as `Resources/VectorSiegeLogo.jpg` and copied into the app by Xcode. The original full-resolution illustration may be substituted later for higher-DPI presentation.
