@@ -3534,6 +3534,9 @@ final class BattlefieldScene: SKScene {
         }
         rearEnvironment.path = obstaclePath
 
+        let rearOpaque = solidBuildingIndices.sorted().map {
+            collisionBody(for: obstacles[$0])
+        }
         let tankPath = CGMutablePath()
         let saucerPath = CGMutablePath()
         for foe in enemies where foe.center.distance(to: tankPosition) < 120 {
@@ -3545,9 +3548,14 @@ final class BattlefieldScene: SKScene {
             case .fighter:
                 drawFighter(foe, on: saucerPath, camera: backCamera)
             case .tank, .hunter, .apc, .artillery:
-                drawTank(foe, on: tankPath, camera: backCamera)
+                let blockers = BattlefieldVisibility.candidates(
+                    camera: backCamera.position, target: foe.center,
+                    opaqueBodies: rearOpaque)
+                drawTank(foe, on: tankPath, camera: backCamera,
+                         blockers: blockers)
                 if foe.kind == .apc || foe.kind == .artillery {
-                    drawVehicleDetails(foe, on: tankPath, camera: backCamera)
+                    drawVehicleDetails(foe, on: tankPath, camera: backCamera,
+                                       blockers: blockers)
                 }
             }
         }
