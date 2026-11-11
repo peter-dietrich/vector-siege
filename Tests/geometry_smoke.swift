@@ -295,7 +295,7 @@ struct GeometrySmoke {
         // Terrain is gently sloped, curbs are raised, and road grades are
         // always shallower than the surrounding landscape.
         let road = LandscapeTopology.height(GroundPoint(0, 30))
-        let curb = LandscapeTopology.height(GroundPoint(7.3, 30))
+        let curb = LandscapeTopology.height(GroundPoint(9.3, 30))
         precondition(curb > road + 0.15)
         for x in stride(from: -150.0, through: 150.0, by: 10.0) {
             precondition(LandscapeTopology.height(GroundPoint(x, 24)).isFinite)
