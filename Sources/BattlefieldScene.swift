@@ -1496,11 +1496,12 @@ final class BattlefieldScene: SKScene {
 
     private func makeVegetation() {
         vegetation.removeAll()
-        // Repeatable roadside planting, independent of gameplay RNG and saves.
-        // Two corridors per street, with gaps around buildings and junctions.
+        // Sparse, irregular planting belongs outside the dense urban core.
+        // Downtown is intentionally free of tree wireframes so the tighter
+        // ground contours and buildings can establish depth.
         for grid in -2...2 {
             let axis = Double(grid) * CityLayout.streetSpacing
-            for slot in -9...9 {
+            for slot in -9...9 where (slot + grid * 3).isMultiple(of: 3) {
                 let along = Double(slot) * 18 +
                     sin(Double(slot * 3 + grid * 7)) * 3.3
                 for side in [-1.0, 1.0] {
@@ -1510,15 +1511,17 @@ final class BattlefieldScene: SKScene {
                         ? GroundPoint(along, axis + sideOffset)
                         : GroundPoint(axis + sideOffset, along)
                     if abs(position.x) > 172 || abs(position.z) > 172 ||
+                        max(abs(position.x), abs(position.z)) < 76 ||
                         blocked(position, radius: 2.4) { continue }
                     let variant = abs(slot * 11 + grid * 17 + Int(side * 7))
-                    let tree = variant % 4 != 0
+                    // Shrubs dominate; just one in four is a small tree.
+                    let tree = variant % 4 == 0
                     let height = tree
-                        ? 4.4 + Double(variant % 8) * 0.62
-                        : 0.95 + Double(variant % 5) * 0.29
+                        ? 3.2 + Double(variant % 8) * 0.44
+                        : 0.65 + Double(variant % 5) * 0.19
                     let crown = tree
-                        ? 1.6 + Double(variant % 5) * 0.33
-                        : 1.05 + Double(variant % 4) * 0.30
+                        ? 1.2 + Double(variant % 5) * 0.24
+                        : 0.85 + Double(variant % 4) * 0.18
                     vegetation.append(Vegetation(
                         location: position, height: height, crown: crown,
                         isTree: tree))
@@ -1529,7 +1532,7 @@ final class BattlefieldScene: SKScene {
 
     private func renderVegetation(_ c: CameraProjection) {
         let path = CGMutablePath()
-        for plant in vegetation where plant.location.distance(to: tankPosition) < 135 {
+        for plant in vegetation where plant.location.distance(to: tankPosition) < 110 {
             let p = plant.location
             let h = plant.height
             let r = plant.crown
@@ -2396,17 +2399,18 @@ final class BattlefieldScene: SKScene {
         let roads = CGMutablePath()
         let markings = CGMutablePath()
         let mesh = CGMutablePath()
-        // Six-unit faint subdivisions make the flat landscape legible at
-        // distance. Roads and building blocks remain the stronger geometry.
-        let meshStep = 12.0
-        let meshRadius = 144.0
+        // A tight five-unit mesh makes the ground surface read as a surface,
+        // particularly along kerbs and moderate ridges. Bound the extent to
+        // control geometry cost on macOS while keeping roads as heavier lines.
+        let meshStep = 5.0
+        let meshRadius = 90.0
         let anchorX = floor(tankPosition.x / meshStep) * meshStep
         let anchorZ = floor(tankPosition.z / meshStep) * meshStep
         // Subdivide the mesh so rolling hills bend the actual ground grid.
-        for index in -12...12 {
+        for index in -18...18 {
             let x = anchorX + Double(index) * meshStep
             let z = anchorZ + Double(index) * meshStep
-            for segment in -12..<12 {
+            for segment in -18..<18 {
                 let a = Double(segment) * meshStep
                 let b = Double(segment + 1) * meshStep
                 line(mesh, WorldPoint(x, 0.018, anchorZ + a),
