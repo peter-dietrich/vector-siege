@@ -196,6 +196,7 @@ final class BattlefieldScene: SKScene {
     private let modernFriendlyShells = SKShapeNode()
     private let modernHostileShells = SKShapeNode()
     private let modernBombShells = SKShapeNode()
+    private let saucerPulseLines = SKShapeNode()
     private let flashLines = SKShapeNode()
     private let damageOverlay = SKShapeNode()
     private let destructionRings = SKShapeNode()
@@ -352,7 +353,7 @@ final class BattlefieldScene: SKScene {
             (groundMesh, 3.1), (streetMarks, 3.2), (foliageLines, 3.9), (structures, 4.0),
             (opponentLines, 5.0), (opponentSaucerLines, 5.1), (shotLines, 6.0),
             (modernFriendlyShells, 6.2), (modernHostileShells, 6.3),
-            (modernBombShells, 6.4),
+            (modernBombShells, 6.4), (saucerPulseLines, 6.5),
             (flashLines, 7.0), (armoredLines, 5.3),
             (droneLines, 5.4), (fighterLines, 5.5),
             (chaffCloudLines, 7.8), (countermeasureLines, 8.6),
@@ -1413,6 +1414,20 @@ final class BattlefieldScene: SKScene {
         }
         combatWorldEffects.path = effects
         combatWorldEffects.alpha = 1
+        let chaffPath = CGMutablePath()
+        for flake in chaffFlakes {
+            let life = max(0, flake.timeLeft / flake.duration)
+            if life <= 0 { continue }
+            let width = (displayMode == .modern ? 0.8 : 0.55) * life
+            line(chaffPath,
+                 WorldPoint(flake.position.x - width,
+                            flake.position.y - width * 0.45,
+                            flake.position.z),
+                 WorldPoint(flake.position.x + width,
+                            flake.position.y + width * 0.45,
+                            flake.position.z), c)
+        }
+        chaffCloudLines.path = chaffPath
         combatWrecks.path = wrecks
     }
 
@@ -2123,6 +2138,14 @@ final class BattlefieldScene: SKScene {
         modernBombShells.fillColor = .clear
         modernBombShells.lineWidth = 2.1
         modernBombShells.glowWidth = modern ? 1.8 : 0
+        saucerPulseLines.strokeColor = NSColor(
+            calibratedRed: 0.24, green: 0.78, blue: 1.0, alpha: 1)
+        saucerPulseLines.lineWidth = modern ? 2.3 : 1.5
+        saucerPulseLines.glowWidth = modern ? 4.5 : 1.3
+        chaffCloudLines.strokeColor = NSColor(
+            calibratedRed: 0.49, green: 0.99, blue: 0.94, alpha: 0.94)
+        chaffCloudLines.lineWidth = modern ? 1.6 : 1.0
+        chaffCloudLines.glowWidth = modern ? 2.2 : 0.2
         // Combat effects use a restrained warm palette that contrasts with
         // green terrain and the cyan cockpit without hiding the sight.
         muzzleEffects.strokeColor = NSColor(
@@ -3165,6 +3188,7 @@ final class BattlefieldScene: SKScene {
 
     private func renderProjectiles(_ c: CameraProjection) {
         let bulletPath = CGMutablePath()
+        let pulseWire = CGMutablePath()
         let friendlyWire = CGMutablePath()
         let hostileWire = CGMutablePath()
         let bombWire = CGMutablePath()
@@ -3187,6 +3211,18 @@ final class BattlefieldScene: SKScene {
                 line(path, adjustedA, adjustedB, c)
             }
             let height = shell.hostile ? 1.5 : 1.65
+            if shell.payload == "saucerPulse" {
+                let p = shell.center
+                let r = 0.76
+                for spoke in 0..<8 {
+                    let a = Double(spoke) * .pi / 4 + gameClock * 2.2
+                    shellLine(pulseWire,
+                        WorldPoint(p.x + cos(a) * r, 2.7, p.z + sin(a) * r),
+                        WorldPoint(p.x + cos(a + .pi / 2) * r, 2.7,
+                                   p.z + sin(a + .pi / 2) * r))
+                }
+                continue
+            }
             if shell.payload == "bomb" && displayMode == .modern {
                 // Bombs visibly descend from an air-delivered trajectory.
                 // They remain low-speed, dodgeable area threats at impact.
@@ -3262,6 +3298,7 @@ final class BattlefieldScene: SKScene {
         modernFriendlyShells.path = friendlyWire
         modernHostileShells.path = hostileWire
         modernBombShells.path = bombWire
+        saucerPulseLines.path = pulseWire
 
         let flarePath = CGMutablePath()
         for spark in sparks {
