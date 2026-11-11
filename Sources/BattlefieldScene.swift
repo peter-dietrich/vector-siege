@@ -25,6 +25,7 @@ private struct Foe {
     var navigationWaypoint: GroundPoint? = nil
     var routeRefreshRemaining: Double = 0
     var attackTimer: Double = 0
+    var evasiveSeconds = 0.0
     var droneVelocity = GroundPoint(0, 0)
     var droneOffset = GroundPoint(0, 0)
     var droneSeed = 0.0
@@ -110,6 +111,7 @@ final class BattlefieldScene: SKScene {
     private var heading: Double = 0
     private var driveSpeed: Double = 0
     private var turnMotion: Double = 0
+    private var playerStillSeconds = 0.0
     private var suspension = TankSuspension()
     private lazy var movementAudio = TankMotionAudio()
     private lazy var proximityAudio = TankProximityAudio()
@@ -629,6 +631,7 @@ final class BattlefieldScene: SKScene {
         proximityCountdown = 0
         driveSpeed = 0
         turnMotion = 0
+        playerStillSeconds = 0
         suspension.reset()
         heading = 0
         steerHoldSeconds = 0
@@ -770,6 +773,9 @@ final class BattlefieldScene: SKScene {
         // Suspension reacts to braking and collisions; a damped rebound dies away
         // instead of drifting the actual tank heading or changing its shot trajectory.
         suspension.update(speed: driveSpeed, dt: dt)
+        playerStillSeconds = abs(driveSpeed) < 0.9
+            ? min(18, playerStillSeconds + dt)
+            : max(0, playerStillSeconds - dt * 4)
         turnMotion += (abs(turn) - turnMotion) * min(1, dt * 12)
         if key(49) && cannon.canFire {
             firePlayer()
@@ -788,6 +794,7 @@ final class BattlefieldScene: SKScene {
             let distance = max(0.001, diff.length)
             enemies[idx].reload -= dt
             enemies[idx].phase += dt
+            enemies[idx].evasiveSeconds = max(0, enemies[idx].evasiveSeconds - dt)
             let type = enemies[idx].kind
             // Flying disks travel slowly to preserve their ominous, floating
             // appearance. Their visual rotation speed is independent.
@@ -936,13 +943,25 @@ final class BattlefieldScene: SKScene {
                 if enemies[idx].routeRefreshRemaining <= 0 ||
                     (enemies[idx].navigationWaypoint?.distance(
                         to: enemies[idx].center) ?? .infinity) < 4 {
-                    let shouldMove = !clearShot || distance > desiredDistance + 7
+                    // One in three vehicles seeks a flank if the player
+                    // camps. Others briefly change lanes under cannon fire.
+                    let evasive = enemies[idx].evasiveSeconds > 0
+                    let flank = playerStillSeconds > 4.0 &&
+                        (idx + wave) % 3 == 0
+                    let shouldMove = !clearShot ||
+                        distance > desiredDistance + 7 || evasive || flank
+                    let lateral = facing(heading + .pi / 2) *
+                        ((idx % 2 == 0 ? 1.0 : -1.0) *
+                         (evasive ? 25.0 : 18.0))
+                    let tacticalGoal = (evasive || flank) &&
+                        distance < 95 ? tankPosition + lateral : tankPosition
                     enemies[idx].navigationWaypoint = shouldMove
                         ? EnemyNavigation.nextWaypoint(
-                            from: enemies[idx].center, player: tankPosition,
+                            from: enemies[idx].center, player: tacticalGoal,
                             obstacles: obstaclesForNavigation,
                             shotBlockers: shotBlockers, otherTanks: occupied,
-                            desiredStandOff: desiredDistance)
+                            desiredStandOff: desiredDistance,
+                            terrainAware: true)
                         : nil
                     enemies[idx].routeRefreshRemaining =
                         0.55 + Double(idx % 4) * 0.12
@@ -953,7 +972,9 @@ final class BattlefieldScene: SKScene {
                 // around buildings, keeping a safe distance from other tanks.
                 let destination = enemies[idx].navigationWaypoint
                 let shouldAdvance = destination != nil &&
-                    (!clearShot || distance > desiredDistance + 6)
+                    (!clearShot || distance > desiredDistance + 6 ||
+                     enemies[idx].evasiveSeconds > 0 ||
+                     (playerStillSeconds > 4.0 && (idx + wave) % 3 == 0))
                 let steeringVector = shouldAdvance
                     ? (destination! - enemies[idx].center) : diff
                 let aimHeading = atan2(steeringVector.x, steeringVector.z)
@@ -1347,6 +1368,17 @@ final class BattlefieldScene: SKScene {
         guard cannon.fire() else { return }
         shotTally.fire()
         let direction = facing(heading)
+        // Incoming cannon corridors provoke a limited evasive reaction.
+        for index in enemies.indices where enemies[index].kind.isVehicle {
+            let relative = enemies[index].center - tankPosition
+            let forward = relative.x * direction.x + relative.z * direction.z
+            let lateral = abs(relative.x * direction.z -
+                              relative.z * direction.x)
+            if forward > 8 && forward < 115 && lateral < 11 {
+                enemies[index].evasiveSeconds = 2.1
+                enemies[index].routeRefreshRemaining = 0
+            }
+        }
         shells.append(Shell(center: tankPosition + direction * 2.5,
                             direction: direction, hostile: false,
                             timeLeft: rules.projectileLifetime,
@@ -1894,6 +1926,7 @@ final class BattlefieldScene: SKScene {
         steerHoldSeconds = 0
         previousSteerDirection = 0
         turnMotion = 0
+        playerStillSeconds = 0
         suspension.reset()
         observedFPS = 60
         nearestTankDistance = nil
