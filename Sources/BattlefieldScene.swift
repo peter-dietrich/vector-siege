@@ -512,6 +512,8 @@ final class BattlefieldScene: SKScene {
             displayMode = displayMode == .classic ? .modern : .classic
         case 17: // T: show extra local diagnostic details
             showDetailedTelemetry.toggle()
+        case 14: // E: defensive chaff/ECM countermeasure pulse
+            launchChaff()
         case 56, 60: // Shift, usually delivered via flagsChanged instead
             triggerShield()
         default: break
@@ -566,6 +568,14 @@ final class BattlefieldScene: SKScene {
         invulnerability = 1.8
         pendingWave = 0
         saucerPatrol = SaucerPatrolClock()
+        waveElapsed = 0
+        dronesPending = 0
+        fightersPending = 0
+        chaffCharges = ChaffDefense.chargesPerWave
+        chaffCooldown = 0
+        chaffActive = 0
+        hitFlashRemaining = 0
+        destructionRemaining = 0
         shells.removeAll()
         sparks.removeAll()
         makeObstacles()
@@ -582,6 +592,13 @@ final class BattlefieldScene: SKScene {
         let dt = lastUpdateTime == 0 ? 0.0 : min(0.04, max(0, currentTime - lastUpdateTime))
         lastUpdateTime = currentTime
         if round == .playing { gameClock += dt; tick(dt) }
+        // Damage feedback continues after the final life has ended, instead
+        // of freezing sparks and the blast on the game-over frame.
+        hitFlashRemaining = max(0, hitFlashRemaining - dt)
+        destructionRemaining = max(0, destructionRemaining - dt)
+        if round == .gameOver {
+            updateSparks(dt)
+        }
         if round == .levelReady { pulse += dt }
         if round == .title {
             pulse += dt
@@ -618,6 +635,21 @@ final class BattlefieldScene: SKScene {
         cannon.advance(by: dt)
         shieldCooldown = max(0, shieldCooldown - dt)
         shieldDuration = max(0, shieldDuration - dt)
+        chaffCooldown = max(0, chaffCooldown - dt)
+        chaffActive = max(0, chaffActive - dt)
+        waveElapsed += dt
+        // Reinforcements emerge from the same approach quadrant as the
+        // ground force. They are delayed so wave starts remain readable.
+        if dronesPending > 0 &&
+            waveElapsed >= BattlefieldWaveDirector.droneDelay(forWave: wave) {
+            deployAirWing(kind: .drone, count: dronesPending)
+            dronesPending = 0
+        }
+        if fightersPending > 0 &&
+            waveElapsed >= BattlefieldWaveDirector.fighterDelay(forWave: wave) {
+            deployAirWing(kind: .fighter, count: fightersPending)
+            fightersPending = 0
+        }
         invulnerability = max(0, invulnerability - dt)
         pulse = max(0, pulse - dt)
 
@@ -823,15 +855,20 @@ final class BattlefieldScene: SKScene {
         shells = survivingShells
         for idx in casualties.sorted(by: >) { enemies.remove(at: idx) }
 
-        for idx in sparks.indices {
-            sparks[idx].position.x += sparks[idx].velocity.x * dt
-            sparks[idx].position.y += sparks[idx].velocity.y * dt
-            sparks[idx].position.z += sparks[idx].velocity.z * dt
-            sparks[idx].velocity.y -= dt * 5.0
-            sparks[idx].timeLeft -= dt
+        updateSparks(dt)
+        // Never advance while delayed air reinforcements are still on the
+        // manifest. If the ground wave was cleared quickly, shorten downtime.
+        if enemies.isEmpty && (dronesPending > 0 || fightersPending > 0) {
+            if dronesPending > 0 {
+                waveElapsed = max(waveElapsed,
+                    BattlefieldWaveDirector.droneDelay(forWave: wave) - 1.5)
+            } else {
+                waveElapsed = max(waveElapsed,
+                    BattlefieldWaveDirector.fighterDelay(forWave: wave) - 1.5)
+            }
         }
-        sparks.removeAll(where: { $0.timeLeft <= 0 })
-        if enemies.isEmpty && pendingWave <= 0 { pendingWave = 2.1 }
+        if enemies.isEmpty && dronesPending == 0 && fightersPending == 0 &&
+            pendingWave <= 0 { pendingWave = 2.1 }
         if pendingWave > 0 {
             pendingWave -= dt
             if pendingWave <= 0 {
@@ -840,6 +877,9 @@ final class BattlefieldScene: SKScene {
                 for shell in shells where !shell.hostile { shotTally.miss() }
                 shells.removeAll()
                 shieldCooldown = 0
+                chaffCharges = ChaffDefense.chargesPerWave
+                chaffCooldown = 0
+                chaffActive = 0
                 invulnerability = 1.0
                 pressedKeys.removeAll()
                 driveSpeed = 0
@@ -896,6 +936,39 @@ final class BattlefieldScene: SKScene {
         sound("shot.wav")
     }
 
+    private func launchChaff() {
+        guard round == .playing, chaffCharges > 0,
+              chaffCooldown <= 0 else { return }
+        chaffCharges -= 1
+        chaffCooldown = ChaffDefense.cooldown
+        chaffActive = ChaffDefense.protectionDuration
+        var intercepted: [Int] = []
+        for index in enemies.indices where enemies[index].kind == .drone {
+            if ChaffDefense.disrupts(
+                distance: enemies[index].center.distance(to: tankPosition)) {
+                intercepted.append(index)
+                burst(at: WorldPoint(enemies[index].center, height: 2.9),
+                      count: 27)
+            }
+        }
+        for index in intercepted.reversed() {
+            enemies.remove(at: index)
+            addPoints(125)
+        }
+        sound("shield.wav")
+    }
+
+    private func updateSparks(_ dt: Double) {
+        for idx in sparks.indices {
+            sparks[idx].position.x += sparks[idx].velocity.x * dt
+            sparks[idx].position.y += sparks[idx].velocity.y * dt
+            sparks[idx].position.z += sparks[idx].velocity.z * dt
+            sparks[idx].velocity.y -= dt * 5
+            sparks[idx].timeLeft -= dt
+        }
+        sparks.removeAll(where: { $0.timeLeft <= 0 })
+    }
+
     private func triggerShield() {
         guard round == .playing && shieldCooldown <= 0 && shieldDuration <= 0 else { return }
         shieldDuration = rules.shieldDuration
@@ -908,10 +981,25 @@ final class BattlefieldScene: SKScene {
         invulnerability = 2.8
         driveSpeed = -6.0
         pulse = 0.5
+        hitFlashRemaining = 0.66
+        // Two layers of debris give an unmistakable armor impact. The death
+        // burst is larger and remains animated through the GAME OVER overlay.
+        burst(at: WorldPoint(tankPosition, height: 1.4), count: 45)
+        burst(at: WorldPoint(tankPosition + facing(heading) * 2.0,
+                             height: 2.8), count: 30)
         sound("damage.wav")
         if lives <= 0 {
+            destructionRemaining = 1.65
+            hitFlashRemaining = 1.28
+            burst(at: WorldPoint(tankPosition, height: 3.2), count: 115)
+            burst(at: WorldPoint(tankPosition, height: 0.65), count: 65)
+            sound("explosion.wav")
             round = .gameOver
-            if score > bestScore { bestScore = score; UserDefaults.standard.set(bestScore, forKey: "VectorSiegeHighScore") }
+            if score > bestScore {
+                bestScore = score
+                UserDefaults.standard.set(
+                    bestScore, forKey: "VectorSiegeHighScore")
+            }
         }
     }
 
