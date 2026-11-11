@@ -243,6 +243,57 @@ struct GeometrySmoke {
             existing: [], isOpen: { _ in false })
         precondition(impossible == nil, "Never fall back to a blocked spawn")
 
+        // Reload is per shot, but the full configured magazine is rearmed
+        // at the next level, including cancelling any residual reload.
+        var waveCannon = CannonMagazine(maxRounds: 3, reloadSeconds: 1.7)
+        precondition(waveCannon.fire())
+        precondition(waveCannon.roundsRemaining == 2)
+        precondition(waveCannon.reloadRemaining > 0)
+        waveCannon.rearmForNextLevel()
+        precondition(waveCannon.roundsRemaining == 3)
+        precondition(waveCannon.reloadRemaining == 0)
+        precondition(waveCannon.canFire)
+        precondition(waveCannon.maxRounds == 3)
+        precondition(waveCannon.fire())
+        waveCannon.advance(by: 1.8)
+        precondition(waveCannon.fire())
+        waveCannon.advance(by: 1.8)
+        precondition(waveCannon.fire())
+        precondition(!waveCannon.canFire)
+        waveCannon.rearmForNextLevel()
+        precondition(waveCannon.canFire && waveCannon.roundsRemaining == 3)
+
+        // Solid facades hide line-of-sight to ground vehicles and permit
+        // real partial exposure, while empty/transparent obstacles do not.
+        let cameraPosition = GroundPoint(0, 0)
+        let cameraEye = LandscapeTopology.height(cameraPosition) + 1.5
+        let solidBuilding = ObstacleCollision.body(
+            center: GroundPoint(0, 30), size: 8, kind: .building)
+        let behind = GroundPoint(0, 65)
+        let foreground = GroundPoint(0, 12)
+        precondition(BattlefieldVisibility.blocked(
+            camera: cameraPosition, eyeAltitude: cameraEye,
+            target: behind, targetHeight: 1.5,
+            opaqueBodies: [solidBuilding]))
+        precondition(!BattlefieldVisibility.blocked(
+            camera: cameraPosition, eyeAltitude: cameraEye,
+            target: behind, targetHeight: 1.5,
+            opaqueBodies: []))
+        precondition(!BattlefieldVisibility.blocked(
+            camera: cameraPosition, eyeAltitude: cameraEye,
+            target: foreground, targetHeight: 1.5,
+            opaqueBodies: [solidBuilding]))
+        precondition(!BattlefieldVisibility.blocked(
+            camera: cameraPosition, eyeAltitude: cameraEye,
+            target: behind, targetHeight: 60,
+            opaqueBodies: [solidBuilding]))
+        precondition(BattlefieldVisibility.candidates(
+            camera: cameraPosition, target: behind,
+            opaqueBodies: [solidBuilding]).count == 1)
+        precondition(BattlefieldVisibility.candidates(
+            camera: cameraPosition, target: foreground,
+            opaqueBodies: [solidBuilding]).isEmpty)
+
         // Save files retain exact magazine state, timers, world objects and shot stats.
         var savedAmmo = CannonMagazine(maxRounds: 75, reloadSeconds: 1.7)
         precondition(savedAmmo.fire())
