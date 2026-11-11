@@ -1735,7 +1735,14 @@ final class BattlefieldScene: SKScene {
 
     private func renderVegetation(_ c: CameraProjection) {
         let path = CGMutablePath()
-        for plant in vegetation where plant.location.distance(to: tankPosition) < 110 {
+        for plant in vegetation {
+            let distance = plant.location.distance(to: tankPosition)
+            guard distance < 110 else { continue }
+            let view = c.local(WorldPoint(plant.location, height: 1))
+            guard BattlefieldRenderLOD.isVisible(
+                depth: view.forward, lateral: view.right,
+                margin: 9) else { continue }
+            let detail = BattlefieldRenderLOD.vegetationDetail(distance: distance)
             let p = plant.location
             let h = plant.height
             let r = plant.crown
@@ -1743,7 +1750,7 @@ final class BattlefieldScene: SKScene {
             if plant.isTree {
                 // Branching pine form with an uneven conical canopy.
                 line(path, center, WorldPoint(p, height: h), c)
-                for level in 1...3 {
+                for level in 1...(detail == 2 ? 3 : 2) {
                     let rise = h * (0.26 + Double(level) * 0.18)
                     let span = r * (1.3 - Double(level) * 0.25)
                     for side in [-1.0, 1.0] {
@@ -1755,9 +1762,10 @@ final class BattlefieldScene: SKScene {
                 }
             } else {
                 // Low angular scrub, not full spherical wireframe clutter.
-                for direction in 0..<6 {
-                    let a = Double(direction) * .pi / 3
-                    let b = Double(direction + 1) * .pi / 3
+                let count = detail == 2 ? 6 : detail == 1 ? 4 : 3
+                for direction in 0..<count {
+                    let a = Double(direction) * 2 * .pi / Double(count)
+                    let b = Double(direction + 1) * 2 * .pi / Double(count)
                     line(path,
                          WorldPoint(p.x + cos(a) * r, h * 0.32, p.z + sin(a) * r),
                          WorldPoint(p.x + cos(b) * r, h * 0.32, p.z + sin(b) * r), c)
