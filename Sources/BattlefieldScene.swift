@@ -948,7 +948,8 @@ final class BattlefieldScene: SKScene {
                     $0.hostile && $0.payload == "droneCharge"
                 }.count
                 let hostileCount = shells.filter { $0.hostile }.count
-                if attackRun && drone.droneHasCharge && !disrupted &&
+                if pendingWave <= 0 &&
+                    attackRun && drone.droneHasCharge && !disrupted &&
                     drone.droneDropDelay <= 0 &&
                     swarmDropTimer <= 0 && chaffActive <= 0 &&
                     distance < 78 && distance > 12 &&
@@ -1073,7 +1074,7 @@ final class BattlefieldScene: SKScene {
                 enemies[idx].attackTimer < 15 &&
                 enemies[idx].airShotsFired == 0 &&
                 forwardDot > 0.50 && distance < 85
-            if type != .drone &&
+            if pendingWave <= 0 && type != .drone &&
                 (type != .fighter || fighterPass) &&
                 (type != .saucer || saucerPass) &&
                 enemies[idx].reload <= 0 && targetVisible &&
@@ -1271,7 +1272,13 @@ final class BattlefieldScene: SKScene {
         updateSparks(dt)
         // Air contacts and pending reinforcements never block level progression.
         if !enemies.contains(where: { $0.kind.isVehicle }) &&
-            pendingWave <= 0 { pendingWave = 2.1 }
+            pendingWave <= 0 {
+            pendingWave = 2.1
+            // Once the ground is secure, no stray air attack can steal
+            // a life during the victory countdown.
+            invulnerability = max(invulnerability, 3.1)
+            shells.removeAll { $0.hostile }
+        }
         if pendingWave > 0 {
             pendingWave -= dt
             if pendingWave <= 0 {
@@ -1283,6 +1290,9 @@ final class BattlefieldScene: SKScene {
                     current: directorPressure, waveSeconds: waveElapsed,
                     livesLost: max(0, directorWaveStartLives - lives),
                     hitRate: hitRate, wave: wave)
+                // Every level starts with a completely full magazine and
+                // no leftover per-shot reload timer, even in custom presets.
+                cannon.rearmForNextLevel()
                 wave += 1
                 spawnWave()
                 for shell in shells where !shell.hostile { shotTally.miss() }
@@ -1463,7 +1473,8 @@ final class BattlefieldScene: SKScene {
     }
 
     private func firePlayer() {
-        guard cannon.fire() else { return }
+        // No ammunition is spent after the ground targets are defeated.
+        guard pendingWave <= 0, cannon.fire() else { return }
         shotTally.fire()
         let direction = facing(heading)
         // Incoming cannon corridors provoke a limited evasive reaction.
@@ -2263,7 +2274,8 @@ final class BattlefieldScene: SKScene {
             calibratedRed: 1, green: 0.23, blue: 0.10, alpha: 1)
         directionalDamageEffects.lineWidth = modern ? 3.2 : 2.2
         directionalDamageEffects.glowWidth = modern ? 5 : 2
-        glassLayer.isHidden = !modern
+        // Solid 30% buildings must remain opaque in Classic too.
+        glassLayer.isHidden = false
         for band in skyBands { band.isHidden = !modern }
         for layer in [distantMountains, middleMountains, nearMountains, horizonMist] {
             layer.isHidden = !modern
@@ -4669,7 +4681,9 @@ final class BattlefieldScene: SKScene {
             subtitle.text = "PRESS RETURN TO DEPLOY"
         case .levelReady:
             banner.text = String(format: "LEVEL %02d", wave)
-            subtitle.text = "PRESS ANY KEY TO BEGIN"
+            subtitle.text = wave > 1
+                ? "FULL AMMO  //  PRESS ANY KEY"
+                : "PRESS ANY KEY TO BEGIN"
         case .paused:
             banner.text = "PAUSED"
             subtitle.text = "PRESS P TO RESUME"
