@@ -314,6 +314,81 @@ struct GeometrySmoke {
                      TankProximity.repeatInterval(for: 28),
                      "Alarm must become more urgent as enemy approaches")
 
+        // Real structure footprints, rather than undersized center circles,
+        // must block shells at corners, walls and all four cardinal faces.
+        let block = ObstacleCollision.body(
+            center: GroundPoint(0, 0), size: 5, kind: .block)
+        precondition(block.halfX == 5 && block.halfZ == 5)
+        precondition(ObstacleCollision.contains(
+            GroundPoint(4.7, 4.7), body: block, height: 1.65),
+            "Previously unprotected square block corners must be solid")
+        precondition(!ObstacleCollision.contains(
+            GroundPoint(5.3, 5.3), body: block, height: 1.65))
+        let wall = ObstacleCollision.firstImpact(
+            from: GroundPoint(-15, 4.8), to: GroundPoint(15, 4.8),
+            body: block, height: 1.65)
+        precondition(wall != nil && abs(wall! - 1.0/3.0) < 0.000001,
+                     "Bullet grazing visible near-edge must impact exactly")
+        precondition(ObstacleCollision.firstImpact(
+            from: GroundPoint(-15, 5.3), to: GroundPoint(15, 5.3),
+            body: block, height: 1.65) == nil)
+        precondition(ObstacleCollision.firstImpact(
+            from: GroundPoint(0, 0), to: GroundPoint(10, 0),
+            body: block, height: 1.65) == 0,
+            "Projectile starting inside solid cover hits immediately")
+        precondition(ObstacleCollision.firstImpact(
+            from: GroundPoint(-20, 0), to: GroundPoint(20, 0),
+            body: block, height: 1.65) != nil,
+            "Fast bullets cannot pass all the way through a block in one frame")
+        precondition(ObstacleCollision.firstImpact(
+            from: GroundPoint(-15, 0), to: GroundPoint(15, 0),
+            body: block, height: 8) == nil,
+            "A projectile flying above a roof is not blocked by it")
+
+        let pyramid = ObstacleCollision.body(
+            center: GroundPoint(0, 0), size: 6, kind: .pyramid)
+        precondition(ObstacleCollision.contains(
+            GroundPoint(5, 0), body: pyramid, height: 0))
+        precondition(!ObstacleCollision.contains(
+            GroundPoint(5, 0), body: pyramid, height: 4),
+            "Pyramid collision cross section tapers toward the peak")
+        precondition(ObstacleCollision.firstImpact(
+            from: GroundPoint(-8, 4), to: GroundPoint(8, 4),
+            body: pyramid, height: 2.0) != nil)
+        let tower = ObstacleCollision.body(
+            center: GroundPoint(0, 0), size: 6, kind: .tower)
+        let building = ObstacleCollision.body(
+            center: GroundPoint(0, 0), size: 6, kind: .building)
+        let monolith = ObstacleCollision.body(
+            center: GroundPoint(0, 0), size: 6, kind: .monolith)
+        precondition(tower.halfX == 3.3 && monolith.halfZ == 2.52)
+        precondition(abs(building.halfX - 6.3) < 1e-10)
+
+        // The same rectangular footprint governs tank driving and AI sight.
+        let solid = [NavigationObstacle(body: building)]
+        precondition(!EnemyNavigation.clearSegment(
+            GroundPoint(-15, 4), GroundPoint(15, 4),
+            obstacles: solid, height: 1.5))
+        precondition(EnemyNavigation.clearSegment(
+            GroundPoint(-15, 7), GroundPoint(15, 7),
+            obstacles: solid, height: 1.5))
+        precondition(!EnemyNavigation.isWalkable(
+            GroundPoint(5, 3), obstacles: solid, otherTanks: []))
+        precondition(EnemyNavigation.isWalkable(
+            GroundPoint(20, 20), obstacles: solid, otherTanks: []))
+        // Wall at x=5 hits at t=1/3; a tank at x=10 is farther away.
+        let enemyBehind = ObstacleCollision.firstCircleImpact(
+            from: GroundPoint(-15, 0), to: GroundPoint(15, 0),
+            center: GroundPoint(10, 0), radius: 2.9)
+        precondition(wall! < enemyBehind!,
+                     "A blocking wall must be resolved before a farther target")
+        // Conversely a near enemy must be hit before an obstacle behind it.
+        let enemyBefore = ObstacleCollision.firstCircleImpact(
+            from: GroundPoint(-15, 0), to: GroundPoint(15, 0),
+            center: GroundPoint(-10, 0), radius: 2.9)
+        precondition(enemyBefore! < wall!,
+                     "A target in front of a wall must not be hidden by it")
+
         // A tank facing a building must be able to choose a reachable
         // intermediate waypoint around cover rather than driving into it.
         let cover = [NavigationObstacle(center: GroundPoint(42, 0), radius: 13)]
