@@ -35,6 +35,8 @@ private struct Foe {
     var droneHasCharge = true
     var droneDropDelay = 0.0
     var droneDisrupted = 0.0
+    // Air patrol attack limits are per individual fly-through, not per frame.
+    var airShotsFired = 0
 }
 private struct FallingDrone {
     var foe: Foe
@@ -152,6 +154,7 @@ final class BattlefieldScene: SKScene {
     private var swarmCenter = GroundPoint(0, 0)
     private var swarmVelocity = GroundPoint(0, 0)
     private var swarmDropTimer = 0.0
+    private var droneAttackClock = 0.0
     private var chaffCharges = ChaffDefense.chargesPerWave
     private var chaffCooldown = 0.0
     private var chaffActive = 0.0
@@ -726,15 +729,28 @@ final class BattlefieldScene: SKScene {
         chaffActive = max(0, chaffActive - dt)
         swarmDropTimer = max(0, swarmDropTimer - dt)
         waveElapsed += dt
+        if enemies.contains(where: { $0.kind == .drone }) {
+            droneAttackClock += dt
+        }
         // Reinforcements emerge from the same approach quadrant as the
         // ground force. They are delayed so wave starts remain readable.
         if dronesPending > 0 &&
-            waveElapsed >= BattlefieldWaveDirector.droneDelay(forWave: wave) {
+            waveElapsed >= BattlefieldWaveDirector.droneDelay(forWave: wave) &&
+            AirEncounterDirector.mayLaunchAirThreat(
+                groundRemaining: enemies.filter { $0.kind.isVehicle }.count,
+                simultaneousHostileShots: shells.filter { $0.hostile }.count,
+                currentAirCount: enemies.filter { $0.kind.isAir }.count,
+                maxHostileShots: BattlefieldWaveDirector.maximumHostileShots(forWave: wave)) {
             deployAirWing(kind: .drone, count: dronesPending)
             dronesPending = 0
         }
         if fightersPending > 0 &&
-            waveElapsed >= BattlefieldWaveDirector.fighterDelay(forWave: wave) {
+            waveElapsed >= BattlefieldWaveDirector.fighterDelay(forWave: wave) &&
+            AirEncounterDirector.mayLaunchAirThreat(
+                groundRemaining: enemies.filter { $0.kind.isVehicle }.count,
+                simultaneousHostileShots: shells.filter { $0.hostile }.count,
+                currentAirCount: enemies.filter { $0.kind.isAir }.count,
+                maxHostileShots: BattlefieldWaveDirector.maximumHostileShots(forWave: wave)) {
             deployAirWing(kind: .fighter, count: fightersPending)
             fightersPending = 0
         }
@@ -783,7 +799,7 @@ final class BattlefieldScene: SKScene {
 
         // Cohesive cloud: approach the player but remain at a playable standoff.
         if enemies.contains(where: { $0.kind == .drone }) {
-            let target = tankPosition - facing(waveApproach) * 34
+            let target = tankPosition - facing(waveApproach) * 42
             let desired = (target - swarmCenter).normalized * 5.8
             swarmVelocity = swarmVelocity +
                 (desired - swarmVelocity) * min(1, dt * 0.65)
@@ -822,7 +838,17 @@ final class BattlefieldScene: SKScene {
                 let wander = GroundPoint(
                     sin(phase * 0.67) * 4.8 + sin(phase * 1.31) * 1.8,
                     cos(phase * 0.53) * 4.5 + cos(phase * 1.17) * 1.9)
-                let desiredPosition = swarmCenter + drone.droneOffset + wander
+                let droneIndex = max(0, Int((drone.droneSeed / 1.618).rounded()))
+                let attackRun = AirEncounterDirector.isAttacking(
+                    droneIndex: droneIndex, elapsed: droneAttackClock) &&
+                    drone.droneHasCharge && drone.droneDisrupted <= 0
+                // A wing of six makes a recognizable inward run and then
+                // naturally returns to its broad standoff formation.
+                let raidTarget = tankPosition -
+                    facing(waveApproach) * 17 +
+                    drone.droneOffset * 0.24 + wander * 0.38
+                let desiredPosition = attackRun ? raidTarget :
+                    swarmCenter + drone.droneOffset + wander
                 var separation = GroundPoint(0, 0)
                 for other in enemies.indices where other != idx &&
                     enemies[other].kind == .drone {
@@ -840,9 +866,10 @@ final class BattlefieldScene: SKScene {
                     cos(drone.droneSeed * 2.3 + gameClock * 1.9)) * 14
                     : GroundPoint(0, 0)
                 let steering = (desiredPosition - drone.center) *
-                    (disrupted ? 0.10 : 0.70) +
+                    (disrupted ? 0.10 : attackRun ? 0.84 : 0.70) +
                     swarmVelocity + separation * 7 + scatter
-                let speedTarget = min(10.5, max(2.0, steering.length * speedFactor))
+                let speedTarget = min(attackRun ? 12.0 : 10.5,
+                                      max(2.0, steering.length * speedFactor))
                 let desiredVelocity = steering.normalized * speedTarget
                 let previousVelocity = drone.droneVelocity
                 var change = desiredVelocity - previousVelocity
@@ -888,11 +915,11 @@ final class BattlefieldScene: SKScene {
                     $0.hostile && $0.payload == "droneCharge"
                 }.count
                 let hostileCount = shells.filter { $0.hostile }.count
-                if drone.droneHasCharge && !disrupted &&
+                if attackRun && drone.droneHasCharge && !disrupted &&
                     drone.droneDropDelay <= 0 &&
                     swarmDropTimer <= 0 && chaffActive <= 0 &&
                     distance < 78 && distance > 12 &&
-                    activeCharges < 5 &&
+                    activeCharges < 2 &&
                     hostileCount < BattlefieldWaveDirector.maximumHostileShots(forWave: wave) {
                     let direction = (tankPosition - drone.center).normalized
                     shells.append(Shell(
@@ -900,27 +927,18 @@ final class BattlefieldScene: SKScene {
                         direction: direction, hostile: true,
                         timeLeft: 5.5, payload: "droneCharge"))
                     drone.droneHasCharge = false
-                    swarmDropTimer = Double.random(in: 1.0...1.8)
+                    swarmDropTimer = Double.random(in: 1.7...2.4)
                     burst(at: WorldPoint(drone.center, height: drone.droneAltitude - 0.7),
                           count: 5)
                     sound("enemy.wav")
                 }
                 enemies[idx] = drone
             } else if type == .fighter {
-                // Fast but low-pass, finite aircraft: sweep across the player
-                // and arc away; never park directly above the tank.
-                let orbit = distance < 28 ? 1.13 : 0.26 *
-                    sin(enemies[idx].phase * 0.52)
-                enemies[idx].heading = wrapAngle(aim + orbit)
-                let proposed = enemies[idx].center +
-                    facing(enemies[idx].heading) * movement * dt
-                if abs(proposed.x) < 177 && abs(proposed.z) < 177 {
-                    enemies[idx].center = proposed
-                } else {
-                    enemies[idx].heading = wrapAngle(aim)
-                    enemies[idx].center = enemies[idx].center +
-                        facing(aim) * movement * dt
-                }
+                // A single recognizable strafing pass: travel across the
+                // battlefield at constant heading rather than homing or orbiting.
+                enemies[idx].center = enemies[idx].center +
+                    facing(enemies[idx].heading) * max(14, movement) * dt
+                enemies[idx].attackTimer += dt
             } else {
                 let obstaclesForNavigation = obstacles.map {
                     NavigationObstacle(body: collisionBody(for: $0))
@@ -1011,7 +1029,20 @@ final class BattlefieldScene: SKScene {
                 LandscapeTopology.clearFiringLine(
                     from: enemies[idx].center, to: tankPosition))
             let hostileShots = shells.filter { $0.hostile }.count
-            if type != .saucer && type != .drone &&
+            let forwardVector = facing(enemies[idx].heading)
+            let forwardDot = diff.normalized.x * forwardVector.x +
+                diff.normalized.z * forwardVector.z
+            let fighterPass = type == .fighter &&
+                enemies[idx].attackTimer < 13 &&
+                enemies[idx].airShotsFired < 2 &&
+                forwardDot > 0.30 && distance < 95
+            let saucerPass = type == .saucer && wave >= 4 &&
+                enemies[idx].attackTimer < 15 &&
+                enemies[idx].airShotsFired == 0 &&
+                forwardDot > 0.50 && distance < 85
+            if type != .drone &&
+                (type != .fighter || fighterPass) &&
+                (type != .saucer || saucerPass) &&
                 enemies[idx].reload <= 0 && targetVisible &&
                 hostileShots < BattlefieldWaveDirector.maximumHostileShots(forWave: wave) &&
                 distance < (type == .fighter ? 125 : 79) && distance > 9 &&
@@ -1023,8 +1054,9 @@ final class BattlefieldScene: SKScene {
                 let error = Double.random(in: -aimError...aimError)
                 let direction = facing(aim + error)
                 let explosive = type == .artillery ||
-                    (type == .fighter && Int(enemies[idx].phase * 3) % 4 == 0)
-                let payload = explosive ? "bomb" :
+                    (type == .fighter && enemies[idx].airShotsFired == 1)
+                let payload = type == .saucer ? "saucerPulse" :
+                    explosive ? "bomb" :
                     (type == .fighter || type == .apc ? "machinegun" : "cannon")
                 let count = payload == "machinegun" && hostileShots == 0 ? 2 : 1
                 for burstIndex in 0..<count {
@@ -1038,9 +1070,11 @@ final class BattlefieldScene: SKScene {
                         launchElevation: type.isVehicle && payload != "bomb"
                             ? LandscapeTopology.height(enemies[idx].center) : nil))
                 }
-                enemies[idx].reload = (type == .fighter ? 4.8 :
+                enemies[idx].reload = (type == .fighter ? 5.8 :
+                    type == .saucer ? 999.0 :
                     type == .artillery ? 5.7 : 3.5) *
                     threatLevel.enemyReload / rules.enemyReload
+                if type.isAir { enemies[idx].airShotsFired += 1 }
                 sound("enemy.wav")
             }
         }
@@ -1050,6 +1084,7 @@ final class BattlefieldScene: SKScene {
             let old = shell.center
             let shellSpeed = !shell.hostile ? 90.0 :
                 (shell.payload == "bomb" || shell.payload == "droneCharge" ? 22.0 :
+                    shell.payload == "saucerPulse" ? 16.0 :
                     shell.payload == "machinegun" ? 34.0 : 23.0)
             shell.center = shell.center + shell.direction * (dt * shellSpeed)
             shell.timeLeft -= dt
@@ -1189,8 +1224,12 @@ final class BattlefieldScene: SKScene {
             enemies.remove(at: idx)
         }
         enemies.removeAll {
-            $0.kind == .saucer &&
-            ($0.attackTimer > 24 || abs($0.center.x) > 187 || abs($0.center.z) > 187)
+            (($0.kind == .saucer &&
+              $0.attackTimer > AirEncounterDirector.saucerLifetime) ||
+             ($0.kind == .fighter &&
+              $0.attackTimer > AirEncounterDirector.fighterLifetime)) ||
+            ($0.kind.isAir && $0.kind != .drone &&
+             (abs($0.center.x) > 190 || abs($0.center.z) > 190))
         }
         updateFallingDrones(dt)
         updateSparks(dt)
@@ -1632,6 +1671,8 @@ final class BattlefieldScene: SKScene {
     }
 
     private func spawnPatrolSaucer() {
+        guard enemies.filter({ $0.kind == .saucer }).count < 1,
+              enemies.contains(where: { $0.kind.isVehicle }) else { return }
         let side = Bool.random() ? 1.0 : -1.0
         let across = heading + side * (.pi / 2)
         let origin = tankPosition - facing(across) * 105 +
@@ -1640,7 +1681,7 @@ final class BattlefieldScene: SKScene {
                                      max(-170, min(170, origin.z)))
         enemies.append(Foe(center: safeOrigin,
                            heading: wrapAngle(across + Double.random(in: -0.16...0.16)),
-                           kind: .saucer, reload: 999,
+                           kind: .saucer, reload: wave >= 4 ? 3.8 : 999,
                            phase: Double.random(in: 0...(2 * .pi)), hitPoints: 1))
     }
 
@@ -1713,6 +1754,7 @@ final class BattlefieldScene: SKScene {
             swarmCenter = waveOrigin - facing(waveApproach) * 8
             swarmVelocity = GroundPoint(0, 0)
             swarmDropTimer = 3.0
+            droneAttackClock = -2.0
         }
         for n in 0..<count {
             // Reinforcements originate from the *original* enemy staging
@@ -1730,12 +1772,17 @@ final class BattlefieldScene: SKScene {
             let depth = facing(waveApproach) *
                 (kind == .fighter ? 17.0 :
                     kind == .drone ? -8.0 + sin(angle) * radius : -8.0)
-            let position = waveOrigin + sideways + depth
+            // Fighters start far to the side for one continuous flyover.
+            let flyover = waveApproach + (n.isMultiple(of: 2) ? 1.27 : -1.27)
+            let position = kind == .fighter
+                ? tankPosition - facing(flyover) * 115 +
+                    facing(waveApproach) * 33
+                : waveOrigin + sideways + depth
             let safe = GroundPoint(
                 max(-174, min(174, position.x)),
                 max(-174, min(174, position.z)))
-            let approachHeading = atan2(tankPosition.x - safe.x,
-                                         tankPosition.z - safe.z)
+            let approachHeading = kind == .fighter ? flyover :
+                atan2(tankPosition.x - safe.x, tankPosition.z - safe.z)
             var foe = Foe(center: safe, heading: approachHeading,
                           kind: kind, reload: kind == .fighter ? 3.5 : 999,
                           phase: Double(n) * 0.29,
