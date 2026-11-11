@@ -143,7 +143,7 @@ struct SiegeWindow: View {
                 .background(.black)
                 .overlay(alignment: .bottom) {
                     HStack(spacing: 12) {
-                        Text("↑↓ DRIVE   ←→ TURN   SPACE FIRE   SHIFT SHIELD")
+                        Text("↑↓ DRIVE   ←→ TURN   SPACE FIRE   SHIFT SHIELD   E CHAFF")
                         Spacer(minLength: 2)
                         Text("I/K + O/L TREADS   P PAUSE   RETURN START")
                     }
