@@ -221,6 +221,16 @@ struct GeometrySmoke {
             precondition(abs(max(x, y) - 80) < 0.00001,
                          "Radar beam must terminate exactly on the square")
         }
+        // Group passive drones, but preserve separate clusters and counts.
+        let radarGroups = TacticalRadarGeometry.droneClusters([
+            GroundPoint(2, 4), GroundPoint(3, 5), GroundPoint(32, 35),
+            GroundPoint(32, 39), GroundPoint(1, 1)
+        ])
+        precondition(radarGroups.count == 2)
+        precondition(radarGroups.map(\.count).sorted() == [2, 3])
+        precondition(TacticalRadarGeometry.droneClusters([]).isEmpty)
+        precondition(TacticalRadarGeometry.droneClusters(
+            [GroundPoint(1, 2)], cellSize: 0).isEmpty)
         precondition(TacticalRadarGeometry.intensity(trailingFraction: 0) == 1)
         precondition(TacticalRadarGeometry.intensity(trailingFraction: 1) == 0)
         precondition(TacticalRadarGeometry.intensity(trailingFraction: 0.2) >
@@ -276,6 +286,38 @@ struct GeometrySmoke {
         let loadedIntro = try! JSONDecoder().decode(SiegeSnapshot.self, from: introData)
         precondition(loadedIntro.awaitingLevelStart == true,
                      "Save/Resume must preserve a pending level-intro")
+
+        // Dynamic pressure never creates extra opponents or increases the
+        // permitted number of simultaneous hostile rounds.
+        precondition(DynamicBattlefieldDirector.nextPressure(
+            current: 0, waveSeconds: 37, livesLost: 0, hitRate: 75, wave: 3) == 1)
+        precondition(DynamicBattlefieldDirector.nextPressure(
+            current: 1, waveSeconds: 37, livesLost: 0, hitRate: 90, wave: 5) == 1)
+        precondition(DynamicBattlefieldDirector.nextPressure(
+            current: 1, waveSeconds: 90, livesLost: 1, hitRate: 85, wave: 5) == 0)
+        precondition(DynamicBattlefieldDirector.nextPressure(
+            current: 0, waveSeconds: 155, livesLost: 0, hitRate: 20, wave: 4) == -1)
+        precondition(DynamicBattlefieldDirector.nextPressure(
+            current: 1, waveSeconds: 30, livesLost: 0, hitRate: 100, wave: 1) == 0)
+        precondition(DynamicBattlefieldDirector.hostileShotLimit(
+            wave: 5, pressure: 1) == BattlefieldWaveDirector.maximumHostileShots(forWave: 5))
+        precondition(DynamicBattlefieldDirector.hostileShotLimit(wave: 5, pressure: -1) == 2)
+        precondition(DynamicBattlefieldDirector.reinforcementDelay(
+            base: 9, pressure: -1) > 9)
+        precondition(DynamicBattlefieldDirector.reinforcementDelay(
+            base: 9, pressure: 1) < 9)
+        precondition(DynamicBattlefieldDirector.fireCooldownFactor(pressure: -1) > 1)
+        precondition(DynamicBattlefieldDirector.fireCooldownFactor(pressure: 1) < 1)
+        var tuned = snapshot
+        tuned.directorPressure = -1
+        tuned.directorWaveStartLives = 3
+        tuned.directorWaveStartFired = 12
+        tuned.directorWaveStartHits = 6
+        let decodedTuned = try! JSONDecoder().decode(SiegeSnapshot.self,
+            from: JSONEncoder().encode(tuned))
+        precondition(decodedTuned.directorPressure == -1)
+        precondition(decodedTuned.directorWaveStartFired == 12)
+        precondition(restored.snapshot.directorPressure == nil)
 
         // Air groups rotate a six-drone attack lane without adding
         // simultaneous hostile shot pressure or gating ground waves.
