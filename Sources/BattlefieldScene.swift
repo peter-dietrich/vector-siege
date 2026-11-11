@@ -1200,10 +1200,13 @@ final class BattlefieldScene: SKScene {
     private func deployAirWing(kind: FoeType, count: Int) {
         guard round == .playing, count > 0 else { return }
         for n in 0..<count {
-            let angle = waveApproach + (Double(n) -
-                Double(count - 1) / 2) * 0.14
-            let distance = kind == .fighter ? 147.0 : 112.0
-            let position = tankPosition + facing(angle) * distance
+            // Reinforcements originate from the *original* enemy staging
+            // sector, even after the player has driven across the map.
+            let sideways = facing(waveApproach + .pi / 2) *
+                ((Double(n) - Double(count - 1) / 2) * 13)
+            let depth = facing(waveApproach) *
+                (kind == .fighter ? 17.0 : -8.0)
+            let position = waveOrigin + sideways + depth
             let safe = GroundPoint(
                 max(-174, min(174, position.x)),
                 max(-174, min(174, position.z)))
