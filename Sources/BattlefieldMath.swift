@@ -37,16 +37,57 @@ enum LandscapeTopology {
         let nearest = min(dx, dz)
         // Road grade is deliberately gentle to keep steering predictable.
         let grade = 0.42 * sin(p.x / 63) + 0.36 * cos(p.z / 71)
-        let rolling = 2.3 * sin(p.x / 31) * cos(p.z / 42) +
+        // Downtown is a deliberately restrained, readable urban plateau;
+        // hill strength ramps smoothly outside the central city blocks.
+        let center = max(abs(p.x), abs(p.z))
+        let urban = min(1.0, max(0.0, (center - 68.0) / 64.0))
+        let terrainStrength = urban * urban * (3.0 - 2.0 * urban)
+        let rolling = terrainStrength * (
+            2.3 * sin(p.x / 31) * cos(p.z / 42) +
             1.5 * sin((p.x + p.z) / 66) +
-            1.4 * cos((p.x - p.z) / 47)
-        if nearest <= roadHalfWidth { return grade }
+            1.4 * cos((p.x - p.z) / 47))
+        if nearest <= roadHalfWidth { return grade * (0.4 + 0.6 * terrainStrength) }
         // 0.28-unit curb lip; beyond it landscaping gradually rises
         // to the full rolling height without sharp cliffs.
         let distance = nearest - roadHalfWidth
         let blend = min(1.0, max(0.0, distance / 7.0))
         let smooth = blend * blend * (3 - 2 * blend)
-        return grade + 0.28 + rolling * smooth
+        let roadGrade = grade * (0.4 + 0.6 * terrainStrength)
+        return roadGrade + 0.28 + rolling * smooth
+    }
+
+    /// Terrain occlusion for tank-to-tank aim lines. Sample a low-height
+    /// sight ray above both endpoints, so hills and berms provide real cover.
+    static func clearFiringLine(from start: GroundPoint, to end: GroundPoint,
+                                eyeHeight: Double = 1.65) -> Bool {
+        let span = end - start
+        let distance = span.length
+        if distance < 0.01 { return true }
+        let startY = height(start) + eyeHeight
+        let endY = height(end) + eyeHeight
+        let steps = max(2, Int(ceil(distance / 2.5)))
+        for i in 1..<steps {
+            let t = Double(i) / Double(steps)
+            let p = start + span * t
+            let ray = startY + (endY - startY) * t
+            if height(p) > ray - 0.17 { return false }
+        }
+        return true
+    }
+
+    /// First physical ground interception for a projectile at a fixed
+    /// world altitude (the cannon uses a shallow, arcade-style trajectory).
+    static func firstTerrainImpact(from start: GroundPoint, to end: GroundPoint,
+                                   altitude: Double, clearance: Double = 0.12) -> Double? {
+        let span = end - start
+        let distance = span.length
+        if distance < 0.01 { return nil }
+        let steps = max(1, Int(ceil(distance / 1.4)))
+        for i in 1...steps {
+            let t = Double(i) / Double(steps)
+            if height(start + span * t) + clearance >= altitude { return t }
+        }
+        return nil
     }
 }
 
