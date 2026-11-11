@@ -582,12 +582,129 @@ enum TankProximity {
     }
 }
 
-/// Simplified top-down collision circles. Scene obstacles use the same radii
-/// as their physics/collision logic, and firing lanes use the smaller shell
-/// intersection radius.
+/// Canonical footprint of the geometry drawn by the scene. The same shape
+/// is used for tank movement, AI navigation, line-of-fire tests and shells.
+/// All structures are axis-aligned; pyramid cross-sections taper with height.
+enum ObstacleCollision {
+    enum Kind { case block, pyramid, tower, building, monolith }
+
+    struct Body {
+        var center: GroundPoint
+        var halfX: Double
+        var halfZ: Double
+        var height: Double
+        var tapered: Bool
+    }
+
+    static func body(center: GroundPoint, size: Double, kind: Kind) -> Body {
+        switch kind {
+        case .block:
+            return Body(center: center, halfX: size, halfZ: size,
+                        height: size * 1.35, tapered: false)
+        case .pyramid:
+            return Body(center: center, halfX: size, halfZ: size,
+                        height: size * 1.28, tapered: true)
+        case .tower:
+            return Body(center: center, halfX: size * 0.55,
+                        halfZ: size * 0.62, height: size * 4.1,
+                        tapered: false)
+        case .building:
+            return Body(center: center, halfX: size * 1.05,
+                        halfZ: size * 0.85, height: size * 2.2,
+                        tapered: false)
+        case .monolith:
+            return Body(center: center, halfX: size * 0.45,
+                        halfZ: size * 0.42, height: size * 6,
+                        tapered: false)
+        }
+    }
+
+    /// Horizontal cross-section at a real shell height. Above a structure's
+    /// roof there is no collision, while pyramids get narrower toward the tip.
+    static func extents(_ body: Body, height: Double,
+                        margin: Double = 0) -> (halfX: Double, halfZ: Double)? {
+        guard height >= 0 && height <= body.height else { return nil }
+        let taper = body.tapered ? max(0, 1 - height / body.height) : 1
+        return (body.halfX * taper + max(0, margin),
+                body.halfZ * taper + max(0, margin))
+    }
+
+    static func contains(_ location: GroundPoint, body: Body,
+                         height: Double = 0, margin: Double = 0) -> Bool {
+        guard let e = extents(body, height: height, margin: margin) else {
+            return false
+        }
+        let delta = location - body.center
+        return abs(delta.x) <= e.halfX && abs(delta.z) <= e.halfZ
+    }
+
+    /// Swept point/round test against the horizontal rectangular cross-section
+    /// of a structure. Liang-Barsky slab clipping returns earliest impact t
+    /// in [0,1], including starting within solid geometry and grazing edges.
+    static func firstImpact(
+        from start: GroundPoint, to end: GroundPoint,
+        body: Body, height: Double, radius: Double = 0
+    ) -> Double? {
+        guard let e = extents(body, height: height, margin: radius) else {
+            return nil
+        }
+        let a = start - body.center
+        let b = end - body.center
+        let dx = b.x - a.x
+        let dz = b.z - a.z
+        var entering = 0.0
+        var leaving = 1.0
+        for (origin, direction, half) in [(a.x, dx, e.halfX),
+                                          (a.z, dz, e.halfZ)] {
+            if abs(direction) < 1e-10 {
+                if abs(origin) > half { return nil }
+            } else {
+                let first = (-half - origin) / direction
+                let second = (half - origin) / direction
+                entering = max(entering, min(first, second))
+                leaving = min(leaving, max(first, second))
+                if entering > leaving { return nil }
+            }
+        }
+        return entering >= 0 && entering <= 1 ? entering : nil
+    }
+
+    /// Swept circular target collision; avoids shells tunneling between frames.
+    static func firstCircleImpact(
+        from start: GroundPoint, to end: GroundPoint,
+        center: GroundPoint, radius: Double
+    ) -> Double? {
+        let a = start - center
+        let d = end - start
+        let aa = d.x*d.x + d.z*d.z
+        let cc = a.x*a.x + a.z*a.z - radius*radius
+        if cc <= 0 { return 0 }
+        guard aa > 1e-12 else { return nil }
+        let bb = 2*(a.x*d.x + a.z*d.z)
+        let discriminant = bb*bb - 4*aa*cc
+        guard discriminant >= 0 else { return nil }
+        let t = (-bb - sqrt(discriminant)) / (2*aa)
+        return t >= 0 && t <= 1 ? t : nil
+    }
+}
+
+/// AI navigation accepts exact building footprints. A radius-only fallback
+/// preserves compatibility with existing generic navigation smoke tests.
 struct NavigationObstacle {
     var center: GroundPoint
     var radius: Double
+    var body: ObstacleCollision.Body?
+
+    init(center: GroundPoint, radius: Double) {
+        self.center = center
+        self.radius = radius
+        self.body = nil
+    }
+    init(body: ObstacleCollision.Body) {
+        self.center = body.center
+        self.radius = max(body.halfX, body.halfZ)
+        self.body = body
+    }
 }
 
 /// Low-cost grid search for a clear position to fire from, not merely a
@@ -613,9 +730,16 @@ enum EnemyNavigation {
 
     static func clearSegment(_ start: GroundPoint, _ end: GroundPoint,
                              obstacles: [NavigationObstacle],
-                             clearance: Double = 0) -> Bool {
+                             clearance: Double = 0,
+                             height: Double = 0) -> Bool {
         obstacles.allSatisfy {
-            segmentDistance($0.center, from: start, to: end) > $0.radius + clearance
+            if let body = $0.body {
+                return ObstacleCollision.firstImpact(
+                    from: start, to: end, body: body,
+                    height: height, radius: clearance) == nil
+            }
+            return segmentDistance($0.center, from: start, to: end)
+                > $0.radius + clearance
         }
     }
 
@@ -625,7 +749,13 @@ enum EnemyNavigation {
         guard abs(location.x) <= gridMax - enemyRadius,
               abs(location.z) <= gridMax - enemyRadius else { return false }
         return obstacles.allSatisfy {
-            $0.center.distance(to: location) > $0.radius + enemyRadius + navigationMargin
+            if let body = $0.body {
+                return !ObstacleCollision.contains(
+                    location, body: body,
+                    margin: enemyRadius + navigationMargin)
+            }
+            return $0.center.distance(to: location)
+                > $0.radius + enemyRadius + navigationMargin
         } && otherTanks.allSatisfy {
             $0.distance(to: location) >= EnemySpawnLayout.movementSpacing + 1.0
         }
@@ -667,7 +797,8 @@ enum EnemyNavigation {
             let distance = candidate.distance(to: player)
             let clearShot = distance >= max(10, desiredStandOff - 5) &&
                             distance <= 78 &&
-                            clearSegment(candidate, player, obstacles: shotBlockers)
+                            clearSegment(candidate, player, obstacles: shotBlockers,
+                                         height: 1.5)
             if clearShot {
                 found = currentIndex
                 break
