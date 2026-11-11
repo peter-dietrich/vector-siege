@@ -47,6 +47,13 @@ Xcode may need to create the scheme when the project first opens; it normally ge
 
 The two tread controls can be used simultaneously, arcade-style: **I+O** moves forward, **K+L** reverses, **I+L** turns right in place, and **K+O** turns left in place. Standard arrow/WASD controls work as a simpler alternative.
 
+## v2.0 — precision-aligned cockpit instrumentation
+
+- **Modern targeting and combat banks:** consolidated upper telemetry into five shared baseline bands, with a fixed heading/speed hierarchy, even targeting and accuracy columns, right-anchored range and status values, and calmer header typography. The primary readout rows now sit inside understated recessed instrument wells.
+- **Clearer visual structure:** thin horizontal rules, two deliberately placed orange cut-corner accents, consistent row padding and tightly aligned shield/ammunition symbols. Reduced icon glow and decorative noise in favor of an intentional military instrumentation style.
+- **Lower command deck:** rebalanced tank-system, hit-ratio, heading-tape, terrain-profile and sector widths. Status now follows one consistent label/value grid, the heading has its own framed digital plate, and the duplicate terrain heading has been removed.
+- **Live functionality:** score, reload, shield, headings, coordinates, radar, rear camera and hit accuracy remain driven by actual game values. Classic remains unchanged, and there are no save-game or game-rule changes.
+
 ## v1.9 — solid structural collision and accurate projectile impacts
 
 - **No more ghost shots through building corners:** bullets are tested against the visible building shape, not a small circular hitbox. Blocks use their full square footprint; buildings, towers and monoliths use their rendered rectangular bases; pyramids use height-dependent, tapered cross-sections.
