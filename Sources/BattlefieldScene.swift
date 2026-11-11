@@ -2764,7 +2764,11 @@ final class BattlefieldScene: SKScene {
         for (index, o) in obstacles.enumerated() {
             // Culling far outside the visible scene.
             let offset = o.center - tankPosition
-            if offset.length > 190 { continue }
+            let view = c.local(WorldPoint(o.center, height: 3))
+            if offset.length > 190 ||
+                !BattlefieldRenderLOD.isVisible(
+                    depth: view.forward, lateral: view.right,
+                    margin: max(20, o.size * 2.5)) { continue }
             switch o.kind {
             case .pyramid: drawPyramid(o, on: structurePath, camera: c)
             case .block: drawBlock(o, on: structurePath, camera: c)
@@ -2781,8 +2785,19 @@ final class BattlefieldScene: SKScene {
         renderVegetation(c)
         updateGlassFaces(facets, camera: c)
 
-        let opaqueBodies = solidBuildingIndices.sorted().map {
-            collisionBody(for: obstacles[$0])
+        // Only nearby solid geometry can hide visible armor. Reuse the
+        // same broad-phase for the whole frame instead of all city facades.
+        let opaqueBodies = solidBuildingIndices.sorted().compactMap { index
+            -> ObstacleCollision.Body? in
+            let object = obstacles[index]
+            guard object.center.distance(to: tankPosition) < 165 else {
+                return nil
+            }
+            let view = c.local(WorldPoint(object.center, height: 3))
+            guard BattlefieldRenderLOD.isVisible(
+                depth: view.forward, lateral: view.right,
+                margin: max(18, object.size * 2.5)) else { return nil }
+            return collisionBody(for: object)
         }
         let tankPath = CGMutablePath()
         let armoredPath = CGMutablePath()
@@ -2790,10 +2805,18 @@ final class BattlefieldScene: SKScene {
         let dronePath = CGMutablePath()
         let fighterPath = CGMutablePath()
         for falling in fallingDrones {
-            drawDrone(falling.foe, on: dronePath, camera: c)
+            let view = c.local(WorldPoint(falling.foe.center, height: 2))
+            if BattlefieldRenderLOD.isVisible(
+                depth: view.forward, lateral: view.right) {
+                drawDrone(falling.foe, on: dronePath, camera: c)
+            }
         }
         for enemy in enemies {
             if enemy.center.distance(to: tankPosition) > 170 { continue }
+            let view = c.local(WorldPoint(enemy.center, height: 3))
+            if !BattlefieldRenderLOD.isVisible(
+                depth: view.forward, lateral: view.right,
+                margin: enemy.kind.isAir ? 30 : 15) { continue }
             let blockers = enemy.kind.isVehicle
                 ? BattlefieldVisibility.candidates(
                     camera: c.position, target: enemy.center,
@@ -3041,7 +3064,11 @@ final class BattlefieldScene: SKScene {
             line(path, a, b, c)
             return
         }
-        let steps = 8
+        let length = sqrt((b.x-a.x)*(b.x-a.x) +
+                          (b.y-a.y)*(b.y-a.y) +
+                          (b.z-a.z)*(b.z-a.z))
+        let steps = BattlefieldRenderLOD.tankSegmentCount(
+            length: length, occluderCount: blockers.count)
         func interpolate(_ t: Double) -> WorldPoint {
             WorldPoint(a.x + (b.x-a.x)*t,
                        a.y + (b.y-a.y)*t,
