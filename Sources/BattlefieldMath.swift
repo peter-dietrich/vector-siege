@@ -844,6 +844,32 @@ struct SaucerPatrolClock: Codable {
 }
 
 
+/// Predictable visual detail tiers for vector rendering. Gameplay collision
+/// distances never change; only redundant distant line segments are reduced.
+enum BattlefieldRenderLOD {
+    static func isVisible(depth: Double, lateral: Double,
+                          margin: Double = 18) -> Bool {
+        depth > -margin && abs(lateral) < max(60, depth * 1.5) + margin
+    }
+
+    static func groundStride(distance: Double) -> Int {
+        if distance < 45 { return 1 }
+        if distance < 90 { return 2 }
+        return 3
+    }
+
+    static func vegetationDetail(distance: Double) -> Int {
+        if distance < 40 { return 2 }
+        if distance < 85 { return 1 }
+        return 0
+    }
+
+    static func tankSegmentCount(length: Double, occluderCount: Int) -> Int {
+        guard occluderCount > 0 else { return 1 }
+        return max(2, min(12, Int(ceil(length / 0.85))))
+    }
+}
+
 /// Camera-to-object visibility against *opaque* building footprints.
 /// This uses the same rectangular building collision profiles as shells.
 /// Other wireframe buildings never hide enemies, and a building behind the
