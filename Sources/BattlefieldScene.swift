@@ -156,6 +156,14 @@ final class BattlefieldScene: SKScene {
     private var waveApproach = 0.0
     private var waveOrigin = GroundPoint(0, 0)
     private var waveElapsed = 0.0
+    private var directorPressure = 0
+    private var directorWaveStartLives = 3
+    private var directorWaveStartFired = 0
+    private var directorWaveStartHits = 0
+    private var hostileShotLimit: Int {
+        DynamicBattlefieldDirector.hostileShotLimit(
+            wave: wave, pressure: directorPressure)
+    }
     private var dronesPending = 0
     private var fightersPending = 0
     private var swarmCenter = GroundPoint(0, 0)
@@ -237,6 +245,8 @@ final class BattlefieldScene: SKScene {
     private let radarHunterContacts = SKShapeNode()
     private let radarSaucerContacts = SKShapeNode()
     private let radarDroneContacts = SKShapeNode()
+    private let radarActiveDrones = SKShapeNode()
+    private let radarTargetCue = SKShapeNode()
     private let radarFighterContacts = SKShapeNode()
     private let hudLines = SKShapeNode()
     private let leftHUD = SKLabelNode(fontNamed: "Menlo-Bold")
@@ -325,6 +335,7 @@ final class BattlefieldScene: SKScene {
         addChild(glassLayer)
         for (node, layer) in [(radarEnemyContacts, 13.3), (radarHunterContacts, 13.4),
                                (radarSaucerContacts, 13.45), (radarDroneContacts, 13.47),
+                               (radarActiveDrones, 13.50), (radarTargetCue, 13.55),
                                (radarFighterContacts, 13.49), (radarProjectileGlow, 13.6),
                                (radarProjectileCore, 13.8)] {
             node.zPosition = layer
@@ -659,6 +670,10 @@ final class BattlefieldScene: SKScene {
         invulnerability = 1.8
         pendingWave = 0
         saucerPatrol = SaucerPatrolClock()
+        directorPressure = 0
+        directorWaveStartLives = lives
+        directorWaveStartFired = shotTally.fired
+        directorWaveStartHits = shotTally.hits
         waveElapsed = 0
         dronesPending = 0
         fightersPending = 0
@@ -749,22 +764,26 @@ final class BattlefieldScene: SKScene {
         // Reinforcements emerge from the same approach quadrant as the
         // ground force. They are delayed so wave starts remain readable.
         if dronesPending > 0 &&
-            waveElapsed >= BattlefieldWaveDirector.droneDelay(forWave: wave) &&
+            waveElapsed >= DynamicBattlefieldDirector.reinforcementDelay(
+                base: BattlefieldWaveDirector.droneDelay(forWave: wave),
+                pressure: directorPressure) &&
             AirEncounterDirector.mayLaunchAirThreat(
                 groundRemaining: enemies.filter { $0.kind.isVehicle }.count,
                 simultaneousHostileShots: shells.filter { $0.hostile }.count,
                 currentAirCount: enemies.filter { $0.kind.isAir }.count,
-                maxHostileShots: BattlefieldWaveDirector.maximumHostileShots(forWave: wave)) {
+                maxHostileShots: hostileShotLimit) {
             deployAirWing(kind: .drone, count: dronesPending)
             dronesPending = 0
         }
         if fightersPending > 0 &&
-            waveElapsed >= BattlefieldWaveDirector.fighterDelay(forWave: wave) &&
+            waveElapsed >= DynamicBattlefieldDirector.reinforcementDelay(
+                base: BattlefieldWaveDirector.fighterDelay(forWave: wave),
+                pressure: directorPressure) &&
             AirEncounterDirector.mayLaunchAirThreat(
                 groundRemaining: enemies.filter { $0.kind.isVehicle }.count,
                 simultaneousHostileShots: shells.filter { $0.hostile }.count,
                 currentAirCount: enemies.filter { $0.kind.isAir }.count,
-                maxHostileShots: BattlefieldWaveDirector.maximumHostileShots(forWave: wave)) {
+                maxHostileShots: hostileShotLimit) {
             deployAirWing(kind: .fighter, count: fightersPending)
             fightersPending = 0
         }
@@ -934,7 +953,7 @@ final class BattlefieldScene: SKScene {
                     swarmDropTimer <= 0 && chaffActive <= 0 &&
                     distance < 78 && distance > 12 &&
                     activeCharges < 2 &&
-                    hostileCount < BattlefieldWaveDirector.maximumHostileShots(forWave: wave) {
+                    hostileCount < hostileShotLimit {
                     let direction = (tankPosition - drone.center).normalized
                     shells.append(Shell(
                         center: drone.center + direction * 1.4,
@@ -1058,7 +1077,7 @@ final class BattlefieldScene: SKScene {
                 (type != .fighter || fighterPass) &&
                 (type != .saucer || saucerPass) &&
                 enemies[idx].reload <= 0 && targetVisible &&
-                hostileShots < BattlefieldWaveDirector.maximumHostileShots(forWave: wave) &&
+                hostileShots < hostileShotLimit &&
                 distance < (type == .fighter ? 125 : 79) && distance > 9 &&
                 (type != .fighter || chaffActive <= 0) {
                 let errorScale = type == .fighter ? 1.7 :
@@ -1088,7 +1107,9 @@ final class BattlefieldScene: SKScene {
                 enemies[idx].reload = (type == .fighter ? 5.8 :
                     type == .saucer ? 999.0 :
                     type == .artillery ? 5.7 : 3.5) *
-                    threatLevel.enemyReload / rules.enemyReload
+                    threatLevel.enemyReload / rules.enemyReload *
+                    DynamicBattlefieldDirector.fireCooldownFactor(
+                        pressure: directorPressure)
                 if type.isAir { enemies[idx].airShotsFired += 1 }
                 sound("enemy.wav")
             }
@@ -1254,6 +1275,14 @@ final class BattlefieldScene: SKScene {
         if pendingWave > 0 {
             pendingWave -= dt
             if pendingWave <= 0 {
+                let shotsThisWave = max(0, shotTally.fired - directorWaveStartFired)
+                let hitsThisWave = max(0, shotTally.hits - directorWaveStartHits)
+                let hitRate = shotsThisWave > 0
+                    ? 100.0 * Double(hitsThisWave) / Double(shotsThisWave) : 0
+                directorPressure = DynamicBattlefieldDirector.nextPressure(
+                    current: directorPressure, waveSeconds: waveElapsed,
+                    livesLost: max(0, directorWaveStartLives - lives),
+                    hitRate: hitRate, wave: wave)
                 wave += 1
                 spawnWave()
                 for shell in shells where !shell.hostile { shotTally.miss() }
@@ -1747,6 +1776,9 @@ final class BattlefieldScene: SKScene {
     private func spawnWave() {
         enemies.removeAll()
         waveElapsed = 0
+        directorWaveStartLives = lives
+        directorWaveStartFired = shotTally.fired
+        directorWaveStartHits = shotTally.hits
         droneAttackClock = 0
         chaffFlakes.removeAll()
         // Evaluate several randomized approach quadrants. Keep the squad
@@ -1978,7 +2010,11 @@ final class BattlefieldScene: SKScene {
             chaffCharges: chaffCharges,
             chaffCooldown: chaffCooldown,
             chaffActive: chaffActive,
-            droneAttackClock: droneAttackClock
+            droneAttackClock: droneAttackClock,
+            directorPressure: directorPressure,
+            directorWaveStartLives: directorWaveStartLives,
+            directorWaveStartFired: directorWaveStartFired,
+            directorWaveStartHits: directorWaveStartHits
         )
     }
 
@@ -2009,6 +2045,7 @@ final class BattlefieldScene: SKScene {
         waveApproach = saved.waveApproach ?? heading
         waveOrigin = saved.waveOrigin ?? tankPosition
         waveElapsed = max(0, saved.waveElapsed ?? 0)
+        directorPressure = max(-1, min(1, saved.directorPressure ?? 0))
         droneAttackClock = saved.droneAttackClock ??
             max(0, waveElapsed - BattlefieldWaveDirector.droneDelay(forWave: wave))
         dronesPending = max(0, saved.dronesPending ?? 0)
@@ -2024,6 +2061,11 @@ final class BattlefieldScene: SKScene {
         destructionRemaining = 0
         cannon = saved.cannon
         shotTally = saved.shotTally
+        directorWaveStartLives = max(lives, saved.directorWaveStartLives ?? lives)
+        directorWaveStartFired = min(shotTally.fired, max(0,
+            saved.directorWaveStartFired ?? shotTally.fired))
+        directorWaveStartHits = min(shotTally.hits, max(0,
+            saved.directorWaveStartHits ?? shotTally.hits))
         combatImpacts.removeAll()
         tankWrecks.removeAll()
         muzzleRemaining = 0
