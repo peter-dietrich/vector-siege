@@ -277,6 +277,53 @@ struct GeometrySmoke {
         precondition(loadedIntro.awaitingLevelStart == true,
                      "Save/Resume must preserve a pending level-intro")
 
+        // Air groups rotate a six-drone attack lane without adding
+        // simultaneous hostile shot pressure or gating ground waves.
+        precondition(AirEncounterDirector.activeWing(elapsed: -0.01) == nil)
+        precondition(AirEncounterDirector.activeWing(elapsed: 0) == 0)
+        precondition(AirEncounterDirector.activeWing(elapsed: 3.99) == 0)
+        precondition(AirEncounterDirector.activeWing(elapsed: 4.0) == nil)
+        precondition(AirEncounterDirector.activeWing(elapsed: 13) == 1)
+        precondition(AirEncounterDirector.activeWing(elapsed: 26) == 2)
+        precondition(AirEncounterDirector.isAttacking(
+            droneIndex: 0, elapsed: 0))
+        precondition(!AirEncounterDirector.isAttacking(
+            droneIndex: 6, elapsed: 0))
+        precondition(AirEncounterDirector.isAttacking(
+            droneIndex: 6, elapsed: 13))
+        precondition(AirEncounterDirector.isAttacking(
+            droneIndex: 29, elapsed: 52))
+        precondition(AirEncounterDirector.mayLaunchAirThreat(
+            groundRemaining: 2, simultaneousHostileShots: 1,
+            currentAirCount: 30, maxHostileShots: 3))
+        precondition(!AirEncounterDirector.mayLaunchAirThreat(
+            groundRemaining: 0, simultaneousHostileShots: 0,
+            currentAirCount: 0, maxHostileShots: 3))
+        precondition(!AirEncounterDirector.mayLaunchAirThreat(
+            groundRemaining: 2, simultaneousHostileShots: 3,
+            currentAirCount: 30, maxHostileShots: 3))
+        // New optional air state survives round-trip while legacy v1
+        // SavedSiegeFoe shapes remain decodable.
+        var restoredDrone = SavedSiegeFoe(
+            center: GroundPoint(14, 23), heading: 0.5,
+            kind: "drone", reload: 999, phase: 1.0, hitPoints: 1)
+        precondition(restoredDrone.droneSeed == nil &&
+                     restoredDrone.droneHasCharge == nil)
+        restoredDrone.droneSeed = 4.854
+        restoredDrone.droneOffset = GroundPoint(4, -3)
+        restoredDrone.droneHasCharge = false
+        restoredDrone.droneDropDelay = 2.5
+        restoredDrone.droneDisrupted = 1.5
+        restoredDrone.droneAltitude = 4.0
+        restoredDrone.airShotsFired = 1
+        let savedDroneData = try! JSONEncoder().encode(restoredDrone)
+        let reloadedDrone = try! JSONDecoder().decode(
+            SavedSiegeFoe.self, from: savedDroneData)
+        precondition(reloadedDrone.droneSeed == 4.854 &&
+                     reloadedDrone.droneHasCharge == false &&
+                     reloadedDrone.droneOffset?.x == 4 &&
+                     reloadedDrone.airShotsFired == 1)
+
         // Patrol arrival is based on active time, not wall clock or wave number.
         var patrol = SaucerPatrolClock()
         precondition(patrol.secondsUntilArrival == 15)
