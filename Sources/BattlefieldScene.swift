@@ -1260,6 +1260,30 @@ final class BattlefieldScene: SKScene {
         }
     }
 
+    private func foeKindName(_ kind: FoeType) -> String {
+        switch kind {
+        case .tank: return "tank"
+        case .hunter: return "hunter"
+        case .apc: return "apc"
+        case .artillery: return "artillery"
+        case .saucer: return "saucer"
+        case .drone: return "drone"
+        case .fighter: return "fighter"
+        }
+    }
+
+    private func foeKind(named name: String) -> FoeType {
+        switch name {
+        case "hunter": return .hunter
+        case "apc": return .apc
+        case "artillery": return .artillery
+        case "saucer": return .saucer
+        case "drone": return .drone
+        case "fighter": return .fighter
+        default: return .tank
+        }
+    }
+
     // Exact in-progress battle state; displayed next in a paused state when resumed.
     func makeSnapshot() -> SiegeSnapshot? {
         guard round == .playing || round == .paused || round == .levelReady else { return nil }
@@ -1278,16 +1302,25 @@ final class BattlefieldScene: SKScene {
                 kind: obstacleKindName($0.kind)) },
             enemies: enemies.map { SavedSiegeFoe(
                 center: $0.center, heading: $0.heading,
-                kind: $0.kind == .hunter ? "hunter" : $0.kind == .saucer ? "saucer" : "tank",
+                kind: foeKindName($0.kind),
                 reload: $0.reload, phase: $0.phase, hitPoints: $0.hitPoints) },
             shells: shells.map { SavedSiegeShell(
                 center: $0.center, direction: $0.direction,
-                hostile: $0.hostile, timeLeft: $0.timeLeft) },
+                hostile: $0.hostile, timeLeft: $0.timeLeft,
+                payload: $0.payload) },
             sparks: sparks.map { SavedSiegeSpark(
                 position: $0.position, velocity: $0.velocity,
                 timeLeft: $0.timeLeft, maxLife: $0.maxLife) },
             secondsUntilSaucerPatrol: saucerPatrol.secondsUntilArrival,
-            awaitingLevelStart: round == .levelReady
+            awaitingLevelStart: round == .levelReady,
+            waveApproach: waveApproach,
+            waveOrigin: waveOrigin,
+            waveElapsed: waveElapsed,
+            dronesPending: dronesPending,
+            fightersPending: fightersPending,
+            chaffCharges: chaffCharges,
+            chaffCooldown: chaffCooldown,
+            chaffActive: chaffActive
         )
     }
 
@@ -1315,6 +1348,17 @@ final class BattlefieldScene: SKScene {
         invulnerability = max(0, saved.invulnerability)
         pendingWave = max(0, saved.pendingWave)
         saucerPatrol.restore(secondsRemaining: saved.secondsUntilSaucerPatrol)
+        waveApproach = saved.waveApproach ?? heading
+        waveOrigin = saved.waveOrigin ?? tankPosition
+        waveElapsed = max(0, saved.waveElapsed ?? 0)
+        dronesPending = max(0, saved.dronesPending ?? 0)
+        fightersPending = max(0, saved.fightersPending ?? 0)
+        chaffCharges = max(0, min(ChaffDefense.chargesPerWave,
+                                  saved.chaffCharges ?? ChaffDefense.chargesPerWave))
+        chaffCooldown = max(0, saved.chaffCooldown ?? 0)
+        chaffActive = max(0, saved.chaffActive ?? 0)
+        hitFlashRemaining = 0
+        destructionRemaining = 0
         cannon = saved.cannon
         shotTally = saved.shotTally
         obstacles = saved.obstacles.map { Obstacle(
@@ -1322,11 +1366,12 @@ final class BattlefieldScene: SKScene {
             kind: obstacleKind(named: $0.kind)) }
         enemies = saved.enemies.map { Foe(
             center: $0.center, heading: $0.heading,
-            kind: $0.kind == "hunter" ? .hunter : $0.kind == "saucer" ? .saucer : .tank,
+            kind: foeKind(named: $0.kind),
             reload: $0.reload, phase: $0.phase, hitPoints: $0.hitPoints) }
         shells = saved.shells.map { Shell(
             center: $0.center, direction: $0.direction,
-            hostile: $0.hostile, timeLeft: $0.timeLeft) }
+            hostile: $0.hostile, timeLeft: $0.timeLeft,
+            payload: $0.payload ?? "cannon") }
         sparks = saved.sparks.map { Spark(
             position: $0.position, velocity: $0.velocity,
             timeLeft: $0.timeLeft, maxLife: $0.maxLife) }
@@ -1377,6 +1422,8 @@ final class BattlefieldScene: SKScene {
         Ammo: \(cannon.roundsRemaining)/\(cannon.maxRounds)  Cannon: \(cannon.statusText)
         Last reload duration: \(String(format: "%.2f", cannon.lastReloadDuration)) seconds
         Enemies: \(enemies.count)  Projectiles: \(shells.count)
+        Reinforcements: \(dronesPending) drones / \(fightersPending) fighters
+        Chaff: \(chaffCharges) charges, \(String(format: "%.1f", chaffCooldown))s cooldown
         FPS (smoothed): \(String(format: "%.1f", observedFPS))
         Shield: \(shieldDuration > 0 ? String(format: "Active %.1fs remaining", shieldDuration) : shieldCooldown > 0 ? "Recharging" : "Ready")
         Runtime: \(String(format: "%.1f", gameClock)) seconds
