@@ -338,6 +338,42 @@ enum BattlefieldWaveDirector {
     }
 }
 
+/// Conservative between-wave pacing. Changes cadence only, not player health,
+/// ground enemy count, projectile damage, or the Veteran difficulty preset.
+enum DynamicBattlefieldDirector {
+    // -1 = relief, 0 = normal, +1 = extra pressure. Bounded on every wave.
+    static func nextPressure(current: Int, waveSeconds: Double,
+                             livesLost: Int, hitRate: Double,
+                             wave: Int) -> Int {
+        if wave < 2 { return 0 }
+        if livesLost > 0 || waveSeconds > 150 { return max(-1, current - 1) }
+        if waveSeconds < 48 && hitRate >= 57 && livesLost == 0 {
+            return min(1, current + 1)
+        }
+        if current > 0 && (waveSeconds > 90 || hitRate < 30) {
+            return 0
+        }
+        return current
+    }
+
+    static func reinforcementDelay(base: Double, pressure: Int) -> Double {
+        max(5.5, base + (pressure < 0 ? 5.0 : pressure > 0 ? -1.5 : 0))
+    }
+
+    static func fireCooldownFactor(pressure: Int) -> Double {
+        pressure < 0 ? 1.20 : pressure > 0 ? 0.93 : 1.0
+    }
+
+    static func hostileShotLimit(wave: Int, pressure: Int) -> Int {
+        max(1, BattlefieldWaveDirector.maximumHostileShots(forWave: wave) +
+            (pressure < 0 ? -1 : 0))
+    }
+
+    static func label(pressure: Int) -> String {
+        pressure < 0 ? "RECOVERY" : pressure > 0 ? "ACTIVE" : "BALANCED"
+    }
+}
+
 /// Predictable mixed-air encounter pacing. This is intentionally small:
 /// the existing 30-drone cloud remains a visual formation, but only one of
 /// five six-drone wings conducts a brief attack run at a time.
@@ -431,6 +467,29 @@ enum TacticalRadarGeometry {
     static func intensity(trailingFraction: Double) -> Double {
         let t = min(1, max(0, trailingFraction))
         return (1 - t) * (1 - t)
+    }
+
+    struct Cluster {
+        var center: GroundPoint
+        var count: Int
+    }
+
+    /// Group close drone contacts without grouping ground vehicles. This
+    /// prevents thirty tiny dots from hiding tank positions or street edges.
+    static func droneClusters(_ positions: [GroundPoint],
+                              cellSize: Double = 16) -> [Cluster] {
+        guard cellSize > 0 else { return [] }
+        var groups: [String: (sum: GroundPoint, count: Int)] = [:]
+        for p in positions {
+            let key = "\(Int(floor(p.x / cellSize))):\(Int(floor(p.z / cellSize)))"
+            let old = groups[key] ?? (GroundPoint(0, 0), 0)
+            groups[key] = (old.sum + p, old.count + 1)
+        }
+        return groups.keys.sorted().compactMap { key in
+            guard let group = groups[key], group.count > 0 else { return nil }
+            return Cluster(center: group.sum * (1 / Double(group.count)),
+                           count: group.count)
+        }
     }
 }
 
