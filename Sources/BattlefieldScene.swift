@@ -1943,6 +1943,7 @@ final class BattlefieldScene: SKScene {
         guard w > 100 && h > 100 else { return }
         var camera = CameraProjection(position: tankPosition, yaw: heading,
                                       viewportWidth: w, viewportHeight: h)
+        camera.terrainEnabled = true
         camera.eyeHeight += LandscapeTopology.height(tankPosition)
         var worldCamera = camera
         let driveAmount = min(1.0, abs(driveSpeed) / 16.5)
@@ -2820,9 +2821,11 @@ final class BattlefieldScene: SKScene {
     /// perspective. All paths are clipped by SKCropNode to the inset viewport.
     /// This does not affect physics, aiming or the main scene camera.
     private func renderRearView(width: Double, height: Double) {
-        let backCamera = CameraProjection(
+        var backCamera = CameraProjection(
             position: tankPosition, yaw: wrapAngle(heading + .pi),
             viewportWidth: width, viewportHeight: height)
+        backCamera.terrainEnabled = true
+        backCamera.eyeHeight += LandscapeTopology.height(tankPosition)
         let backgroundPath = CGMutablePath()
         backgroundPath.addRect(CGRect(x: 0, y: 0, width: width, height: height))
         rearBackground.path = backgroundPath
