@@ -2137,6 +2137,91 @@ final class BattlefieldScene: SKScene {
         line(path, v(-0.89, 3.42, -0.83), v(-0.84, 3.71, -0.81), c)
     }
 
+    private func drawVehicleDetails(_ e: Foe, on path: CGMutablePath,
+                                    camera c: CameraProjection) {
+        func v(_ x: Double, _ y: Double, _ z: Double) -> WorldPoint {
+            let cs = cos(e.heading), sn = sin(e.heading)
+            return WorldPoint(e.center.x + x*cs + z*sn, y,
+                              e.center.z - x*sn + z*cs)
+        }
+        if e.kind == .apc {
+            // Short armored personnel carrier: wider engine roof and several
+            // access hatches, one-hit target that moves faster than a tank.
+            for z in [-1.8, 0.0, 1.8] {
+                line(path, v(-1.6, 1.5, z), v(1.6, 1.5, z), c)
+            }
+            line(path, v(-2.5, 0.72, -2.6), v(-2.5, 0.72, 2.6), c)
+            line(path, v(2.5, 0.72, -2.6), v(2.5, 0.72, 2.6), c)
+        } else if e.kind == .artillery {
+            // Mobile artillery: elevated distinctive long-range cannon and
+            // rear stabilizers. Two hits and a slower, distant attack.
+            line(path, v(0, 2.2, 0), v(0, 3.6, 5.8), c)
+            line(path, v(-0.32, 2.2, 0), v(-0.32, 3.6, 5.8), c)
+            line(path, v(0.32, 2.2, 0), v(0.32, 3.6, 5.8), c)
+            line(path, v(-2.4, 0.35, -2.6), v(-3.5, 0.10, -4), c)
+            line(path, v(2.4, 0.35, -2.6), v(3.5, 0.10, -4), c)
+        }
+    }
+
+    private func drawDrone(_ e: Foe, on path: CGMutablePath,
+                           camera c: CameraProjection) {
+        let y = 2.7 + 0.26 * sin(gameClock * 5.8 + e.phase)
+        func v(_ x: Double, _ rise: Double, _ z: Double) -> WorldPoint {
+            let cs = cos(e.heading), sn = sin(e.heading)
+            return WorldPoint(e.center.x + x*cs + z*sn, y + rise,
+                              e.center.z - x*sn + z*cs)
+        }
+        // Small easily targeted quad-rotor airframe, original vector design.
+        let core = [v(-0.55, 0, -0.65), v(0.55, 0, -0.65),
+                    v(0.55, 0, 0.65), v(-0.55, 0, 0.65)]
+        for i in core.indices {
+            line(path, core[i], core[(i + 1) % core.count], c)
+        }
+        for side in [-1.0, 1.0] {
+            for z in [-1.25, 1.25] {
+                line(path, v(0, 0, 0), v(side * 1.65, 0.1, z), c)
+                let n = 7
+                for k in 0..<n {
+                    let a = Double(k) * 2 * .pi / Double(n)
+                    let b = Double(k + 1) * 2 * .pi / Double(n)
+                    line(path, v(side * 1.65 + cos(a) * 0.55,
+                                 0.1, z + sin(a) * 0.55),
+                         v(side * 1.65 + cos(b) * 0.55,
+                           0.1, z + sin(b) * 0.55), c)
+                }
+            }
+        }
+        line(path, v(0, 0, 0.65), v(0, -0.38, 1.25), c)
+    }
+
+    private func drawFighter(_ e: Foe, on path: CGMutablePath,
+                             camera c: CameraProjection) {
+        let altitude = 3.9 + 0.40 * sin(e.phase * 0.9)
+        func v(_ x: Double, _ y: Double, _ z: Double) -> WorldPoint {
+            let cs = cos(e.heading), sn = sin(e.heading)
+            return WorldPoint(e.center.x + x*cs + z*sn, altitude + y,
+                              e.center.z - x*sn + z*cs)
+        }
+        // Delta wing and paired tail fins distinguish the strafing aircraft
+        // from slow saucers. It makes a low enough pass for tank auto-elevation.
+        let outer = [v(0, 0, 6.6), v(1.15, 0, 2.0),
+                     v(6.1, 0, -1.1), v(5.0, 0, -2.4),
+                     v(1.25, 0, -1.6), v(1.0, 0, -5.0),
+                     v(-1.0, 0, -5.0), v(-1.25, 0, -1.6),
+                     v(-5.0, 0, -2.4), v(-6.1, 0, -1.1),
+                     v(-1.15, 0, 2.0)]
+        for i in outer.indices {
+            line(path, outer[i], outer[(i+1) % outer.count], c)
+        }
+        line(path, v(0, 0.5, 4.9), v(0, 1.2, 0.7), c)
+        line(path, v(0, 1.2, 0.7), v(0, 0, -5.0), c)
+        for x in [-1.0, 1.0] {
+            line(path, v(x, 0, -3.6), v(x * 2.0, 1.6, -4.7), c)
+            line(path, v(x * 2.0, 1.6, -4.7), v(x * 1.0, 0, -5), c)
+        }
+        line(path, v(-1.0, 0, 0.2), v(1.0, 0, 0.2), c)
+    }
+
     private func drawSaucer(_ e: Foe, on path: CGMutablePath, camera c: CameraProjection) {
         // Animated rotating wireframe disk: moving facets and radial spokes make
         // the spin obvious in both Classic and Modern display modes.
@@ -2317,10 +2402,18 @@ final class BattlefieldScene: SKScene {
         let tankPath = CGMutablePath()
         let saucerPath = CGMutablePath()
         for foe in enemies where foe.center.distance(to: tankPosition) < 120 {
-            if foe.kind == .saucer {
+            switch foe.kind {
+            case .saucer:
                 drawSaucer(foe, on: saucerPath, camera: backCamera)
-            } else {
+            case .drone:
+                drawDrone(foe, on: saucerPath, camera: backCamera)
+            case .fighter:
+                drawFighter(foe, on: saucerPath, camera: backCamera)
+            case .tank, .hunter, .apc, .artillery:
                 drawTank(foe, on: tankPath, camera: backCamera)
+                if foe.kind == .apc || foe.kind == .artillery {
+                    drawVehicleDetails(foe, on: tankPath, camera: backCamera)
+                }
             }
         }
         rearEnemies.path = tankPath
