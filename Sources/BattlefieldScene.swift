@@ -3146,10 +3146,10 @@ final class BattlefieldScene: SKScene {
             let delta = spark.timeLeft / spark.maxLife
             if delta <= 0 { continue }
             let v = spark.velocity
-            shellLine(flarePath, spark.position,
+            line(flarePath, spark.position,
                  WorldPoint(spark.position.x - v.x*0.045*delta,
                             spark.position.y - v.y*0.045*delta,
-                            spark.position.z - v.z*0.045*delta))
+                            spark.position.z - v.z*0.045*delta), c)
         }
         flashLines.path = flarePath
     }
