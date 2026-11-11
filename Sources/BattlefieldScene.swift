@@ -1680,6 +1680,65 @@ final class BattlefieldScene: SKScene {
         renderObjects(worldCamera)
         renderProjectiles(worldCamera)
         renderHUD(camera)
+        renderCombatEffects(camera)
+    }
+
+    private func renderCombatEffects(_ c: CameraProjection) {
+        let w = c.viewportWidth
+        let h = c.viewportHeight
+        if hitFlashRemaining > 0 {
+            let path = CGMutablePath()
+            path.addRect(CGRect(x: 0, y: 0, width: w, height: h))
+            damageOverlay.path = path
+            let dying = destructionRemaining > 0
+            let clock = dying ? destructionRemaining : hitFlashRemaining
+            let flicker = 0.42 + 0.58 * abs(sin(clock * 29.0))
+            damageOverlay.alpha = CGFloat(
+                min(0.72, hitFlashRemaining * (dying ? 0.57 : 0.34) * flicker))
+            damageOverlay.fillColor = dying
+                ? NSColor(calibratedRed: 1.0, green: 0.26, blue: 0.11, alpha: 1)
+                : NSColor(calibratedRed: 1.0, green: 0.09, blue: 0.06, alpha: 1)
+        } else {
+            damageOverlay.path = nil
+        }
+        if destructionRemaining > 0 {
+            let elapsed = 1.65 - destructionRemaining
+            let center = point(w / 2, c.horizon + 18)
+            let shock = CGMutablePath()
+            for index in 0..<3 {
+                let radius = 22 + elapsed * (95 + Double(index) * 59)
+                shock.addEllipse(in: CGRect(
+                    x: center.x - radius, y: center.y - radius,
+                    width: radius * 2, height: radius * 2))
+            }
+            destructionRings.path = shock
+            destructionRings.strokeColor = NSColor(
+                calibratedRed: 1.0, green: 0.52, blue: 0.12,
+                alpha: max(0, min(1, destructionRemaining / 1.4)))
+            destructionRings.lineWidth = CGFloat(2.4 + destructionRemaining * 1.2)
+            destructionRings.glowWidth = 2
+        } else {
+            destructionRings.path = nil
+        }
+
+        // Electronic countermeasure is an active, visible player defense:
+        // concentric cyan rings and an E / charge readout in both modes.
+        if chaffActive > 0 {
+            let rings = CGMutablePath()
+            let center = point(w / 2, c.horizon + 18)
+            for index in 0..<3 {
+                let radius = 55 + Double(index) * 29 +
+                    13 * sin((ChaffDefense.protectionDuration - chaffActive) * 5)
+                rings.addEllipse(in: CGRect(x: center.x-radius,
+                                            y: center.y-radius,
+                                            width: radius*2, height: radius*2))
+            }
+            countermeasureLines.path = rings
+            countermeasureLines.alpha = CGFloat(
+                min(0.65, chaffActive / ChaffDefense.protectionDuration))
+        } else {
+            countermeasureLines.path = nil
+        }
     }
 
     private func point(_ x: Double, _ y: Double) -> CGPoint { CGPoint(x: x, y: y) }
@@ -2933,7 +2992,13 @@ final class BattlefieldScene: SKScene {
                  x: x5 - 18, y: bottomY + 20,
                  size: 10, color: cyan.withAlphaComponent(0.80),
                  alignedRight: true)
-        for unused in 7..<modernLowerExtra.count {
+        let chaffStatus = chaffCooldown > 0
+            ? String(format: "E CHAFF %d  %.0fs", chaffCharges, chaffCooldown)
+            : String(format: "E CHAFF  %d/%d", chaffCharges,
+                     ChaffDefense.chargesPerWave)
+        setExtra(7, chaffStatus, x: x1 + 17, y: bottomY + 18,
+                 size: 10, color: chaffCharges > 0 ? greenLight : amber)
+        for unused in 8..<modernLowerExtra.count {
             modernLowerExtra[unused].text = ""
         }
 
