@@ -160,6 +160,8 @@ final class BattlefieldScene: SKScene {
     private let radarEnemyContacts = SKShapeNode()
     private let radarHunterContacts = SKShapeNode()
     private let radarSaucerContacts = SKShapeNode()
+    private let radarDroneContacts = SKShapeNode()
+    private let radarFighterContacts = SKShapeNode()
     private let hudLines = SKShapeNode()
     private let leftHUD = SKLabelNode(fontNamed: "Menlo-Bold")
     private let rightHUD = SKLabelNode(fontNamed: "Menlo-Bold")
@@ -246,7 +248,8 @@ final class BattlefieldScene: SKScene {
         glassLayer.zPosition = 3.7
         addChild(glassLayer)
         for (node, layer) in [(radarEnemyContacts, 13.3), (radarHunterContacts, 13.4),
-                               (radarSaucerContacts, 13.45), (radarProjectileGlow, 13.6),
+                               (radarSaucerContacts, 13.45), (radarDroneContacts, 13.47),
+                               (radarFighterContacts, 13.49), (radarProjectileGlow, 13.6),
                                (radarProjectileCore, 13.8)] {
             node.zPosition = layer
             addChild(node)
@@ -1463,6 +1466,14 @@ final class BattlefieldScene: SKScene {
         radarSaucerContacts.fillColor = NSColor(calibratedRed: 0.30, green: 1, blue: 0.56, alpha: 0.58)
         radarSaucerContacts.lineWidth = 1.2
         radarSaucerContacts.glowWidth = 3
+        radarDroneContacts.strokeColor = NSColor(calibratedRed: 1, green: 0.85, blue: 0.24, alpha: 1)
+        radarDroneContacts.fillColor = NSColor(calibratedRed: 1, green: 0.77, blue: 0.19, alpha: 0.68)
+        radarDroneContacts.lineWidth = 1.4
+        radarDroneContacts.glowWidth = 2.2
+        radarFighterContacts.strokeColor = NSColor(calibratedRed: 1, green: 0.35, blue: 0.19, alpha: 1)
+        radarFighterContacts.fillColor = NSColor(calibratedRed: 1, green: 0.24, blue: 0.13, alpha: 0.35)
+        radarFighterContacts.lineWidth = 1.7
+        radarFighterContacts.glowWidth = 2.6
         radarSweepBeam.strokeColor = NSColor(calibratedRed: 0.22, green: 1, blue: 0.48, alpha: 1)
         radarSweepBeam.glowWidth = 0
         for wedge in radarSweepGlow {
@@ -1558,6 +1569,18 @@ final class BattlefieldScene: SKScene {
         rearEnemies.strokeColor = enemyOrange
         rearEnemies.lineWidth = 1.45
         rearEnemies.glowWidth = displayMode == .modern ? 0.8 : 0.2
+        armoredLines.strokeColor = NSColor(calibratedRed: 1, green: 0.68, blue: 0.24, alpha: 1)
+        armoredLines.lineWidth = 1.6
+        armoredLines.glowWidth = 0.7
+        droneLines.strokeColor = NSColor(calibratedRed: 1, green: 0.84, blue: 0.25, alpha: 1)
+        droneLines.lineWidth = 1.7
+        droneLines.glowWidth = 1.2
+        fighterLines.strokeColor = NSColor(calibratedRed: 1, green: 0.37, blue: 0.26, alpha: 1)
+        fighterLines.lineWidth = 1.7
+        fighterLines.glowWidth = 1.0
+        countermeasureLines.strokeColor = NSColor(calibratedRed: 0.43, green: 0.96, blue: 1, alpha: 1)
+        countermeasureLines.lineWidth = 1.7
+        countermeasureLines.glowWidth = 1.1
         rearSaucers.strokeColor = green
         rearSaucers.lineWidth = 1.5
         rearSaucers.glowWidth = displayMode == .modern ? 2.5 : 0.7
@@ -1769,14 +1792,27 @@ final class BattlefieldScene: SKScene {
         updateGlassFaces(facets, camera: c)
 
         let tankPath = CGMutablePath()
+        let armoredPath = CGMutablePath()
         let saucerPath = CGMutablePath()
+        let dronePath = CGMutablePath()
+        let fighterPath = CGMutablePath()
         for enemy in enemies {
             if enemy.center.distance(to: tankPosition) > 170 { continue }
-            if enemy.kind == .saucer { drawSaucer(enemy, on: saucerPath, camera: c) }
-            else { drawTank(enemy, on: tankPath, camera: c) }
+            switch enemy.kind {
+            case .saucer: drawSaucer(enemy, on: saucerPath, camera: c)
+            case .drone: drawDrone(enemy, on: dronePath, camera: c)
+            case .fighter: drawFighter(enemy, on: fighterPath, camera: c)
+            case .apc, .artillery:
+                drawTank(enemy, on: armoredPath, camera: c)
+                drawVehicleDetails(enemy, on: armoredPath, camera: c)
+            case .tank, .hunter: drawTank(enemy, on: tankPath, camera: c)
+            }
         }
         opponentLines.path = tankPath
+        armoredLines.path = armoredPath
         opponentSaucerLines.path = saucerPath
+        droneLines.path = dronePath
+        fighterLines.path = fighterPath
     }
 
     // Filled translucent polygons are rendered back-to-front beneath the vector
