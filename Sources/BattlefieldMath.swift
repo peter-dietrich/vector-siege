@@ -199,6 +199,13 @@ struct CannonMagazine: Codable {
     mutating func advance(by dt: Double) {
         reloadRemaining = max(0, reloadRemaining - max(0, dt))
     }
+
+    /// Fully rearm between levels, keeping the configured magazine size and
+    /// reload duration. Never changes a resumed in-progress battle.
+    mutating func rearmForNextLevel() {
+        roundsRemaining = maxRounds
+        reloadRemaining = 0
+    }
 }
 
 
