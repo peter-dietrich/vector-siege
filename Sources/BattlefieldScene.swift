@@ -2781,6 +2781,9 @@ final class BattlefieldScene: SKScene {
         renderVegetation(c)
         updateGlassFaces(facets, camera: c)
 
+        let opaqueBodies = solidBuildingIndices.sorted().map {
+            collisionBody(for: obstacles[$0])
+        }
         let tankPath = CGMutablePath()
         let armoredPath = CGMutablePath()
         let saucerPath = CGMutablePath()
@@ -2791,14 +2794,21 @@ final class BattlefieldScene: SKScene {
         }
         for enemy in enemies {
             if enemy.center.distance(to: tankPosition) > 170 { continue }
+            let blockers = enemy.kind.isVehicle
+                ? BattlefieldVisibility.candidates(
+                    camera: c.position, target: enemy.center,
+                    opaqueBodies: opaqueBodies)
+                : []
             switch enemy.kind {
             case .saucer: drawSaucer(enemy, on: saucerPath, camera: c)
             case .drone: drawDrone(enemy, on: dronePath, camera: c)
             case .fighter: drawFighter(enemy, on: fighterPath, camera: c)
             case .apc, .artillery:
-                drawTank(enemy, on: armoredPath, camera: c)
-                drawVehicleDetails(enemy, on: armoredPath, camera: c)
-            case .tank, .hunter: drawTank(enemy, on: tankPath, camera: c)
+                drawTank(enemy, on: armoredPath, camera: c, blockers: blockers)
+                drawVehicleDetails(enemy, on: armoredPath, camera: c,
+                                   blockers: blockers)
+            case .tank, .hunter:
+                drawTank(enemy, on: tankPath, camera: c, blockers: blockers)
             }
         }
         opponentLines.path = tankPath
@@ -3021,7 +3031,39 @@ final class BattlefieldScene: SKScene {
         }
     }
 
-    private func drawTank(_ e: Foe, on path: CGMutablePath, camera c: CameraProjection) {
+    /// Occlude precisely the wireframe fragments behind solid buildings.
+    /// A partially concealed tank can still expose a gun barrel or tracks.
+    private func armoredLine(_ path: CGMutablePath,
+                             _ a: WorldPoint, _ b: WorldPoint,
+                             _ c: CameraProjection,
+                             blockers: [ObstacleCollision.Body]) {
+        guard !blockers.isEmpty else {
+            line(path, a, b, c)
+            return
+        }
+        let steps = 8
+        func interpolate(_ t: Double) -> WorldPoint {
+            WorldPoint(a.x + (b.x-a.x)*t,
+                       a.y + (b.y-a.y)*t,
+                       a.z + (b.z-a.z)*t)
+        }
+        for step in 0..<steps {
+            let lo = Double(step) / Double(steps)
+            let hi = Double(step + 1) / Double(steps)
+            let mid = interpolate((lo + hi) * 0.5)
+            let hidden = BattlefieldVisibility.blocked(
+                camera: c.position, eyeAltitude: c.eyeHeight,
+                target: GroundPoint(mid.x, mid.z),
+                targetHeight: mid.y, opaqueBodies: blockers)
+            if !hidden {
+                line(path, interpolate(lo), interpolate(hi), c)
+            }
+        }
+    }
+
+    private func drawTank(_ e: Foe, on path: CGMutablePath,
+                          camera c: CameraProjection,
+                          blockers: [ObstacleCollision.Body] = []) {
         func v(_ x: Double, _ y: Double, _ z: Double) -> WorldPoint {
             let cs = cos(e.heading), sn = sin(e.heading)
             return WorldPoint(e.center.x + x*cs + z*sn, y,
@@ -3029,25 +3071,25 @@ final class BattlefieldScene: SKScene {
         }
         func polygon(_ vertices: [WorldPoint]) {
             guard vertices.count > 1 else { return }
-            for i in vertices.indices { line(path, vertices[i], vertices[(i+1)%vertices.count], c) }
+            for i in vertices.indices { armoredLine(path, vertices[i], vertices[(i+1)%vertices.count], c, blockers: blockers) }
         }
         polygon([v(-2.3, 0.35, -3), v(2.3, 0.35, -3),
                  v(2.3, 0.35, 3), v(-2.3, 0.35, 3)])
         polygon([v(-1.9, 1.25, -2.4), v(1.9, 1.25, -2.4),
                  v(1.9, 1.25, 2.1), v(-1.9, 1.25, 2.1)])
         for (x,z) in [(-2.3,-3.0),(2.3,-3.0),(2.3,3.0),(-2.3,3.0)] {
-            line(path, v(x, 0.35, z), v(x*0.83, 1.25, z*0.8), c)
+            armoredLine(path, v(x, 0.35, z), v(x*0.83, 1.25, z*0.8), c, blockers: blockers)
         }
         polygon([v(-1.05, 1.35, -1.25), v(1.05, 1.35, -1.25),
                  v(1.05, 1.35, 1.1), v(-1.05, 1.35, 1.1)])
         polygon([v(-0.82, 2.05, -0.95), v(0.82, 2.05, -0.95),
                  v(0.82, 2.05, 0.85), v(-0.82, 2.05, 0.85)])
         for (x,z) in [(-1.05,-1.25),(1.05,-1.25),(1.05,1.1),(-1.05,1.1)] {
-            line(path, v(x, 1.35, z), v(x*0.78, 2.05, z*0.77), c)
+            armoredLine(path, v(x, 1.35, z), v(x*0.78, 2.05, z*0.77), c, blockers: blockers)
         }
-        line(path, v(0, 1.80, 0.75), v(0, 1.8, 4.5), c)
-        line(path, v(-0.19, 1.95, 0.8), v(-0.19, 1.95, 4.5), c)
-        line(path, v(0.19, 1.68, 0.8), v(0.19, 1.68, 4.5), c)
+        armoredLine(path, v(0, 1.80, 0.75), v(0, 1.8, 4.5), c, blockers: blockers)
+        armoredLine(path, v(-0.19, 1.95, 0.8), v(-0.19, 1.95, 4.5), c, blockers: blockers)
+        armoredLine(path, v(0.19, 1.68, 0.8), v(0.19, 1.68, 4.5), c, blockers: blockers)
         // Independent track outlines add depth at closer range.
         for x in [-2.17, 2.17] {
             polygon([v(x, 0.20, -2.8), v(x, 0.2, 2.7),
@@ -3061,15 +3103,15 @@ final class BattlefieldScene: SKScene {
         // Faceted glacis armor, sloped hull seams and rear engine deck.
         polygon([v(-1.82, 1.18, 2.15), v(1.82, 1.18, 2.15),
                  v(1.58, 0.62, 3.25), v(-1.58, 0.62, 3.25)])
-        line(path, v(-1.7, 0.75, 3.0), v(1.7, 0.75, 3.0), c)
-        line(path, v(-1.65, 1.20, -1.95), v(1.65, 1.20, -1.95), c)
+        armoredLine(path, v(-1.7, 0.75, 3.0), v(1.7, 0.75, 3.0), c, blockers: blockers)
+        armoredLine(path, v(-1.65, 1.20, -1.95), v(1.65, 1.20, -1.95), c, blockers: blockers)
         for side in [-1.0, 1.0] {
             // Segmented armored track guards, track plates and side skirts.
-            line(path, v(side*2.48, 0.90, -2.65), v(side*2.48, 0.90, 2.55), c)
-            line(path, v(side*2.48, 0.16, -2.75), v(side*2.48, 0.16, 2.55), c)
+            armoredLine(path, v(side*2.48, 0.90, -2.65), v(side*2.48, 0.90, 2.55), c, blockers: blockers)
+            armoredLine(path, v(side*2.48, 0.16, -2.75), v(side*2.48, 0.16, 2.55), c, blockers: blockers)
             for index in -6...6 {
                 let z = Double(index) * 0.42
-                line(path, v(side*2.52, 0.10, z), v(side*2.52, 0.85, z + 0.09), c)
+                armoredLine(path, v(side*2.52, 0.10, z), v(side*2.52, 0.85, z + 0.09), c, blockers: blockers)
             }
             // Five eight-segment road wheels on each track.
             for index in -2...2 {
@@ -3079,16 +3121,16 @@ final class BattlefieldScene: SKScene {
                 for j in 0..<8 {
                     let a = Double(j) * .pi / 4
                     let b = Double(j + 1) * .pi / 4
-                    line(path,
+                    armoredLine(path,
                          v(side*2.56, wheelY + sin(a)*radius, z + cos(a)*radius),
-                         v(side*2.56, wheelY + sin(b)*radius, z + cos(b)*radius), c)
+                         v(side*2.56, wheelY + sin(b)*radius, z + cos(b)*radius), c, blockers: blockers)
                 }
-                line(path, v(side*2.56, wheelY, z),
-                     v(side*2.59, wheelY + 0.11, z), c)
+                armoredLine(path, v(side*2.56, wheelY, z),
+                     v(side*2.59, wheelY + 0.11, z), c, blockers: blockers)
             }
             // Angled turret cheek armor and side lifting brackets.
-            line(path, v(side*1.12, 1.38, 0.98), v(side*0.88, 2.10, 0.72), c)
-            line(path, v(side*1.05, 1.55, -1.13), v(side*0.79, 2.07, -0.84), c)
+            armoredLine(path, v(side*1.12, 1.38, 0.98), v(side*0.88, 2.10, 0.72), c, blockers: blockers)
+            armoredLine(path, v(side*1.05, 1.55, -1.13), v(side*0.79, 2.07, -0.84), c, blockers: blockers)
             polygon([v(side*0.94, 1.89, -0.98), v(side*0.94, 1.89, -0.60),
                      v(side*0.70, 2.18, -0.64), v(side*0.70, 2.18, -0.91)])
         }
@@ -3098,13 +3140,13 @@ final class BattlefieldScene: SKScene {
         for index in 0..<12 {
             let a = Double(index) * .pi / 6
             let b = Double(index + 1) * .pi / 6
-            line(path,
+            armoredLine(path,
                  v(-0.29 + cos(a)*0.42, 2.12, -0.25 + sin(a)*0.42),
-                 v(-0.29 + cos(b)*0.42, 2.12, -0.25 + sin(b)*0.42), c)
+                 v(-0.29 + cos(b)*0.42, 2.12, -0.25 + sin(b)*0.42), c, blockers: blockers)
         }
         polygon([v(0.22, 2.10, 0.18), v(0.55, 2.10, 0.18),
                  v(0.55, 2.46, 0.48), v(0.22, 2.46, 0.48)])
-        line(path, v(0.38, 2.46, 0.48), v(0.38, 2.65, 0.51), c)
+        armoredLine(path, v(0.38, 2.46, 0.48), v(0.38, 2.65, 0.51), c, blockers: blockers)
 
         // Recoil housing and three barrel reinforcing collars / muzzle ring.
         polygon([v(-0.29, 1.95, 1.28), v(0.29, 1.95, 1.28),
@@ -3113,12 +3155,12 @@ final class BattlefieldScene: SKScene {
             polygon([v(-0.25, 1.97, z), v(0.25, 1.97, z),
                      v(0.25, 1.63, z), v(-0.25, 1.63, z)])
         }
-        line(path, v(0, 1.80, 4.5), v(0, 1.80, 4.83), c)
+        armoredLine(path, v(0, 1.80, 4.5), v(0, 1.80, 4.83), c, blockers: blockers)
 
         // Engine louvers, rear tow loops and whip antenna.
         for index in -3...3 {
             let x = Double(index) * 0.39
-            line(path, v(x, 1.29, -1.86), v(x, 1.29, -2.43), c)
+            armoredLine(path, v(x, 1.29, -1.86), v(x, 1.29, -2.43), c, blockers: blockers)
         }
         for side in [-1.0, 1.0] {
             polygon([v(side*1.31, 0.52, -3.07),
@@ -3126,12 +3168,13 @@ final class BattlefieldScene: SKScene {
                      v(side*1.66, 0.86, -3.07),
                      v(side*1.31, 0.86, -3.07)])
         }
-        line(path, v(-0.73, 2.03, -0.76), v(-0.89, 3.42, -0.83), c)
-        line(path, v(-0.89, 3.42, -0.83), v(-0.84, 3.71, -0.81), c)
+        armoredLine(path, v(-0.73, 2.03, -0.76), v(-0.89, 3.42, -0.83), c, blockers: blockers)
+        armoredLine(path, v(-0.89, 3.42, -0.83), v(-0.84, 3.71, -0.81), c, blockers: blockers)
     }
 
     private func drawVehicleDetails(_ e: Foe, on path: CGMutablePath,
-                                    camera c: CameraProjection) {
+                                    camera c: CameraProjection,
+                                    blockers: [ObstacleCollision.Body] = []) {
         func v(_ x: Double, _ y: Double, _ z: Double) -> WorldPoint {
             let cs = cos(e.heading), sn = sin(e.heading)
             return WorldPoint(e.center.x + x*cs + z*sn, y,
@@ -3141,18 +3184,18 @@ final class BattlefieldScene: SKScene {
             // Short armored personnel carrier: wider engine roof and several
             // access hatches, one-hit target that moves faster than a tank.
             for z in [-1.8, 0.0, 1.8] {
-                line(path, v(-1.6, 1.5, z), v(1.6, 1.5, z), c)
+                armoredLine(path, v(-1.6, 1.5, z), v(1.6, 1.5, z), c, blockers: blockers)
             }
-            line(path, v(-2.5, 0.72, -2.6), v(-2.5, 0.72, 2.6), c)
-            line(path, v(2.5, 0.72, -2.6), v(2.5, 0.72, 2.6), c)
+            armoredLine(path, v(-2.5, 0.72, -2.6), v(-2.5, 0.72, 2.6), c, blockers: blockers)
+            armoredLine(path, v(2.5, 0.72, -2.6), v(2.5, 0.72, 2.6), c, blockers: blockers)
         } else if e.kind == .artillery {
             // Mobile artillery: elevated distinctive long-range cannon and
             // rear stabilizers. Two hits and a slower, distant attack.
-            line(path, v(0, 2.2, 0), v(0, 3.6, 5.8), c)
-            line(path, v(-0.32, 2.2, 0), v(-0.32, 3.6, 5.8), c)
-            line(path, v(0.32, 2.2, 0), v(0.32, 3.6, 5.8), c)
-            line(path, v(-2.4, 0.35, -2.6), v(-3.5, 0.10, -4), c)
-            line(path, v(2.4, 0.35, -2.6), v(3.5, 0.10, -4), c)
+            armoredLine(path, v(0, 2.2, 0), v(0, 3.6, 5.8), c, blockers: blockers)
+            armoredLine(path, v(-0.32, 2.2, 0), v(-0.32, 3.6, 5.8), c, blockers: blockers)
+            armoredLine(path, v(0.32, 2.2, 0), v(0.32, 3.6, 5.8), c, blockers: blockers)
+            armoredLine(path, v(-2.4, 0.35, -2.6), v(-3.5, 0.10, -4), c, blockers: blockers)
+            armoredLine(path, v(2.4, 0.35, -2.6), v(3.5, 0.10, -4), c, blockers: blockers)
         }
     }
 
