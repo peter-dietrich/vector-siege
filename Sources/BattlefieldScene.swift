@@ -758,7 +758,7 @@ final class BattlefieldScene: SKScene {
                 }
             }
 
-            if let wall = wallTime, wall <= targetTime ?? .infinity {
+            if let wall = wallTime, wall <= (targetTime ?? .infinity) {
                 let impact = old + (shell.center - old) * wall
                 if !shell.hostile { shotTally.miss() }
                 burst(at: WorldPoint(impact, height: height), count: 9)
