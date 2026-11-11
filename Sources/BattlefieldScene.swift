@@ -1037,7 +1037,8 @@ final class BattlefieldScene: SKScene {
                         ? (enemies[idx].kind == .fighter ? 4.0 :
                             enemies[idx].kind == .drone ? enemies[idx].droneAltitude : 2.8) : 1.45
                     burst(at: WorldPoint(impact, height: impactHeight),
-                          count: enemies[idx].hitPoints <= 0 ? 40 : 14)
+                          count: enemies[idx].kind == .drone ? 9 :
+                            (enemies[idx].hitPoints <= 0 ? 40 : 14))
                     if enemies[idx].hitPoints <= 0 {
                         casualties.insert(idx)
                         let points: Int
@@ -1051,7 +1052,8 @@ final class BattlefieldScene: SKScene {
                         case .tank: points = 1000
                         }
                         addPoints(points)
-                        sound("explosion.wav")
+                        // Drones spark on impact and explode after hitting terrain.
+                        sound(enemies[idx].kind == .drone ? "impact.wav" : "explosion.wav")
                     } else { sound("impact.wav") }
                 }
                 continue
@@ -1788,8 +1790,8 @@ final class BattlefieldScene: SKScene {
         radarHunterContacts.fillColor = NSColor(calibratedRed: 1, green: 0.24, blue: 0.20, alpha: 0.38)
         radarHunterContacts.lineWidth = 1.8
         radarHunterContacts.glowWidth = 4
-        radarSaucerContacts.strokeColor = NSColor(calibratedRed: 0.30, green: 1, blue: 0.56, alpha: 1)
-        radarSaucerContacts.fillColor = NSColor(calibratedRed: 0.30, green: 1, blue: 0.56, alpha: 0.58)
+        radarSaucerContacts.strokeColor = NSColor(calibratedRed: 0.20, green: 0.75, blue: 1, alpha: 1)
+        radarSaucerContacts.fillColor = NSColor(calibratedRed: 0.20, green: 0.75, blue: 1, alpha: 0.58)
         radarSaucerContacts.lineWidth = 1.2
         radarSaucerContacts.glowWidth = 3
         radarDroneContacts.strokeColor = NSColor(calibratedRed: 1, green: 0.85, blue: 0.24, alpha: 1)
@@ -2115,15 +2117,15 @@ final class BattlefieldScene: SKScene {
         let mesh = CGMutablePath()
         // Six-unit faint subdivisions make the flat landscape legible at
         // distance. Roads and building blocks remain the stronger geometry.
-        let meshStep = 6.0
+        let meshStep = 12.0
         let meshRadius = 144.0
         let anchorX = floor(tankPosition.x / meshStep) * meshStep
         let anchorZ = floor(tankPosition.z / meshStep) * meshStep
         // Subdivide the mesh so rolling hills bend the actual ground grid.
-        for index in -24...24 {
+        for index in -12...12 {
             let x = anchorX + Double(index) * meshStep
             let z = anchorZ + Double(index) * meshStep
-            for segment in -24..<24 {
+            for segment in -12..<12 {
                 let a = Double(segment) * meshStep
                 let b = Double(segment + 1) * meshStep
                 line(mesh, WorldPoint(x, 0.018, anchorZ + a),
