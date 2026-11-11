@@ -844,6 +844,51 @@ struct SaucerPatrolClock: Codable {
 }
 
 
+/// Camera-to-object visibility against *opaque* building footprints.
+/// This uses the same rectangular building collision profiles as shells.
+/// Other wireframe buildings never hide enemies, and a building behind the
+/// contact cannot occlude it. Elevations are measured above the heightmap.
+enum BattlefieldVisibility {
+    static func blocked(
+        camera: GroundPoint, eyeAltitude: Double,
+        target: GroundPoint, targetHeight: Double,
+        opaqueBodies: [ObstacleCollision.Body]
+    ) -> Bool {
+        let span = target - camera
+        guard span.length > 0.05 else { return false }
+        let targetAltitude = LandscapeTopology.height(target) + targetHeight
+        for body in opaqueBodies {
+            guard let impact = ObstacleCollision.firstImpact(
+                from: camera, to: target, body: body,
+                height: min(body.height * 0.5, 1.5)),
+                impact > 0.001, impact < 0.995 else { continue }
+            let altitude = eyeAltitude + (targetAltitude - eyeAltitude) * impact
+            let base = LandscapeTopology.height(body.center)
+            if altitude >= base + 0.02 &&
+                altitude <= base + body.height - 0.02 {
+                return true
+            }
+        }
+        return false
+    }
+
+    /// Broad-phase to avoid testing every building for every tank spoke.
+    /// An expanded footprint catches partially hidden hulls and barrels.
+    static func candidates(
+        camera: GroundPoint, target: GroundPoint,
+        opaqueBodies: [ObstacleCollision.Body], margin: Double = 6.5
+    ) -> [ObstacleCollision.Body] {
+        opaqueBodies.filter { body in
+            var expanded = body
+            expanded.halfX += margin
+            expanded.halfZ += margin
+            return ObstacleCollision.firstImpact(
+                from: camera, to: target, body: expanded,
+                height: min(body.height * 0.5, 1.5)) != nil
+        }
+    }
+}
+
 /// Radar/proximity units are world units; the standard tank is about 6 long.
 enum TankProximity {
     static let tankLength = 6.0
