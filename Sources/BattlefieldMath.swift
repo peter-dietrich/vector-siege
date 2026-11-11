@@ -519,6 +519,8 @@ struct SavedSiegeShell: Codable {
     var direction: GroundPoint
     var hostile: Bool
     var timeLeft: Double
+    // Older save slots contain no projectile payload field.
+    var payload: String? = nil
 }
 struct SavedSiegeSpark: Codable {
     var position: WorldPoint
@@ -555,6 +557,15 @@ struct SiegeSnapshot: Codable {
     var secondsUntilSaucerPatrol: Double? = nil
     // Backwards compatible with snapshots saved before level-intro screens.
     var awaitingLevelStart: Bool? = nil
+    // Optional additive fields retain compatibility with all v1 save slots.
+    var waveApproach: Double? = nil
+    var waveOrigin: GroundPoint? = nil
+    var waveElapsed: Double? = nil
+    var dronesPending: Int? = nil
+    var fightersPending: Int? = nil
+    var chaffCharges: Int? = nil
+    var chaffCooldown: Double? = nil
+    var chaffActive: Double? = nil
 }
 
 struct SiegeSaveSlot: Codable, Identifiable {
