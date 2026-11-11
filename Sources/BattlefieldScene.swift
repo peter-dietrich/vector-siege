@@ -1909,14 +1909,32 @@ final class BattlefieldScene: SKScene {
         run(SKAction.playSoundFileNamed(name, waitForCompletion: false))
     }
 
-    private func targetTelemetry() -> (range: Double, error: Double)? {
-        enemies.compactMap { foe -> (range: Double, error: Double)? in
-            let difference = foe.center - tankPosition
-            let distance = difference.length
-            let error = wrapAngle(atan2(difference.x, difference.z) - heading)
-            guard distance < 150, abs(error) < .pi / 2 else { return nil }
-            return (distance, error)
-        }.min(by: { abs($0.error) < abs($1.error) })
+    private func targetTelemetry() -> (range: Double, error: Double,
+                                       position: GroundPoint, ground: Bool,
+                                       clearShot: Bool)? {
+        // Choose an actually aimable contact; favor ground vehicles by a
+        // narrow angular margin so dense drones do not steal tank targeting.
+        let candidate = enemies.compactMap { foe ->
+            (foe: Foe, range: Double, error: Double)? in
+            let relative = foe.center - tankPosition
+            let range = relative.length
+            let error = wrapAngle(atan2(relative.x, relative.z) - heading)
+            guard range < 150, abs(error) < .pi / 2 else { return nil }
+            return (foe, range, error)
+        }.min { a, b in
+            let aCost = abs(a.error) - (a.foe.kind.isVehicle ? 0.035 : 0)
+            let bCost = abs(b.error) - (b.foe.kind.isVehicle ? 0.035 : 0)
+            return aCost < bCost
+        }
+        guard let chosen = candidate else { return nil }
+        let ground = chosen.foe.kind.isVehicle
+        let clearShot = !ground || (
+            firstObstacleImpact(from: tankPosition, to: chosen.foe.center,
+                height: 1.65,
+                worldAltitude: LandscapeTopology.height(tankPosition) + 1.65) == nil &&
+            LandscapeTopology.clearFiringLine(
+                from: tankPosition, to: chosen.foe.center))
+        return (chosen.range, chosen.error, chosen.foe.center, ground, clearShot)
     }
 
     private func obstacleKindName(_ kind: Obstacle.Kind) -> String {
@@ -2155,6 +2173,7 @@ final class BattlefieldScene: SKScene {
         Last reload duration: \(String(format: "%.2f", cannon.lastReloadDuration)) seconds
         Enemies: \(enemies.count)  Projectiles: \(shells.count)
         Reinforcements: \(dronesPending) drones / \(fightersPending) fighters
+        Director: \(DynamicBattlefieldDirector.label(pressure: directorPressure))  Hostile fire cap: \(hostileShotLimit)
         Chaff: \(chaffCharges) charges, \(String(format: "%.1f", chaffCooldown))s cooldown
         FPS (smoothed): \(String(format: "%.1f", observedFPS))
         Shield: \(shieldDuration > 0 ? String(format: "Active %.1fs remaining", shieldDuration) : shieldCooldown > 0 ? "Recharging" : "Ready")
@@ -3556,7 +3575,10 @@ final class BattlefieldScene: SKScene {
             c2, row3Y, medium, greenBright)
         put(8, String(format: "F %02d", shotTally.pending),
             c3, row3Y, small, align: .right)
-        put(9, "POS", c1, row4Y, 11 * scale, mutedText)
+        let targetStatus = target.map { $0.ground
+            ? ($0.clearShot ? "LOS CLEAR" : "COVER") : "AIR TRACK" } ?? "NO TRACK"
+        put(9, targetStatus, c1, row4Y, 10 * scale,
+            target?.clearShot == false ? amber : mutedText)
         put(10, String(format: "X %+.1f", tankPosition.x),
             c2, row4Y, medium)
         put(11, String(format: "Z %+.1f", tankPosition.z),
@@ -4427,7 +4449,9 @@ final class BattlefieldScene: SKScene {
             : String(format: "HDG %03d°   SPD %05.1f", compass, driveSpeed)
         let target = targetTelemetry()
         telemetryLeftDetail.text = target.map {
-            String(format: "TGT %03.0f   AIM %+05.1f°", $0.range, $0.error * 180 / .pi)
+            String(format: "TGT %03.0f  AIM %+05.1f°  %@",
+                   $0.range, $0.error * 180 / .pi,
+                   $0.ground ? ($0.clearShot ? "CLEAR" : "COVER") : "AIR")
         } ?? "TGT ---   AIM ---"
         let accuracy = shotTally.hitPercentage
         // Only resolved projectiles count toward the ratio; F is still in flight.
@@ -4481,7 +4505,8 @@ final class BattlefieldScene: SKScene {
             warning.fontColor = accent
             warning.alpha = 1
             warning.text = target.map {
-                abs($0.error) < 0.055 && $0.range < 68 ? "TARGET ALIGNED" : ""
+                guard abs($0.error) < 0.055 && $0.range < 68 else { return "" }
+                return $0.clearShot ? "TARGET ALIGNED" : "TARGET IN COVER"
             } ?? (pendingWave > 0 ? "AREA SECURE" : "")
         }
 
