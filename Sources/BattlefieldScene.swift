@@ -1959,6 +1959,25 @@ final class BattlefieldScene: SKScene {
         modernBombShells.fillColor = .clear
         modernBombShells.lineWidth = 2.1
         modernBombShells.glowWidth = modern ? 1.8 : 0
+        // Combat effects use a restrained warm palette that contrasts with
+        // green terrain and the cyan cockpit without hiding the sight.
+        muzzleEffects.strokeColor = NSColor(
+            calibratedRed: 1, green: 0.94, blue: 0.43, alpha: 1)
+        muzzleEffects.lineWidth = modern ? 2.8 : 1.7
+        muzzleEffects.glowWidth = modern ? 8 : 2.0
+        muzzleEffects.fillColor = .clear
+        combatWorldEffects.strokeColor = NSColor(
+            calibratedRed: 1, green: 0.59, blue: 0.20, alpha: 0.92)
+        combatWorldEffects.lineWidth = modern ? 1.7 : 1.15
+        combatWorldEffects.glowWidth = modern ? 2.7 : 0.6
+        combatWrecks.strokeColor = NSColor(
+            calibratedRed: 0.62, green: 0.36, blue: 0.21, alpha: 0.76)
+        combatWrecks.lineWidth = 1.25
+        combatWrecks.glowWidth = 0
+        directionalDamageEffects.strokeColor = NSColor(
+            calibratedRed: 1, green: 0.23, blue: 0.10, alpha: 1)
+        directionalDamageEffects.lineWidth = modern ? 3.2 : 2.2
+        directionalDamageEffects.glowWidth = modern ? 5 : 2
         glassLayer.isHidden = !modern
         for band in skyBands { band.isHidden = !modern }
         for layer in [distantMountains, middleMountains, nearMountains, horizonMist] {
