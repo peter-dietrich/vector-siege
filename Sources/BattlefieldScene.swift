@@ -1275,6 +1275,93 @@ final class BattlefieldScene: SKScene {
         }
     }
 
+    private func selectSolidBuildings() {
+        // Choose exactly thirty percent of actual building structures.
+        let indices = obstacles.indices.filter {
+            switch obstacles[$0].kind {
+            case .building, .tower, .monolith: return true
+            default: return false
+            }
+        }
+        let ordered = indices.sorted {
+            let a = obstacles[$0].center
+            let b = obstacles[$1].center
+            let ha = sin(a.x * 13.37 + a.z * 7.11) * 100_000
+            let hb = sin(b.x * 13.37 + b.z * 7.11) * 100_000
+            return ha < hb
+        }
+        solidBuildingIndices = Set(ordered.prefix(Int((Double(ordered.count) * 0.30).rounded())))
+    }
+
+    private func makeVegetation() {
+        vegetation.removeAll()
+        // Repeatable roadside planting, independent of gameplay RNG and saves.
+        // Two corridors per street, with gaps around buildings and junctions.
+        for grid in -2...2 {
+            let axis = Double(grid) * CityLayout.streetSpacing
+            for slot in -9...9 {
+                let along = Double(slot) * 18 +
+                    sin(Double(slot * 3 + grid * 7)) * 3.3
+                for side in [-1.0, 1.0] {
+                    let horizontal = slot % 2 == 0
+                    let sideOffset = side * (10.5 + Double(abs(slot + grid) % 4))
+                    let position = horizontal
+                        ? GroundPoint(along, axis + sideOffset)
+                        : GroundPoint(axis + sideOffset, along)
+                    if abs(position.x) > 172 || abs(position.z) > 172 ||
+                        blocked(position, radius: 2.4) { continue }
+                    let variant = abs(slot * 11 + grid * 17 + Int(side * 7))
+                    let tree = variant % 4 != 0
+                    let height = tree
+                        ? 4.4 + Double(variant % 8) * 0.62
+                        : 0.95 + Double(variant % 5) * 0.29
+                    let crown = tree
+                        ? 1.6 + Double(variant % 5) * 0.33
+                        : 1.05 + Double(variant % 4) * 0.30
+                    vegetation.append(Vegetation(
+                        location: position, height: height, crown: crown,
+                        isTree: tree))
+                }
+            }
+        }
+    }
+
+    private func renderVegetation(_ c: CameraProjection) {
+        let path = CGMutablePath()
+        for plant in vegetation where plant.location.distance(to: tankPosition) < 135 {
+            let p = plant.location
+            let h = plant.height
+            let r = plant.crown
+            let center = WorldPoint(p, height: 0)
+            if plant.isTree {
+                // Branching pine form with an uneven conical canopy.
+                line(path, center, WorldPoint(p, height: h), c)
+                for level in 1...3 {
+                    let rise = h * (0.26 + Double(level) * 0.18)
+                    let span = r * (1.3 - Double(level) * 0.25)
+                    for side in [-1.0, 1.0] {
+                        line(path, WorldPoint(p, height: rise + h * 0.20),
+                             WorldPoint(p.x + side * span, rise, p.z), c)
+                        line(path, WorldPoint(p, height: rise + h * 0.20),
+                             WorldPoint(p.x, rise, p.z + side * span), c)
+                    }
+                }
+            } else {
+                // Low angular scrub, not full spherical wireframe clutter.
+                for direction in 0..<6 {
+                    let a = Double(direction) * .pi / 3
+                    let b = Double(direction + 1) * .pi / 3
+                    line(path,
+                         WorldPoint(p.x + cos(a) * r, h * 0.32, p.z + sin(a) * r),
+                         WorldPoint(p.x + cos(b) * r, h * 0.32, p.z + sin(b) * r), c)
+                    line(path, WorldPoint(p, height: h),
+                         WorldPoint(p.x + cos(a) * r, h * 0.32, p.z + sin(a) * r), c)
+                }
+            }
+        }
+        foliageLines.path = path
+    }
+
     private func spawnPatrolSaucer() {
         let side = Bool.random() ? 1.0 : -1.0
         let across = heading + side * (.pi / 2)
