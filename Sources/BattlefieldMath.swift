@@ -21,6 +21,35 @@ struct WorldPoint: Codable {
     init(_ ground: GroundPoint, height: Double) { self.init(ground.x, height, ground.z) }
 }
 
+/// Continuous low-amplitude landscape. Streets follow gentle grade while
+/// blocks rise away from a raised, clearly visible curb edge.
+enum LandscapeTopology {
+    static let roadSpacing = 60.0
+    static let roadHalfWidth = 7.0
+
+    static func distanceToRoadAxis(_ n: Double) -> Double {
+        abs(n - (n / roadSpacing).rounded() * roadSpacing)
+    }
+
+    static func height(_ p: GroundPoint) -> Double {
+        let dx = distanceToRoadAxis(p.x)
+        let dz = distanceToRoadAxis(p.z)
+        let nearest = min(dx, dz)
+        // Road grade is deliberately gentle to keep steering predictable.
+        let grade = 0.42 * sin(p.x / 63) + 0.36 * cos(p.z / 71)
+        let rolling = 2.3 * sin(p.x / 31) * cos(p.z / 42) +
+            1.5 * sin((p.x + p.z) / 66) +
+            1.4 * cos((p.x - p.z) / 47)
+        if nearest <= roadHalfWidth { return grade }
+        // 0.28-unit curb lip; beyond it landscaping gradually rises
+        // to the full rolling height without sharp cliffs.
+        let distance = nearest - roadHalfWidth
+        let blend = min(1.0, max(0.0, distance / 7.0))
+        let smooth = blend * blend * (3 - 2 * blend)
+        return grade + 0.28 + rolling * smooth
+    }
+}
+
 struct CameraProjection {
     var position: GroundPoint
     var yaw: Double
@@ -36,7 +65,7 @@ struct CameraProjection {
     func local(_ world: WorldPoint) -> (right: Double, up: Double, forward: Double) {
         let dx = world.x - position.x
         let dz = world.z - position.z
-        return (dx * cos(yaw) - dz * sin(yaw) - cameraLateral, world.y - eyeHeight,
+        return (dx * cos(yaw) - dz * sin(yaw) - cameraLateral, world.y + LandscapeTopology.height(GroundPoint(world.x, world.z)) - eyeHeight,
                 dx * sin(yaw) + dz * cos(yaw))
     }
 
