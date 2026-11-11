@@ -294,6 +294,19 @@ struct GeometrySmoke {
         precondition(!patrol.advance(by: 0), "Pause must not advance timer")
         // Terrain is gently sloped, curbs are raised, and road grades are
         // always shallower than the surrounding landscape.
+        // Downtown is intentionally flatter than the surrounding hills.
+        precondition(abs(LandscapeTopology.height(GroundPoint(30, 30))) < 0.8)
+        precondition(LandscapeTopology.clearFiringLine(
+            from: GroundPoint(20, 20), to: GroundPoint(40, 40)))
+        // Outer ridgelines are meaningful cover and intercept flat rounds.
+        precondition(!LandscapeTopology.clearFiringLine(
+            from: GroundPoint(-150, -150), to: GroundPoint(-60, -150)))
+        precondition(LandscapeTopology.firstTerrainImpact(
+            from: GroundPoint(-150, -120), to: GroundPoint(-90, -150),
+            altitude: LandscapeTopology.height(GroundPoint(-150, -120)) + 1.65) != nil)
+        precondition(LandscapeTopology.firstTerrainImpact(
+            from: GroundPoint(20, 20), to: GroundPoint(40, 40),
+            altitude: 5.0) == nil)
         let road = LandscapeTopology.height(GroundPoint(0, 30))
         let curb = LandscapeTopology.height(GroundPoint(9.3, 30))
         precondition(curb > road + 0.15)
