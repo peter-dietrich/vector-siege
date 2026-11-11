@@ -33,7 +33,13 @@ private struct Foe {
     var droneAltitude = 3.1
     var droneHasCharge = true
     var droneDropDelay = 0.0
+    var droneDisrupted = 0.0
 }
+private struct FallingDrone {
+    var foe: Foe
+    var speed: Double
+}
+
 
 private struct Shell {
     var center: GroundPoint
@@ -112,6 +118,7 @@ final class BattlefieldScene: SKScene {
     private var chaffCharges = ChaffDefense.chargesPerWave
     private var chaffCooldown = 0.0
     private var chaffActive = 0.0
+    private var fallingDrones: [FallingDrone] = []
     private var hitFlashRemaining = 0.0
     private var destructionRemaining = 0.0
     private var obstacles: [Obstacle] = []
@@ -737,11 +744,12 @@ final class BattlefieldScene: SKScene {
             let movement = baseMovement * threatLevel.enemyVelocity * rules.enemySpeed
             let aim = atan2(diff.x, diff.z)
             if type == .saucer {
-                let tangent = GroundPoint(cos(enemies[idx].phase * 0.8),
-                                          sin(enemies[idx].phase * 0.8))
-                enemies[idx].center = enemies[idx].center + tangent * (movement * dt)
+                enemies[idx].center = enemies[idx].center +
+                    facing(enemies[idx].heading) * movement * dt
+                enemies[idx].attackTimer += dt
             } else if type == .drone {
                 var drone = enemies[idx]
+                drone.droneDisrupted = max(0, drone.droneDisrupted - dt)
                 let phase = drone.phase + drone.droneSeed
                 // Independent long-period motion keeps the wider cloud organic.
                 let wander = GroundPoint(
@@ -759,8 +767,14 @@ final class BattlefieldScene: SKScene {
                 }
                 let speedFactor = 1.0 + 0.18 * sin(phase * 0.47) +
                     0.08 * sin(phase * 1.06)
-                let steering = (desiredPosition - drone.center) * 0.70 +
-                    swarmVelocity + separation * 7
+                let disrupted = drone.droneDisrupted > 0
+                let scatter = disrupted ? GroundPoint(
+                    sin(drone.droneSeed * 3.1 + gameClock * 1.8),
+                    cos(drone.droneSeed * 2.3 + gameClock * 1.9)) * 14
+                    : GroundPoint(0, 0)
+                let steering = (desiredPosition - drone.center) *
+                    (disrupted ? 0.10 : 0.70) +
+                    swarmVelocity + separation * 7 + scatter
                 let speedTarget = min(10.5, max(2.0, steering.length * speedFactor))
                 let desiredVelocity = steering.normalized * speedTarget
                 let previousVelocity = drone.droneVelocity
@@ -793,8 +807,9 @@ final class BattlefieldScene: SKScene {
                 let rollTarget = max(-0.24, min(0.24, -0.031 * lateralAccel))
                 drone.dronePitch += (pitchTarget - drone.dronePitch) *
                     min(1, dt * 6.5)
-                drone.droneRoll += (rollTarget - drone.droneRoll) *
-                    min(1, dt * 5)
+                drone.droneRoll += (rollTarget +
+                    (disrupted ? 0.38 * sin(gameClock * 14 + drone.droneSeed) : 0) -
+                    drone.droneRoll) * min(1, dt * 5)
                 // Distinct height bands with continuous individual bobbing.
                 // Never place rotors beneath the terrain.
                 let altitudeBand = 2.3 + Double(idx % 6) * 0.48
@@ -806,7 +821,8 @@ final class BattlefieldScene: SKScene {
                     $0.hostile && $0.payload == "droneCharge"
                 }.count
                 let hostileCount = shells.filter { $0.hostile }.count
-                if drone.droneHasCharge && drone.droneDropDelay <= 0 &&
+                if drone.droneHasCharge && !disrupted &&
+                    drone.droneDropDelay <= 0 &&
                     swarmDropTimer <= 0 && chaffActive <= 0 &&
                     distance < 78 && distance > 12 &&
                     activeCharges < 5 &&
@@ -1031,21 +1047,20 @@ final class BattlefieldScene: SKScene {
             survivingShells.append(shell)
         }
         shells = survivingShells
-        for idx in casualties.sorted(by: >) { enemies.remove(at: idx) }
-
-        updateSparks(dt)
-        // Never advance while delayed air reinforcements are still on the
-        // manifest. If the ground wave was cleared quickly, shorten downtime.
-        if enemies.isEmpty && (dronesPending > 0 || fightersPending > 0) {
-            if dronesPending > 0 {
-                waveElapsed = max(waveElapsed,
-                    BattlefieldWaveDirector.droneDelay(forWave: wave) - 1.5)
-            } else {
-                waveElapsed = max(waveElapsed,
-                    BattlefieldWaveDirector.fighterDelay(forWave: wave) - 1.5)
+        for idx in casualties.sorted(by: >) {
+            if enemies[idx].kind == .drone {
+                fallingDrones.append(FallingDrone(foe: enemies[idx], speed: 0.5))
             }
+            enemies.remove(at: idx)
         }
-        if enemies.isEmpty && dronesPending == 0 && fightersPending == 0 &&
+        enemies.removeAll {
+            $0.kind == .saucer &&
+            ($0.attackTimer > 24 || abs($0.center.x) > 187 || abs($0.center.z) > 187)
+        }
+        updateFallingDrones(dt)
+        updateSparks(dt)
+        // Air contacts and pending reinforcements never block level progression.
+        if !enemies.contains(where: { $0.kind.isVehicle }) &&
             pendingWave <= 0 { pendingWave = 2.1 }
         if pendingWave > 0 {
             pendingWave -= dt
@@ -1054,6 +1069,7 @@ final class BattlefieldScene: SKScene {
                 spawnWave()
                 for shell in shells where !shell.hostile { shotTally.miss() }
                 shells.removeAll()
+                fallingDrones.removeAll()
                 shieldCooldown = 0
                 chaffCharges = ChaffDefense.chargesPerWave
                 chaffCooldown = 0
@@ -1120,20 +1136,45 @@ final class BattlefieldScene: SKScene {
         chaffCharges -= 1
         chaffCooldown = ChaffDefense.cooldown
         chaffActive = ChaffDefense.protectionDuration
-        var intercepted: [Int] = []
         for index in enemies.indices where enemies[index].kind == .drone {
-            if ChaffDefense.disrupts(
-                distance: enemies[index].center.distance(to: tankPosition)) {
-                intercepted.append(index)
-                burst(at: WorldPoint(enemies[index].center, height: 2.9),
-                      count: 27)
+            let distance = enemies[index].center.distance(to: tankPosition)
+            if distance <= ChaffDefense.decoyRadius {
+                enemies[index].droneDisrupted = 3.0 + Double(index % 5) * 0.45
+                enemies[index].droneDropDelay = 5.0
+                if ChaffDefense.disrupts(distance: distance) && index % 3 != 0 {
+                    fallingDrones.append(FallingDrone(foe: enemies[index], speed: 0.8))
+                    enemies[index].hitPoints = 0
+                    addPoints(125)
+                } else {
+                    burst(at: WorldPoint(enemies[index].center,
+                                        height: enemies[index].droneAltitude), count: 10)
+                }
             }
         }
-        for index in intercepted.reversed() {
-            enemies.remove(at: index)
-            addPoints(125)
+        enemies.removeAll { $0.kind == .drone && $0.hitPoints <= 0 }
+        shells.removeAll {
+            $0.hostile && $0.payload == "droneCharge" &&
+            $0.center.distance(to: tankPosition) < ChaffDefense.disruptionRadius
         }
         sound("shield.wav")
+    }
+
+    private func updateFallingDrones(_ dt: Double) {
+        for i in fallingDrones.indices {
+            fallingDrones[i].speed += 9.8 * dt
+            fallingDrones[i].foe.droneAltitude -= fallingDrones[i].speed * dt
+            fallingDrones[i].foe.droneRoll += dt * 5.6
+            fallingDrones[i].foe.dronePitch += dt * 3.8
+            fallingDrones[i].foe.center = fallingDrones[i].foe.center +
+                fallingDrones[i].foe.droneVelocity * (dt * 0.5)
+        }
+        for i in fallingDrones.indices.reversed()
+            where fallingDrones[i].foe.droneAltitude <= 0.22 {
+            let foe = fallingDrones[i].foe
+            burst(at: WorldPoint(foe.center, height: 0.35), count: 44)
+            sound("explosion.wav")
+            fallingDrones.remove(at: i)
+        }
     }
 
     private func updateSparks(_ dt: Double) {
@@ -1223,11 +1264,14 @@ final class BattlefieldScene: SKScene {
     }
 
     private func spawnPatrolSaucer() {
-        let bearing = heading + Double.random(in: -0.9...0.9)
-        let origin = tankPosition + facing(bearing) * 96
-        let safeOrigin = GroundPoint(max(-175, min(175, origin.x)),
-                                     max(-175, min(175, origin.z)))
-        enemies.append(Foe(center: safeOrigin, heading: bearing + .pi,
+        let side = Bool.random() ? 1.0 : -1.0
+        let across = heading + side * (.pi / 2)
+        let origin = tankPosition - facing(across) * 105 +
+            facing(heading) * Double.random(in: 45...75)
+        let safeOrigin = GroundPoint(max(-170, min(170, origin.x)),
+                                     max(-170, min(170, origin.z)))
+        enemies.append(Foe(center: safeOrigin,
+                           heading: wrapAngle(across + Double.random(in: -0.16...0.16)),
                            kind: .saucer, reload: 999,
                            phase: Double.random(in: 0...(2 * .pi)), hitPoints: 1))
     }
@@ -1581,7 +1625,8 @@ final class BattlefieldScene: SKScene {
             (opponentLines, NSColor(calibratedRed: 1, green: 0.57, blue: 0.19, alpha: 1),
              displayMode == .classic ? 1.35 : 1.55,
              displayMode == .classic ? 0.15 : 0.8),
-            (opponentSaucerLines, green, 1.8, displayMode == .classic ? 0.7 : 3.1),
+            (opponentSaucerLines, NSColor(calibratedRed: 0.20, green: 0.75, blue: 1, alpha: 1),
+             1.8, displayMode == .classic ? 0.7 : 3.1),
             (shotLines, accent, 2.5, displayMode == .classic ? 0.8 : 5),
             (flashLines, accent, 2.0, displayMode == .classic ? 1 : 5),
             (reticle, accent, displayMode == .classic ? 1.05 : 1.5,
@@ -1859,15 +1904,17 @@ final class BattlefieldScene: SKScene {
             let rings = CGMutablePath()
             let center = point(w / 2, c.horizon + 18)
             for index in 0..<3 {
-                let radius = 55 + Double(index) * 29 +
-                    13 * sin((ChaffDefense.protectionDuration - chaffActive) * 5)
+                let elapsed = ChaffDefense.protectionDuration - chaffActive
+                let radius = 38 + elapsed * (84 + Double(index) * 27)
                 rings.addEllipse(in: CGRect(x: center.x-radius,
                                             y: center.y-radius,
                                             width: radius*2, height: radius*2))
             }
             countermeasureLines.path = rings
             countermeasureLines.alpha = CGFloat(
-                min(0.65, chaffActive / ChaffDefense.protectionDuration))
+                min(1, chaffActive / ChaffDefense.protectionDuration + 0.2))
+            countermeasureLines.lineWidth = 3.3
+            countermeasureLines.glowWidth = 5.2
         } else {
             countermeasureLines.path = nil
         }
@@ -2034,6 +2081,9 @@ final class BattlefieldScene: SKScene {
         let saucerPath = CGMutablePath()
         let dronePath = CGMutablePath()
         let fighterPath = CGMutablePath()
+        for falling in fallingDrones {
+            drawDrone(falling.foe, on: dronePath, camera: c)
+        }
         for enemy in enemies {
             if enemy.center.distance(to: tankPosition) > 170 { continue }
             switch enemy.kind {
@@ -2509,7 +2559,7 @@ final class BattlefieldScene: SKScene {
         // the spin obvious in both Classic and Modern display modes.
         let n = displayMode == .modern ? 18 : 12
         let spin = gameClock * 2.9 + e.phase
-        let hover = 5.1 + sin(gameClock * 2.4 + e.phase) * 0.55
+        let hover = 7.5 + sin(gameClock * 2.4 + e.phase) * 0.55
         let radius = displayMode == .modern ? 3.7 : 3.1
         func ring(_ angle: Double, radius r: Double, elevation: Double) -> WorldPoint {
             WorldPoint(e.center.x + cos(angle) * r, elevation,
