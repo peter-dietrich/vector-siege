@@ -47,6 +47,9 @@ private struct Shell {
     var hostile: Bool
     var timeLeft: Double
     var payload: String = "cannon"
+    // Transient world elevation. Nil preserves legacy save compatibility
+    // and falling bomb behavior.
+    var launchElevation: Double? = nil
 }
 
 private struct Spark {
@@ -921,7 +924,9 @@ final class BattlefieldScene: SKScene {
                     .map { enemies[$0].center }
                 let clearShot = EnemyNavigation.clearSegment(
                     enemies[idx].center, tankPosition, obstacles: shotBlockers,
-                    height: 1.5)
+                    height: 1.5) &&
+                    LandscapeTopology.clearFiringLine(
+                        from: enemies[idx].center, to: tankPosition)
                 let desiredDistance = type == .hunter ? 19.0 :
                     (type == .artillery ? 48.0 : 24.0)
 
@@ -976,11 +981,14 @@ final class BattlefieldScene: SKScene {
                     }
                 }
             }
-            let targetVisible = !type.isVehicle || EnemyNavigation.clearSegment(
-                enemies[idx].center, tankPosition,
-                obstacles: obstacles.map {
-                    NavigationObstacle(body: collisionBody(for: $0))
-                }, height: 1.5)
+            let targetVisible = !type.isVehicle || (
+                EnemyNavigation.clearSegment(
+                    enemies[idx].center, tankPosition,
+                    obstacles: obstacles.map {
+                        NavigationObstacle(body: collisionBody(for: $0))
+                    }, height: 1.5) &&
+                LandscapeTopology.clearFiringLine(
+                    from: enemies[idx].center, to: tankPosition))
             let hostileShots = shells.filter { $0.hostile }.count
             if type != .saucer && type != .drone &&
                 enemies[idx].reload <= 0 && targetVisible &&
@@ -1005,7 +1013,9 @@ final class BattlefieldScene: SKScene {
                         center: enemies[idx].center + flight * 3,
                         direction: flight, hostile: true,
                         timeLeft: payload == "bomb" ? 7.2 : 4.0,
-                        payload: payload))
+                        payload: payload,
+                        launchElevation: type.isVehicle && payload != "bomb"
+                            ? LandscapeTopology.height(enemies[idx].center) : nil))
                 }
                 enemies[idx].reload = (type == .fighter ? 4.8 :
                     type == .artillery ? 5.7 : 3.5) *
@@ -1037,8 +1047,14 @@ final class BattlefieldScene: SKScene {
             // the actual projectile travel segment. A wall behind a target
             // must not absorb a shot that hits the tank first.
             let height = shell.hostile ? 1.5 : 1.65
+            let worldAltitude = shell.launchElevation.map { $0 + height }
             let wallTime = firstObstacleImpact(
-                from: old, to: shell.center, height: height)
+                from: old, to: shell.center, height: height,
+                worldAltitude: worldAltitude)
+            let terrainTime = worldAltitude.flatMap {
+                LandscapeTopology.firstTerrainImpact(
+                    from: old, to: shell.center, altitude: $0)
+            }
             var targetTime: Double?
             var targetIndex: Int?
             if shell.hostile {
@@ -1066,6 +1082,16 @@ final class BattlefieldScene: SKScene {
                 }
             }
 
+            if let terrain = terrainTime,
+                terrain <= (wallTime ?? .infinity) &&
+                terrain <= (targetTime ?? .infinity) {
+                let impact = old + (shell.center - old) * terrain
+                if !shell.hostile { shotTally.miss() }
+                burst(at: WorldPoint(impact, height: 0.25), count: 18)
+                registerImpact(at: impact, kind: .ground)
+                combatAudio.play(.impact, enabled: soundOn)
+                continue
+            }
             if let wall = wallTime, wall <= (targetTime ?? .infinity) {
                 let impact = old + (shell.center - old) * wall
                 if !shell.hostile { shotTally.miss() }
@@ -1199,12 +1225,17 @@ final class BattlefieldScene: SKScene {
 
     private func firstObstacleImpact(
         from a: GroundPoint, to b: GroundPoint,
-        height: Double, shellRadius: Double = 0.13
+        height: Double, shellRadius: Double = 0.13,
+        worldAltitude: Double? = nil
     ) -> Double? {
-        obstacles.compactMap {
-            ObstacleCollision.firstImpact(
-                from: a, to: b, body: collisionBody(for: $0),
-                height: height, radius: shellRadius)
+        obstacles.compactMap { structure in
+            // Buildings rise from the local foundation, not sea level.
+            let relativeHeight = worldAltitude.map {
+                $0 - LandscapeTopology.height(structure.center)
+            } ?? height
+            return ObstacleCollision.firstImpact(
+                from: a, to: b, body: collisionBody(for: structure),
+                height: relativeHeight, radius: shellRadius)
         }.min()
     }
 
@@ -1317,7 +1348,9 @@ final class BattlefieldScene: SKScene {
         shotTally.fire()
         let direction = facing(heading)
         shells.append(Shell(center: tankPosition + direction * 2.5,
-                            direction: direction, hostile: false, timeLeft: rules.projectileLifetime))
+                            direction: direction, hostile: false,
+                            timeLeft: rules.projectileLifetime,
+                            launchElevation: LandscapeTopology.height(tankPosition)))
         pulse = 0.13
         muzzleRemaining = 0.23
         recoilRemaining = 0.30
