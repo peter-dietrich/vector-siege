@@ -126,6 +126,7 @@ final class BattlefieldScene: SKScene {
     private let shotLines = SKShapeNode()
     private let modernFriendlyShells = SKShapeNode()
     private let modernHostileShells = SKShapeNode()
+    private let modernBombShells = SKShapeNode()
     private let flashLines = SKShapeNode()
     private let damageOverlay = SKShapeNode()
     private let destructionRings = SKShapeNode()
@@ -277,6 +278,7 @@ final class BattlefieldScene: SKScene {
             (groundMesh, 3.1), (streetMarks, 3.2), (structures, 4.0),
             (opponentLines, 5.0), (opponentSaucerLines, 5.1), (shotLines, 6.0),
             (modernFriendlyShells, 6.2), (modernHostileShells, 6.3),
+            (modernBombShells, 6.4),
             (flashLines, 7.0), (armoredLines, 5.3),
             (droneLines, 5.4), (fighterLines, 5.5),
             (countermeasureLines, 8.6), (destructionRings, 9.0),
@@ -849,7 +851,8 @@ final class BattlefieldScene: SKScene {
                     shells.append(Shell(
                         center: enemies[idx].center + flight * 3,
                         direction: flight, hostile: true,
-                        timeLeft: 4, payload: payload))
+                        timeLeft: payload == "bomb" ? 7.2 : 4.0,
+                        payload: payload))
                 }
                 enemies[idx].reload = (type == .fighter ? 4.8 :
                     type == .artillery ? 5.7 : 3.5) *
@@ -866,7 +869,7 @@ final class BattlefieldScene: SKScene {
         for var shell in shells {
             let old = shell.center
             let shellSpeed = !shell.hostile ? 90.0 :
-                (shell.payload == "bomb" ? 17.0 :
+                (shell.payload == "bomb" ? 22.0 :
                     shell.payload == "machinegun" ? 34.0 : 23.0)
             shell.center = shell.center + shell.direction * (dt * shellSpeed)
             shell.timeLeft -= dt
@@ -1479,6 +1482,11 @@ final class BattlefieldScene: SKScene {
             shellNode.lineWidth = 1.65
             shellNode.glowWidth = modern ? 3.5 : 0
         }
+        modernBombShells.strokeColor = NSColor(
+            calibratedRed: 1, green: 0.63, blue: 0.19, alpha: 1)
+        modernBombShells.fillColor = .clear
+        modernBombShells.lineWidth = 2.1
+        modernBombShells.glowWidth = modern ? 1.8 : 0
         glassLayer.isHidden = !modern
         for band in skyBands { band.isHidden = !modern }
         for layer in [distantMountains, middleMountains, nearMountains, horizonMist] {
@@ -2377,8 +2385,29 @@ final class BattlefieldScene: SKScene {
         let bulletPath = CGMutablePath()
         let friendlyWire = CGMutablePath()
         let hostileWire = CGMutablePath()
+        let bombWire = CGMutablePath()
         for shell in shells {
             let height = shell.hostile ? 1.5 : 1.65
+            if shell.payload == "bomb" && displayMode == .modern {
+                // Bombs visibly descend from an air-delivered trajectory.
+                // They remain low-speed, dodgeable area threats at impact.
+                let timeInFlight = 7.2 - shell.timeLeft
+                let altitude = max(1.5, 5.4 - timeInFlight * 0.80)
+                let r = 0.90
+                for index in 0..<10 {
+                    let a = Double(index) * 2 * .pi / 10
+                    let b = Double(index + 1) * 2 * .pi / 10
+                    line(bombWire,
+                         WorldPoint(shell.center.x + cos(a)*r, altitude,
+                                    shell.center.z + sin(a)*r),
+                         WorldPoint(shell.center.x + cos(b)*r, altitude,
+                                    shell.center.z + sin(b)*r), c)
+                }
+                line(bombWire,
+                     WorldPoint(shell.center.x, altitude + 1.0, shell.center.z),
+                     WorldPoint(shell.center.x, altitude - 1.0, shell.center.z), c)
+                continue
+            }
             if displayMode == .classic {
                 // Preserve the original compact tracer in Classic.
                 let p = WorldPoint(shell.center, height: height)
@@ -2433,6 +2462,7 @@ final class BattlefieldScene: SKScene {
         shotLines.path = bulletPath
         modernFriendlyShells.path = friendlyWire
         modernHostileShells.path = hostileWire
+        modernBombShells.path = bombWire
 
         let flarePath = CGMutablePath()
         for spark in sparks {
