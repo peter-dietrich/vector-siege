@@ -618,7 +618,7 @@ final class BattlefieldScene: SKScene {
             enabled: playing && soundOn, dt: max(dt, 0.016))
         if playing {
             nearestTankDistance = enemies
-                .filter { $0.kind != .saucer }
+                .filter { $0.kind.isVehicle }
                 .map { $0.center.distance(to: tankPosition) }
                 .min()
             proximityCountdown = max(0, proximityCountdown - dt)
@@ -3155,6 +3155,8 @@ final class BattlefieldScene: SKScene {
         let enemyContacts = CGMutablePath()
         let hunterContacts = CGMutablePath()
         let saucerContacts = CGMutablePath()
+        let droneContacts = CGMutablePath()
+        let fighterContacts = CGMutablePath()
         let projectileHalos = CGMutablePath()
         let projectileDots = CGMutablePath()
         func radarPoint(_ center: GroundPoint) -> CGPoint? {
@@ -3184,18 +3186,28 @@ final class BattlefieldScene: SKScene {
                 saucerContacts.addLine(to: point(contact.x, contact.y - r))
                 saucerContacts.addLine(to: point(contact.x - r, contact.y))
                 saucerContacts.closeSubpath()
-            case .hunter:
-                // Red outline triangle: high-priority pursuit armor.
-                let r = 5.2
+            case .hunter, .artillery:
+                let r = foe.kind == .artillery ? 5.7 : 5.2
                 hunterContacts.move(to: point(contact.x, contact.y + r))
                 hunterContacts.addLine(to: point(contact.x - r, contact.y - r))
                 hunterContacts.addLine(to: point(contact.x + r, contact.y - r))
                 hunterContacts.closeSubpath()
-            case .tank:
-                // Bright orange square marks the standard enemy tank.
-                enemyContacts.addRect(CGRect(x: contact.x - 3.2,
-                                             y: contact.y - 3.2,
-                                             width: 6.4, height: 6.4))
+            case .drone:
+                let r = 2.9
+                droneContacts.addEllipse(in: CGRect(
+                    x: contact.x-r, y: contact.y-r,
+                    width: r*2, height: r*2))
+            case .fighter:
+                let r = 6.0
+                fighterContacts.move(to: point(contact.x, contact.y+r))
+                fighterContacts.addLine(to: point(contact.x+r, contact.y-r))
+                fighterContacts.addLine(to: point(contact.x, contact.y-r*0.3))
+                fighterContacts.addLine(to: point(contact.x-r, contact.y-r))
+                fighterContacts.closeSubpath()
+            case .tank, .apc:
+                let r = foe.kind == .apc ? 3.8 : 3.2
+                enemyContacts.addRect(CGRect(x: contact.x-r, y: contact.y-r,
+                                             width: r*2, height: r*2))
             }
         }
         for shell in shells {
@@ -3211,6 +3223,8 @@ final class BattlefieldScene: SKScene {
         radarEnemyContacts.path = enemyContacts
         radarHunterContacts.path = hunterContacts
         radarSaucerContacts.path = saucerContacts
+        radarDroneContacts.path = droneContacts
+        radarFighterContacts.path = fighterContacts
         radarProjectileGlow.path = projectileHalos
         radarProjectileCore.path = projectileDots
 
