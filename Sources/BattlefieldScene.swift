@@ -642,16 +642,15 @@ final class BattlefieldScene: SKScene {
                 enemies[idx].center = enemies[idx].center + tangent * (movement * dt)
             } else {
                 let obstaclesForNavigation = obstacles.map {
-                    NavigationObstacle(center: $0.center, radius: $0.size * 0.78)
+                    NavigationObstacle(body: collisionBody(for: $0))
                 }
-                let shotBlockers = obstacles.map {
-                    NavigationObstacle(center: $0.center, radius: $0.size * 0.66)
-                }
+                let shotBlockers = obstaclesForNavigation
                 let occupied = enemies.indices
                     .filter { $0 != idx && enemies[$0].kind != .saucer }
                     .map { enemies[$0].center }
                 let clearShot = EnemyNavigation.clearSegment(
-                    enemies[idx].center, tankPosition, obstacles: shotBlockers)
+                    enemies[idx].center, tankPosition, obstacles: shotBlockers,
+                    height: 1.5)
                 let desiredDistance = type == .hunter ? 19.0 : 24.0
 
                 // Replan if the target moves, cover blocks the shot, or the
@@ -709,8 +708,8 @@ final class BattlefieldScene: SKScene {
                 EnemyNavigation.clearSegment(
                     enemies[idx].center, tankPosition,
                     obstacles: obstacles.map {
-                        NavigationObstacle(center: $0.center, radius: $0.size * 0.66)
-                    })
+                        NavigationObstacle(body: collisionBody(for: $0))
+                    }, height: 1.5)
             if enemies[idx].reload <= 0 && visibleTarget &&
                 distance < 79 && distance > 7 {
                 let aimError = threatLevel.enemyAimError / rules.enemyAccuracy
@@ -733,38 +732,59 @@ final class BattlefieldScene: SKScene {
                 if !shell.hostile { shotTally.miss() }
                 continue
             }
-            if obstacles.contains(where: { segmentHitsObstacle(old, shell.center, $0) }) {
+
+            // Continuous swept collisions, ordered by first contact along
+            // the actual projectile travel segment. A wall behind a target
+            // must not absorb a shot that hits the tank first.
+            let height = shell.hostile ? 1.5 : 1.65
+            let wallTime = firstObstacleImpact(
+                from: old, to: shell.center, height: height)
+            var targetTime: Double?
+            var targetIndex: Int?
+            if shell.hostile {
+                targetTime = ObstacleCollision.firstCircleImpact(
+                    from: old, to: shell.center, center: tankPosition,
+                    radius: 2.0)
+            } else {
+                for idx in enemies.indices where !casualties.contains(idx) {
+                    let radius = enemies[idx].kind == .saucer ? 3.1 : 2.9
+                    if let hit = ObstacleCollision.firstCircleImpact(
+                        from: old, to: shell.center,
+                        center: enemies[idx].center, radius: radius),
+                        hit < (targetTime ?? .infinity) {
+                        targetTime = hit
+                        targetIndex = idx
+                    }
+                }
+            }
+
+            if let wall = wallTime, wall <= targetTime ?? .infinity {
+                let impact = old + (shell.center - old) * wall
                 if !shell.hostile { shotTally.miss() }
-                burst(at: WorldPoint(shell.center, height: 1.2), count: 9)
+                burst(at: WorldPoint(impact, height: height), count: 9)
                 sound("impact.wav")
                 continue
             }
-            if shell.hostile {
-                if shell.center.distance(to: tankPosition) < 2.0 {
-                    burst(at: WorldPoint(tankPosition, height: 1.15), count: 24)
+            if let hit = targetTime {
+                let impact = old + (shell.center - old) * hit
+                if shell.hostile {
+                    burst(at: WorldPoint(impact, height: height), count: 24)
                     if shieldDuration <= 0 && invulnerability <= 0 { takeDamage() }
                     else { sound("impact.wav") }
-                    continue
+                } else if let idx = targetIndex {
+                    shotTally.hit()
+                    enemies[idx].hitPoints -= 1
+                    burst(at: WorldPoint(impact,
+                                         height: enemies[idx].kind == .saucer ? 5.1 : 1.45),
+                          count: enemies[idx].hitPoints <= 0 ? 35 : 12)
+                    if enemies[idx].hitPoints <= 0 {
+                        casualties.insert(idx)
+                        addPoints(enemies[idx].kind == .hunter ? 1500 :
+                                  (enemies[idx].kind == .saucer ? 250 : 1000))
+                        sound("explosion.wav")
+                    } else { sound("impact.wav") }
                 }
-            } else {
-                var hit = false
-                for idx in enemies.indices where !casualties.contains(idx) {
-                    if shell.center.distance(to: enemies[idx].center) < (enemies[idx].kind == .saucer ? 3.1 : 2.9) {
-                        hit = true
-                        shotTally.hit()
-                        enemies[idx].hitPoints -= 1
-                        burst(at: WorldPoint(enemies[idx].center,
-                                             height: enemies[idx].kind == .saucer ? 5.1 : 1.45),
-                              count: enemies[idx].hitPoints <= 0 ? 35 : 12)
-                        if enemies[idx].hitPoints <= 0 {
-                            casualties.insert(idx)
-                            addPoints(enemies[idx].kind == .hunter ? 1500 : (enemies[idx].kind == .saucer ? 250 : 1000))
-                            sound("explosion.wav")
-                        } else { sound("impact.wav") }
-                        break
-                    }
-                }
-                if hit { continue }
+                continue
             }
             survivingShells.append(shell)
         }
@@ -800,17 +820,38 @@ final class BattlefieldScene: SKScene {
 
     private func key(_ codes: UInt16...) -> Bool { codes.contains { pressedKeys.contains($0) } }
 
-    private func blocked(_ p: GroundPoint, radius: Double) -> Bool {
-        if abs(p.x) > 190 || abs(p.z) > 190 { return true }
-        return obstacles.contains { p.distance(to: $0.center) < $0.size * 0.78 + radius }
+    /// The visual structure and the physical collision volume use the exact
+    /// same dimensions. Every gameplay system queries this one profile.
+    private func collisionBody(for obstacle: Obstacle) -> ObstacleCollision.Body {
+        let kind: ObstacleCollision.Kind
+        switch obstacle.kind {
+        case .block: kind = .block
+        case .pyramid: kind = .pyramid
+        case .tower: kind = .tower
+        case .building: kind = .building
+        case .monolith: kind = .monolith
+        }
+        return ObstacleCollision.body(
+            center: obstacle.center, size: obstacle.size, kind: kind)
     }
 
-    private func segmentHitsObstacle(_ a: GroundPoint, _ b: GroundPoint, _ obstacle: Obstacle) -> Bool {
-        let ab = b - a
-        let ap = obstacle.center - a
-        let len2 = max(0.0001, ab.x * ab.x + ab.z * ab.z)
-        let t = max(0, min(1, (ap.x * ab.x + ap.z * ab.z) / len2))
-        return (a + ab * t).distance(to: obstacle.center) < obstacle.size * 0.66
+    private func blocked(_ p: GroundPoint, radius: Double) -> Bool {
+        if abs(p.x) > 190 || abs(p.z) > 190 { return true }
+        return obstacles.contains {
+            ObstacleCollision.contains(
+                p, body: collisionBody(for: $0), margin: radius)
+        }
+    }
+
+    private func firstObstacleImpact(
+        from a: GroundPoint, to b: GroundPoint,
+        height: Double, shellRadius: Double = 0.13
+    ) -> Double? {
+        obstacles.compactMap {
+            ObstacleCollision.firstImpact(
+                from: a, to: b, body: collisionBody(for: $0),
+                height: height, radius: shellRadius)
+        }.min()
     }
 
     private func firePlayer() {
