@@ -63,6 +63,13 @@ private struct GlassFace {
     var vertices: [WorldPoint]
     var depth: Double
     var tint: Int
+    var solid: Bool = false
+}
+private struct Vegetation {
+    var location: GroundPoint
+    var height: Double
+    var crown: Double
+    var isTree: Bool
 }
 
 
@@ -122,6 +129,8 @@ final class BattlefieldScene: SKScene {
     private var hitFlashRemaining = 0.0
     private var destructionRemaining = 0.0
     private var obstacles: [Obstacle] = []
+    private var vegetation: [Vegetation] = []
+    private var solidBuildingIndices: Set<Int> = []
     private var enemies: [Foe] = []
     private var shells: [Shell] = []
     private var sparks: [Spark] = []
@@ -139,6 +148,7 @@ final class BattlefieldScene: SKScene {
     private let groundMesh = SKShapeNode()
     private let streetMarks = SKShapeNode()
     private let structures = SKShapeNode()
+    private let foliageLines = SKShapeNode()
     private let opponentLines = SKShapeNode()
     private let opponentSaucerLines = SKShapeNode()
     private let shotLines = SKShapeNode()
@@ -293,7 +303,7 @@ final class BattlefieldScene: SKScene {
 
         for (layer, z) in [
             (farSkyline, 1.0), (skyline, 2.0), (ground, 3.0),
-            (groundMesh, 3.1), (streetMarks, 3.2), (structures, 4.0),
+            (groundMesh, 3.1), (streetMarks, 3.2), (foliageLines, 3.9), (structures, 4.0),
             (opponentLines, 5.0), (opponentSaucerLines, 5.1), (shotLines, 6.0),
             (modernFriendlyShells, 6.2), (modernHostileShells, 6.3),
             (modernBombShells, 6.4),
@@ -603,6 +613,8 @@ final class BattlefieldScene: SKScene {
         shells.removeAll()
         sparks.removeAll()
         makeObstacles()
+        makeVegetation()
+        selectSolidBuildings()
         spawnWave()
         round = .levelReady
         lastUpdateTime = 0
@@ -1535,6 +1547,9 @@ final class BattlefieldScene: SKScene {
         obstacles = saved.obstacles.map { Obstacle(
             center: $0.center, size: $0.size,
             kind: obstacleKind(named: $0.kind)) }
+        fallingDrones.removeAll()
+        makeVegetation()
+        selectSolidBuildings()
         enemies = saved.enemies.map { Foe(
             center: $0.center, heading: $0.heading,
             kind: foeKind(named: $0.kind),
@@ -1839,8 +1854,9 @@ final class BattlefieldScene: SKScene {
         let w = Double(size.width)
         let h = Double(size.height)
         guard w > 100 && h > 100 else { return }
-        let camera = CameraProjection(position: tankPosition, yaw: heading,
+        var camera = CameraProjection(position: tankPosition, yaw: heading,
                                       viewportWidth: w, viewportHeight: h)
+        camera.eyeHeight += LandscapeTopology.height(tankPosition)
         var worldCamera = camera
         let driveAmount = min(1.0, abs(driveSpeed) / 16.5)
         let turnAmount = min(1.0, turnMotion)
@@ -2015,13 +2031,18 @@ final class BattlefieldScene: SKScene {
         let meshRadius = 144.0
         let anchorX = floor(tankPosition.x / meshStep) * meshStep
         let anchorZ = floor(tankPosition.z / meshStep) * meshStep
+        // Subdivide the mesh so rolling hills bend the actual ground grid.
         for index in -24...24 {
             let x = anchorX + Double(index) * meshStep
             let z = anchorZ + Double(index) * meshStep
-            line(mesh, WorldPoint(x, 0.018, anchorZ - meshRadius),
-                 WorldPoint(x, 0.018, anchorZ + meshRadius), c)
-            line(mesh, WorldPoint(anchorX - meshRadius, 0.018, z),
-                 WorldPoint(anchorX + meshRadius, 0.018, z), c)
+            for segment in -24..<24 {
+                let a = Double(segment) * meshStep
+                let b = Double(segment + 1) * meshStep
+                line(mesh, WorldPoint(x, 0.018, anchorZ + a),
+                     WorldPoint(x, 0.018, anchorZ + b), c)
+                line(mesh, WorldPoint(anchorX + a, 0.018, z),
+                     WorldPoint(anchorX + b, 0.018, z), c)
+            }
         }
         // Wide, continuous orthogonal streets frame 60-unit city blocks.
         // World-space layout matches obstacle placement and the square radar.
@@ -2035,11 +2056,20 @@ final class BattlefieldScene: SKScene {
             let z = Double(roadOriginZ + offset) * roadStep
             for side in [-1.0, 1.0] {
                 let roadX = x + side * halfStreet
-                line(roads, WorldPoint(roadX, 0.025, -extent),
-                     WorldPoint(roadX, 0.025, extent), c)
                 let roadZ = z + side * halfStreet
-                line(roads, WorldPoint(-extent, 0.025, roadZ),
-                     WorldPoint(extent, 0.025, roadZ), c)
+                // Raised curb lips, beside a gradual roadside transition.
+                for segment in -18..<18 {
+                    let a = Double(segment) * 10
+                    let b = Double(segment + 1) * 10
+                    line(roads, WorldPoint(roadX, 0.025, a),
+                         WorldPoint(roadX, 0.025, b), c)
+                    line(roads, WorldPoint(a, 0.025, roadZ),
+                         WorldPoint(b, 0.025, roadZ), c)
+                    line(roads, WorldPoint(roadX + side * 0.30, 0.30, a),
+                         WorldPoint(roadX + side * 0.30, 0.30, b), c)
+                    line(roads, WorldPoint(a, 0.30, roadZ + side * 0.30),
+                         WorldPoint(b, 0.30, roadZ + side * 0.30), c)
+                }
             }
             // Dashed lane markings: only the road centerlines, so the
             // empty blocks stay visually distinct from the paved corridors.
@@ -2060,7 +2090,7 @@ final class BattlefieldScene: SKScene {
     private func renderObjects(_ c: CameraProjection) {
         let structurePath = CGMutablePath()
         var facets: [GlassFace] = []
-        for o in obstacles {
+        for (index, o) in obstacles.enumerated() {
             // Culling far outside the visible scene.
             let offset = o.center - tankPosition
             if offset.length > 190 { continue }
@@ -2071,9 +2101,13 @@ final class BattlefieldScene: SKScene {
                 if displayMode == .modern { drawArchitecture(o, on: structurePath, camera: c) }
                 else { drawBlock(o, on: structurePath, camera: c) }
             }
-            if displayMode == .modern { facets.append(contentsOf: glassFacets(for: o, camera: c)) }
+            if displayMode == .modern || solidBuildingIndices.contains(index) {
+                facets.append(contentsOf: glassFacets(
+                    for: o, camera: c, solid: solidBuildingIndices.contains(index)))
+            }
         }
         structures.path = structurePath
+        renderVegetation(c)
         updateGlassFaces(facets, camera: c)
 
         let tankPath = CGMutablePath()
@@ -2145,7 +2179,8 @@ final class BattlefieldScene: SKScene {
         return path
     }
 
-    private func glassFacets(for o: Obstacle, camera c: CameraProjection) -> [GlassFace] {
+    private func glassFacets(for o: Obstacle, camera c: CameraProjection,
+                            solid: Bool = false) -> [GlassFace] {
         let s = o.size
         let halfX: Double
         let halfZ: Double
@@ -2176,15 +2211,12 @@ final class BattlefieldScene: SKScene {
         }
         return polygons.enumerated().map { index, vertices in
             let z = vertices.reduce(0.0) { $0 + c.local($1).forward } / Double(vertices.count)
-            return GlassFace(vertices: vertices, depth: z, tint: index)
+            return GlassFace(vertices: vertices, depth: z, tint: index, solid: solid)
         }
     }
 
     private func updateGlassFaces(_ facets: [GlassFace], camera c: CameraProjection) {
-        guard displayMode == .modern else {
-            for face in glassFacePool { face.isHidden = true }
-            return
-        }
+        // Solid facades remain visible in classic and modern modes.
         let palette: [NSColor] = [
             NSColor(calibratedRed: 0.13, green: 0.43, blue: 0.51, alpha: 0.23),
             NSColor(calibratedRed: 0.32, green: 0.71, blue: 0.74, alpha: 0.17),
@@ -2205,7 +2237,9 @@ final class BattlefieldScene: SKScene {
             let face = glassFacePool[visible]
             face.isHidden = false
             face.path = path
-            face.fillColor = palette[facet.tint % palette.count]
+            face.fillColor = facet.solid
+                ? NSColor(calibratedRed: 0.025, green: 0.095, blue: 0.105, alpha: 1)
+                : palette[facet.tint % palette.count]
             face.zPosition = CGFloat(visible) * 0.001
             visible += 1
         }
