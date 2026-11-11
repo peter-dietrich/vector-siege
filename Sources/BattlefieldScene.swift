@@ -2712,6 +2712,9 @@ final class BattlefieldScene: SKScene {
         let anchorZ = floor(tankPosition.z / meshStep) * meshStep
         // Subdivide the mesh so rolling hills bend the actual ground grid.
         for index in -18...18 {
+            // Keep the close city mesh at five-unit spacing. Outer ground
+            // mesh lines thin to ten units, preventing distant wire clutter.
+            if abs(index) > 12 && !index.isMultiple(of: 2) { continue }
             let x = anchorX + Double(index) * meshStep
             let z = anchorZ + Double(index) * meshStep
             for segment in -18..<18 {
@@ -2784,9 +2787,15 @@ final class BattlefieldScene: SKScene {
                 if displayMode == .modern { drawArchitecture(o, on: structurePath, camera: c) }
                 else { drawBlock(o, on: structurePath, camera: c) }
             }
-            if displayMode == .modern || solidBuildingIndices.contains(index) {
-                facets.append(contentsOf: glassFacets(
-                    for: o, camera: c, solid: solidBuildingIndices.contains(index)))
+            let solid = solidBuildingIndices.contains(index)
+            if displayMode == .modern || solid {
+                // Extremely distant translucent faces add fill overdraw
+                // without helping architecture depth. Solid walls remain
+                // fully drawn for concealment at every visible range.
+                if solid || offset.length < 140 {
+                    facets.append(contentsOf: glassFacets(
+                        for: o, camera: c, solid: solid))
+                }
             }
         }
         structures.path = structurePath
@@ -2938,6 +2947,8 @@ final class BattlefieldScene: SKScene {
         ]
         var visible = 0
         for facet in facets.sorted(by: { $0.depth > $1.depth }) {
+            // Skip faces wholly behind the tank before creating a path.
+            if facet.depth < -2 { continue }
             guard let path = glassFacePath(facet.vertices, camera: c) else { continue }
             if visible >= glassFacePool.count {
                 let face = SKShapeNode()
@@ -2953,6 +2964,13 @@ final class BattlefieldScene: SKScene {
                 ? NSColor(calibratedRed: 0.025, green: 0.095, blue: 0.105, alpha: 1)
                 : palette[facet.tint % palette.count]
             face.zPosition = CGFloat(visible) * 0.001
+            // Render solid facades without the translucent glass edge
+            // treatment, so they read as genuine non-transparent walls.
+            face.strokeColor = facet.solid
+                ? NSColor(calibratedRed: 0.11, green: 0.29,
+                          blue: 0.30, alpha: 0.80)
+                : NSColor(calibratedRed: 0.71, green: 0.98,
+                          blue: 0.97, alpha: 0.25)
             visible += 1
         }
         for i in visible..<glassFacePool.count { glassFacePool[i].isHidden = true }
