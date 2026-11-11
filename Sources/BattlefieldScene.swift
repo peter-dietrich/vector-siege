@@ -3047,6 +3047,23 @@ final class BattlefieldScene: SKScene {
         let hostileWire = CGMutablePath()
         let bombWire = CGMutablePath()
         for shell in shells {
+            // Heightmap projection applies terrain elevation automatically.
+            // Compensate for that in shell geometry so ballistic rounds keep
+            // the actual world-space elevation used by hit tests.
+            func shellLine(_ path: CGMutablePath,
+                           _ a: WorldPoint, _ b: WorldPoint) {
+                guard let origin = shell.launchElevation else {
+                    line(path, a, b, c)
+                    return
+                }
+                let adjustedA = WorldPoint(
+                    a.x, a.y + origin -
+                    LandscapeTopology.height(GroundPoint(a.x, a.z)), a.z)
+                let adjustedB = WorldPoint(
+                    b.x, b.y + origin -
+                    LandscapeTopology.height(GroundPoint(b.x, b.z)), b.z)
+                line(path, adjustedA, adjustedB, c)
+            }
             let height = shell.hostile ? 1.5 : 1.65
             if shell.payload == "bomb" && displayMode == .modern {
                 // Bombs visibly descend from an air-delivered trajectory.
@@ -3057,24 +3074,24 @@ final class BattlefieldScene: SKScene {
                 for index in 0..<10 {
                     let a = Double(index) * 2 * .pi / 10
                     let b = Double(index + 1) * 2 * .pi / 10
-                    line(bombWire,
+                    shellLine(bombWire,
                          WorldPoint(shell.center.x + cos(a)*r, altitude,
                                     shell.center.z + sin(a)*r),
                          WorldPoint(shell.center.x + cos(b)*r, altitude,
-                                    shell.center.z + sin(b)*r), c)
+                                    shell.center.z + sin(b)*r))
                 }
-                line(bombWire,
+                shellLine(bombWire,
                      WorldPoint(shell.center.x, altitude + 1.0, shell.center.z),
-                     WorldPoint(shell.center.x, altitude - 1.0, shell.center.z), c)
+                     WorldPoint(shell.center.x, altitude - 1.0, shell.center.z))
                 continue
             }
             if displayMode == .classic {
                 // Preserve the original compact tracer in Classic.
                 let p = WorldPoint(shell.center, height: height)
                 let tail = shell.center - shell.direction * (shell.hostile ? 2.4 : 3.8)
-                line(bulletPath, p, WorldPoint(tail, height: height), c)
-                line(bulletPath, WorldPoint(shell.center.x, height-0.28, shell.center.z),
-                     WorldPoint(shell.center.x, height+0.28, shell.center.z), c)
+                shellLine(bulletPath, p, WorldPoint(tail, height: height))
+                shellLine(bulletPath, WorldPoint(shell.center.x, height-0.28, shell.center.z),
+                     WorldPoint(shell.center.x, height+0.28, shell.center.z))
             } else {
                 // Modern rounds are small three-dimensional wireframe darts:
                 // pointed nose, two diamond rings, longitudinal ribs and
@@ -3103,20 +3120,20 @@ final class BattlefieldScene: SKScene {
                 ]
                 for i in 0..<4 {
                     let next = (i + 1) % 4
-                    line(path, nose, frontRing[i], c)
-                    line(path, frontRing[i], frontRing[next], c)
-                    line(path, frontRing[i], backRing[i], c)
-                    line(path, backRing[i], backRing[next], c)
-                    line(path, backRing[i], tailTip, c)
+                    shellLine(path, nose, frontRing[i])
+                    shellLine(path, frontRing[i], frontRing[next])
+                    shellLine(path, frontRing[i], backRing[i])
+                    shellLine(path, backRing[i], backRing[next])
+                    shellLine(path, backRing[i], tailTip)
                 }
                 for side in [-1.0, 1.0] {
                     let fin = vertex(end, side * radius * 1.65, 0)
-                    line(path, frontRing[side > 0 ? 0 : 2], fin, c)
-                    line(path, fin, tailTip, c)
+                    shellLine(path, frontRing[side > 0 ? 0 : 2], fin)
+                    shellLine(path, fin, tailTip)
                 }
                 // A narrow illuminated tracer axis makes fast rounds readable
                 // without changing their position or hit detection.
-                line(path, nose, tailTip, c)
+                shellLine(path, nose, tailTip)
             }
         }
         shotLines.path = bulletPath
@@ -3129,10 +3146,10 @@ final class BattlefieldScene: SKScene {
             let delta = spark.timeLeft / spark.maxLife
             if delta <= 0 { continue }
             let v = spark.velocity
-            line(flarePath, spark.position,
+            shellLine(flarePath, spark.position,
                  WorldPoint(spark.position.x - v.x*0.045*delta,
                             spark.position.y - v.y*0.045*delta,
-                            spark.position.z - v.z*0.045*delta), c)
+                            spark.position.z - v.z*0.045*delta))
         }
         flashLines.path = flarePath
     }
