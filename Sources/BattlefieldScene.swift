@@ -9,7 +9,11 @@ private struct Obstacle {
     var kind: Kind
 }
 
-private enum FoeType { case tank, hunter, saucer }
+private enum FoeType {
+    case tank, hunter, apc, artillery, saucer, drone, fighter
+    var isAir: Bool { self == .saucer || self == .drone || self == .fighter }
+    var isVehicle: Bool { !isAir }
+}
 private struct Foe {
     var center: GroundPoint
     var heading: Double
@@ -20,6 +24,7 @@ private struct Foe {
     // Transient routing cache: recalculated after restoring a save.
     var navigationWaypoint: GroundPoint? = nil
     var routeRefreshRemaining: Double = 0
+    var attackTimer: Double = 0
 }
 
 private struct Shell {
@@ -27,6 +32,7 @@ private struct Shell {
     var direction: GroundPoint
     var hostile: Bool
     var timeLeft: Double
+    var payload: String = "cannon"
 }
 
 private struct Spark {
@@ -87,6 +93,15 @@ final class BattlefieldScene: SKScene {
     private var lastUpdateTime: TimeInterval = 0
     private var pendingWave: Double = 0
     private var saucerPatrol = SaucerPatrolClock()
+    private var waveApproach = 0.0
+    private var waveElapsed = 0.0
+    private var dronesPending = 0
+    private var fightersPending = 0
+    private var chaffCharges = ChaffDefense.chargesPerWave
+    private var chaffCooldown = 0.0
+    private var chaffActive = 0.0
+    private var hitFlashRemaining = 0.0
+    private var destructionRemaining = 0.0
     private var obstacles: [Obstacle] = []
     private var enemies: [Foe] = []
     private var shells: [Shell] = []
@@ -111,6 +126,12 @@ final class BattlefieldScene: SKScene {
     private let modernFriendlyShells = SKShapeNode()
     private let modernHostileShells = SKShapeNode()
     private let flashLines = SKShapeNode()
+    private let damageOverlay = SKShapeNode()
+    private let destructionRings = SKShapeNode()
+    private let droneLines = SKShapeNode()
+    private let fighterLines = SKShapeNode()
+    private let armoredLines = SKShapeNode()
+    private let countermeasureLines = SKShapeNode()
     private let reticle = SKShapeNode()
     private let shieldBorder = SKShapeNode()
     private let shieldNotice = SKLabelNode(fontNamed: "Menlo-Bold")
@@ -130,6 +151,7 @@ final class BattlefieldScene: SKScene {
     private let rearBackground = SKShapeNode()
     private let rearLabel = SKLabelNode(fontNamed: "Menlo-Bold")
     private let proximityLabel = SKLabelNode(fontNamed: "Menlo-Bold")
+    private let proximityWings = SKShapeNode()
     private let radarObstacleContacts = SKShapeNode()
     private let radarStreetGrid = SKShapeNode()
     private let radarProjectileGlow = SKShapeNode()
@@ -251,7 +273,10 @@ final class BattlefieldScene: SKScene {
             (groundMesh, 3.1), (streetMarks, 3.2), (structures, 4.0),
             (opponentLines, 5.0), (opponentSaucerLines, 5.1), (shotLines, 6.0),
             (modernFriendlyShells, 6.2), (modernHostileShells, 6.3),
-            (flashLines, 7.0),
+            (flashLines, 7.0), (armoredLines, 5.3),
+            (droneLines, 5.4), (fighterLines, 5.5),
+            (countermeasureLines, 8.6), (destructionRings, 9.0),
+            (damageOverlay, 9.3), (proximityWings, 15.9),
             (scanlines, 8.0), (reticle, 10.0), (hudLines, 12.0), (radar, 13.0)
         ] {
             layer.zPosition = z
@@ -293,6 +318,11 @@ final class BattlefieldScene: SKScene {
         proximityLabel.verticalAlignmentMode = .center
         proximityLabel.isHidden = true
         addChild(proximityLabel)
+        damageOverlay.strokeColor = .clear
+        damageOverlay.fillColor = .clear
+        destructionRings.strokeColor = .clear
+        countermeasureLines.strokeColor = .clear
+        proximityWings.fillColor = .clear
         radarStreetGrid.zPosition = 12.8
         addChild(radarStreetGrid)
         radarObstacleContacts.zPosition = 13.1
