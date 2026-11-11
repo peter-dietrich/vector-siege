@@ -263,6 +263,29 @@ struct GeometrySmoke {
         waveCannon.rearmForNextLevel()
         precondition(waveCannon.canFire && waveCannon.roundsRemaining == 3)
 
+        // Culling reduces distant geometry without hiding close contacts,
+        // and the segmented hull occluder retains exposed gun details.
+        precondition(BattlefieldRenderLOD.isVisible(
+            depth: 30, lateral: 12))
+        precondition(!BattlefieldRenderLOD.isVisible(
+            depth: 80, lateral: 400))
+        precondition(BattlefieldRenderLOD.isVisible(
+            depth: -4, lateral: 0))
+        precondition(!BattlefieldRenderLOD.isVisible(
+            depth: -30, lateral: 0))
+        precondition(BattlefieldRenderLOD.vegetationDetail(
+            distance: 20) == 2)
+        precondition(BattlefieldRenderLOD.vegetationDetail(
+            distance: 55) == 1)
+        precondition(BattlefieldRenderLOD.vegetationDetail(
+            distance: 100) == 0)
+        precondition(BattlefieldRenderLOD.tankSegmentCount(
+            length: 8, occluderCount: 0) == 1)
+        precondition(BattlefieldRenderLOD.tankSegmentCount(
+            length: 8, occluderCount: 2) >= 8)
+        precondition(BattlefieldRenderLOD.tankSegmentCount(
+            length: 22, occluderCount: 2) <= 12)
+
         // Solid facades hide line-of-sight to ground vehicles and permit
         // real partial exposure, while empty/transparent obstacles do not.
         let cameraPosition = GroundPoint(0, 0)
