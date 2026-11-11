@@ -2300,7 +2300,15 @@ final class BattlefieldScene: SKScene {
         radarDroneContacts.strokeColor = NSColor(calibratedRed: 1, green: 0.85, blue: 0.24, alpha: 1)
         radarDroneContacts.fillColor = NSColor(calibratedRed: 1, green: 0.77, blue: 0.19, alpha: 0.68)
         radarDroneContacts.lineWidth = 1.4
-        radarDroneContacts.glowWidth = 2.2
+        radarDroneContacts.glowWidth = 1.0
+        radarActiveDrones.strokeColor = NSColor(
+            calibratedRed: 1.0, green: 0.82, blue: 0.29, alpha: 1)
+        radarActiveDrones.lineWidth = 1.55
+        radarActiveDrones.glowWidth = 3.0
+        radarTargetCue.strokeColor = NSColor(
+            calibratedRed: 0.45, green: 1.0, blue: 0.69, alpha: 1)
+        radarTargetCue.lineWidth = 1.6
+        radarTargetCue.glowWidth = 2.3
         radarFighterContacts.strokeColor = NSColor(calibratedRed: 1, green: 0.35, blue: 0.19, alpha: 1)
         radarFighterContacts.fillColor = NSColor(calibratedRed: 1, green: 0.24, blue: 0.13, alpha: 0.35)
         radarFighterContacts.lineWidth = 1.7
@@ -4290,6 +4298,8 @@ final class BattlefieldScene: SKScene {
         let hunterContacts = CGMutablePath()
         let saucerContacts = CGMutablePath()
         let droneContacts = CGMutablePath()
+        let activeDroneContacts = CGMutablePath()
+        let focusedTarget = CGMutablePath()
         let fighterContacts = CGMutablePath()
         let projectileHalos = CGMutablePath()
         let projectileDots = CGMutablePath()
@@ -4327,10 +4337,18 @@ final class BattlefieldScene: SKScene {
                 hunterContacts.addLine(to: point(contact.x + r, contact.y - r))
                 hunterContacts.closeSubpath()
             case .drone:
-                let r = 2.9
-                droneContacts.addEllipse(in: CGRect(
-                    x: contact.x-r, y: contact.y-r,
-                    width: r*2, height: r*2))
+                // Passive drones are grouped below the entity loop.
+                // Only an active wing gets separate high-contrast contacts.
+                let index = max(0, Int((foe.droneSeed / 1.618).rounded()))
+                if AirEncounterDirector.isAttacking(
+                    droneIndex: index, elapsed: droneAttackClock) &&
+                    foe.droneDisrupted <= 0 {
+                    let r = 3.5
+                    activeDroneContacts.move(to: point(contact.x, contact.y + r))
+                    activeDroneContacts.addLine(to: point(contact.x-r, contact.y-r))
+                    activeDroneContacts.addLine(to: point(contact.x+r, contact.y-r))
+                    activeDroneContacts.closeSubpath()
+                }
             case .fighter:
                 let r = 6.0
                 fighterContacts.move(to: point(contact.x, contact.y+r))
@@ -4342,6 +4360,41 @@ final class BattlefieldScene: SKScene {
                 let r = foe.kind == .apc ? 3.8 : 3.2
                 enemyContacts.addRect(CGRect(x: contact.x-r, y: contact.y-r,
                                              width: r*2, height: r*2))
+            }
+        }
+        // Cluster non-attacking drone contacts into coherent squad markers.
+        // Buildings and ground vehicles stay individually visible.
+        let passiveDrones = enemies.filter { foe in
+            guard foe.kind == .drone else { return false }
+            let index = max(0, Int((foe.droneSeed / 1.618).rounded()))
+            return !AirEncounterDirector.isAttacking(
+                droneIndex: index, elapsed: droneAttackClock) ||
+                foe.droneDisrupted > 0
+        }.map(\.center)
+        for cluster in TacticalRadarGeometry.droneClusters(passiveDrones) {
+            guard let contact = radarPoint(cluster.center) else { continue }
+            let r = cluster.count > 3 ? 3.1 : 2.1
+            droneContacts.addEllipse(in: CGRect(
+                x: contact.x-r, y: contact.y-r,
+                width: r*2, height: r*2))
+            if cluster.count > 3 {
+                let ring = r + 2.3
+                droneContacts.addEllipse(in: CGRect(
+                    x: contact.x-ring, y: contact.y-ring,
+                    width: ring*2, height: ring*2))
+            }
+        }
+        let tacticalTarget = targetTelemetry()
+        if let target = tacticalTarget,
+            let contact = radarPoint(target.position) {
+            let radius = 8.0
+            for n in 0..<4 {
+                let angle = Double(n) * .pi / 2 + .pi / 4
+                let a = point(contact.x + cos(angle) * radius,
+                              contact.y + sin(angle) * radius)
+                let b = point(contact.x + cos(angle + 0.52) * radius,
+                              contact.y + sin(angle + 0.52) * radius)
+                segment(focusedTarget, a, b)
             }
         }
         for shell in shells {
@@ -4358,6 +4411,11 @@ final class BattlefieldScene: SKScene {
         radarHunterContacts.path = hunterContacts
         radarSaucerContacts.path = saucerContacts
         radarDroneContacts.path = droneContacts
+        radarActiveDrones.path = activeDroneContacts
+        radarTargetCue.path = focusedTarget
+        radarTargetCue.strokeColor = tacticalTarget?.clearShot == false
+            ? NSColor(calibratedRed: 1, green: 0.64, blue: 0.22, alpha: 1)
+            : NSColor(calibratedRed: 0.45, green: 1, blue: 0.69, alpha: 1)
         radarFighterContacts.path = fighterContacts
         radarProjectileGlow.path = projectileHalos
         radarProjectileCore.path = projectileDots
