@@ -1156,22 +1156,41 @@ final class BattlefieldScene: SKScene {
     private func spawnWave() {
         enemies.removeAll()
         waveElapsed = 0
-        // A combined-arms squad approaches from a single randomized side
-        // or rear quadrant, rather than materializing around the commander.
+        // Evaluate several randomized approach quadrants. Keep the squad
+        // together and favor an approach with enough clear positions even
+        // when the commander is near the city's edge.
         let flank = Double.random(in: 1.15...2.75)
-        waveApproach = wrapAngle(heading +
-            (Bool.random() ? flank : -flank))
-        waveOrigin = tankPosition + facing(waveApproach) * 125
+        let side = Bool.random() ? 1.0 : -1.0
+        let approaches = [side * flank, -side * flank,
+                          side * 2.2, -side * 2.2,
+                          Double.pi, -Double.pi]
         let count = rules.enemies(forWave: wave)
-        for n in 0..<count {
-            let occupied = enemies.map { $0.center }
-            guard let target = SquadSpawnLayout.choose(
-                player: tankPosition, heading: heading,
-                approach: waveApproach, index: n, count: count,
-                existing: occupied,
-                isOpen: { !self.blocked($0, radius: 4) }) else {
-                continue // A blocked street never creates stacked tanks.
+        var bestPositions: [GroundPoint] = []
+        var chosenApproach = wrapAngle(heading + approaches[0])
+        for relative in approaches {
+            let candidateApproach = wrapAngle(heading + relative)
+            var candidatePositions: [GroundPoint] = []
+            for index in 0..<count {
+                if let location = SquadSpawnLayout.choose(
+                    player: tankPosition, heading: heading,
+                    approach: candidateApproach,
+                    index: index, count: count, existing: candidatePositions,
+                    isOpen: { !self.blocked($0, radius: 4) }) {
+                    candidatePositions.append(location)
+                }
             }
+            if candidatePositions.count > bestPositions.count {
+                bestPositions = candidatePositions
+                chosenApproach = candidateApproach
+            }
+            if bestPositions.count == count { break }
+        }
+        waveApproach = chosenApproach
+        waveOrigin = bestPositions.isEmpty
+            ? tankPosition + facing(waveApproach) * 125 :
+            bestPositions.reduce(GroundPoint(0, 0), +) *
+                (1.0 / Double(bestPositions.count))
+        for (n, target) in bestPositions.enumerated() {
             let label = BattlefieldWaveDirector.vehicleKind(
                 index: n, wave: wave)
             let kind: FoeType
