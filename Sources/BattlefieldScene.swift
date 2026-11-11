@@ -2248,10 +2248,12 @@ final class BattlefieldScene: SKScene {
         let bottomHeight = max(113.0, min(152.0, h * 0.177))
         let topY = bottomY + bottomHeight
         let x0 = 12.0
-        let x1 = w * 0.225
-        let x2 = w * 0.370
-        let x3 = w * 0.670
-        let x4 = w * 0.830
+        // Strong, repeatable zones: vehicle 25%, accuracy 15%,
+        // navigation 28%, terrain plot 16%, coordinates 16%.
+        let x1 = w * 0.250
+        let x2 = w * 0.400
+        let x3 = w * 0.680
+        let x4 = w * 0.840
         let x5 = w - 12
         let middleY = bottomY + bottomHeight * 0.51
 
@@ -2336,7 +2338,7 @@ final class BattlefieldScene: SKScene {
         // game doesn't yet simulate component-by-component armor damage.
         let integrity = 100.0 * Double(max(0, lives)) /
                         Double(max(1, rules.startingLives))
-        let statusLeft = leftEdge + tankWidth + 22
+        let statusLeft = leftEdge + tankWidth + 17
         func setExtra(_ id: Int, _ value: String,
                       x: Double, y: Double, size: Double,
                       color: NSColor, alignedRight: Bool = false) {
@@ -2347,10 +2349,10 @@ final class BattlefieldScene: SKScene {
             label.fontColor = color
             label.horizontalAlignmentMode = alignedRight ? .right : .left
         }
-        modernTankStatus.position = point(statusLeft, topY - 31)
+        modernTankStatus.position = point(statusLeft, topY - 29)
         modernTankStatus.fontColor = greenLight
-        modernTankStatus.fontSize = CGFloat(14.5 * scale)
-        modernTankStatus.text = "• TANK STATUS"
+        modernTankStatus.fontSize = CGFloat(12.5 * scale)
+        modernTankStatus.text = "TANK / STATUS"
         modernIntegrity.position = point(statusLeft, topY - 61)
         modernIntegrity.fontSize = CGFloat(12 * scale)
         modernIntegrity.text = "INTEGRITY"
@@ -2363,20 +2365,23 @@ final class BattlefieldScene: SKScene {
         setExtra(1, round == .gameOver ? "OFFLINE" : "ONLINE",
                  x: x1 - 16, y: topY - 87,
                  size: 12, color: greenLight, alignedRight: true)
-        setExtra(2, round == .playing ? "MODE  COMBAT" :
-                       round == .paused ? "MODE  PAUSED" :
-                       round == .levelReady ? "MODE  STANDBY" : "MODE  OFFLINE",
-                 x: statusLeft, y: topY - 111, size: 11, color: cyan)
+        setExtra(2, "MODE", x: statusLeft, y: topY - 111,
+                 size: 12, color: cyan)
+        setExtra(6, round == .playing ? "COMBAT" :
+                       round == .paused ? "PAUSED" :
+                       round == .levelReady ? "STANDBY" : "OFFLINE",
+                 x: x1 - 16, y: topY - 111, size: 12,
+                 color: greenLight, alignedRight: true)
 
         // Hit ratio is backed by the existing resolved shot tally.
         modernHitCaption.position = point(x1 + 17, topY - 29)
         modernHitCaption.fontSize = CGFloat(13 * scale)
         modernHitCaption.text = "HIT RATIO"
         modernHitValue.position = point(x1 + 17, middleY - 12)
-        modernHitValue.fontSize = CGFloat(36 * scale)
+        modernHitValue.fontSize = CGFloat(32 * scale)
         modernHitValue.fontColor = cyan
         modernHitValue.text = String(format: "%.0f%%", shotTally.hitPercentage)
-        let hitRadius = min(33.0, (x2 - x1) * 0.19)
+        let hitRadius = min(34.0, (x2 - x1) * 0.18)
         let hitPoint = point(x2 - hitRadius - 18, middleY - 4)
         let track = CGMutablePath()
         track.addEllipse(in: CGRect(x: hitPoint.x - hitRadius,
@@ -2437,8 +2442,8 @@ final class BattlefieldScene: SKScene {
         modernHeadingValue.text = String(
             format: "%03d°", Int(headingDegrees.rounded()) % 360)
         modernCompassLabel.position = point(compassX, bottomY + 14)
-        modernCompassLabel.fontSize = CGFloat(9 * scale)
-        modernCompassLabel.text = "HEADING  //  LIVE"
+        modernCompassLabel.fontSize = CGFloat(10 * scale)
+        modernCompassLabel.text = "NAV  /  HEADING"
 
         // Skyline terrain signature moves with tank heading. Flat-ground
         // elevation is zero: no nonexistent height sensor is implied.
@@ -2464,9 +2469,10 @@ final class BattlefieldScene: SKScene {
                     point(x, plotBottom + 10))
         }
         modernTerrainProfile.path = terrain
-        modernTerrainLabel.position = point(x4 - 17, topY - 28)
-        modernTerrainLabel.text = "TERRAIN PROFILE"
-        modernTerrainLabel.fontSize = CGFloat(12 * scale)
+        modernTerrainLabel.position = point(x3 + 18, topY - 28)
+        modernTerrainLabel.horizontalAlignmentMode = .left
+        modernTerrainLabel.text = "TERRAIN / PROFILE"
+        modernTerrainLabel.fontSize = CGFloat(11 * scale)
 
         // Sector readout uses actual 60-unit city blocks, not fabricated
         // location labels. X maps A-F, Z maps 01-06.
@@ -2477,21 +2483,21 @@ final class BattlefieldScene: SKScene {
             Int(floor((tankPosition.z + CityLayout.cityExtent)
                       / CityLayout.streetSpacing))))
         let sectorLetter = String(UnicodeScalar(65 + sectorX)!)
-        modernSectorValue.position = point(x5 - 25, topY - 64)
-        modernSectorValue.text = String(format: "SECTOR %@-%02d",
+        modernSectorValue.position = point(x5 - 18, topY - 64)
+        modernSectorValue.text = String(format: "%@-%02d",
                                        sectorLetter, sectorZ + 1)
-        modernSectorValue.fontSize = CGFloat(14 * scale)
+        modernSectorValue.fontSize = CGFloat(19 * scale)
         modernSectorValue.fontColor = cyan
-        setExtra(3, "TERRAIN", x: x5 - 25, y: topY - 27,
-                 size: 12, color: cyan, alignedRight: true)
-        setExtra(4, "ELEV   +0.0 m", x: x5 - 25, y: topY - 97,
-                 size: 12, color: cyan, alignedRight: true)
-        setExtra(5, String(format: "X %+.0f   Z %+.0f",
+        setExtra(3, "SECTOR", x: x4 + 18, y: topY - 28,
+                 size: 11, color: cyan)
+        setExtra(4, "ELEV  +0.0 m", x: x5 - 18, y: topY - 94,
+                 size: 11, color: cyan, alignedRight: true)
+        setExtra(5, String(format: "X%+.0f  Z%+.0f",
                            tankPosition.x, tankPosition.z),
-                 x: x5 - 25, y: bottomY + 18,
+                 x: x5 - 18, y: bottomY + 20,
                  size: 10, color: cyan.withAlphaComponent(0.80),
                  alignedRight: true)
-        for unused in 6..<modernLowerExtra.count {
+        for unused in 7..<modernLowerExtra.count {
             modernLowerExtra[unused].text = ""
         }
 
@@ -2499,9 +2505,11 @@ final class BattlefieldScene: SKScene {
         // magazine depletion while keeping independent vector progress bars.
         let barLeft = rightX - bankWidth + 70
         let barWidth = max(46.0, bankWidth - 91)
-        let barHeight = 7.0
-        let shieldY = h - 16 - 185.0
-        let ammoY = h - 16 - 229.0
+        let barHeight = 6.0
+        // Directly below each corresponding status row, never floating
+        // across row separators or intersecting a neighboring label.
+        let shieldY = h - 16 - 181.0
+        let ammoY = h - 16 - 226.0
         func bar(_ x: Double, _ y: Double, _ width: Double) -> CGPath {
             CGPath(roundedRect: CGRect(x: x, y: y,
                                         width: max(0.1, width),
