@@ -1023,7 +1023,13 @@ final class BattlefieldScene: SKScene {
             shell.center = shell.center + shell.direction * (dt * shellSpeed)
             shell.timeLeft -= dt
             if shell.timeLeft <= 0 {
-                if !shell.hostile { shotTally.miss() }
+                if !shell.hostile {
+                    shotTally.miss()
+                    // End-of-range rounds disturb the ground rather than
+                    // vanishing silently, without manufacturing a target hit.
+                    registerImpact(at: shell.center, kind: .ground)
+                    burst(at: WorldPoint(shell.center, height: 0.3), count: 12)
+                }
                 continue
             }
 
@@ -2232,9 +2238,18 @@ final class BattlefieldScene: SKScene {
             }
         }
         directionalDamageEffects.path = warningPath
+        directionalDamageEffects.strokeColor = lives <= 1
+            ? NSColor(calibratedRed: 1, green: 0.11, blue: 0.08, alpha: 1)
+            : NSColor(calibratedRed: 1, green: 0.63, blue: 0.13, alpha: 1)
         directionalDamageEffects.alpha = CGFloat(
             min(1, damageDirectionRemaining * 1.5) *
             (0.70 + 0.30 * abs(sin(gameClock * 15))))
+        // Damage shakes the instrumentation without moving its layout.
+        let damagePulse = damageDirectionRemaining > 0
+            ? 0.66 + 0.34 * abs(sin(gameClock * (lives <= 1 ? 19 : 12)))
+            : 1.0
+        telemetryRightHeading.alpha = CGFloat(damagePulse)
+        telemetryRightFootnote.alpha = CGFloat(damagePulse)
         if hitFlashRemaining > 0 {
             let path = CGMutablePath()
             path.addRect(CGRect(x: 0, y: 0, width: w, height: h))
