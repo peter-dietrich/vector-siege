@@ -2983,16 +2983,65 @@ final class BattlefieldScene: SKScene {
         }
         modernThreatPanel.isHidden = close == nil || round != .playing
         if let distance = close, round == .playing {
-            let width = min(570.0, w * 0.60)
-            modernThreatPanel.path = CGPath(
-                roundedRect: CGRect(x: w / 2 - width / 2,
-                                    y: bottomY + bottomHeight + 18,
-                                    width: width, height: 49),
-                cornerWidth: 8, cornerHeight: 8, transform: nil)
+            // Floating full-width beveled hazard bar inspired by the supplied
+            // mockup. The label is centered *inside* this very same rectangle.
+            let width = min(w - 44, 1040.0)
+            let high = 67.0
+            let centerY = bottomY + bottomHeight + 56
+            let x0 = (w - width) / 2
+            let x1 = x0 + width
+            let lo = centerY - high / 2
+            let hi = centerY + high / 2
+            let panel = CGMutablePath()
+            let bevel = 15.0
+            panel.move(to: point(x0 + bevel, lo))
+            panel.addLine(to: point(x1 - bevel, lo))
+            panel.addLine(to: point(x1, centerY))
+            panel.addLine(to: point(x1 - bevel, hi))
+            panel.addLine(to: point(x0 + bevel, hi))
+            panel.addLine(to: point(x0, centerY))
+            panel.closeSubpath()
+            modernThreatPanel.path = panel
+            modernThreatPanel.strokeColor = distance <= TankProximity.tankLength ?
+                NSColor.systemRed : amber
+            modernThreatPanel.fillColor = NSColor(
+                calibratedRed: 0.15, green: 0.017, blue: 0.014, alpha: 0.91)
+            modernThreatPanel.lineWidth = 2.5
+            modernThreatPanel.glowWidth = 2.2
             modernThreatPanel.alpha = CGFloat(
-                0.80 + 0.20 * abs(sin(gameClock * 7)))
-            modernThreatPanel.strokeColor =
-                distance <= TankProximity.tankLength ? NSColor.systemRed : amber
+                0.86 + 0.14 * abs(sin(gameClock * 5.0)))
+            let wings = CGMutablePath()
+            for side in [-1.0, 1.0] {
+                for stripe in 0..<3 {
+                    let offset = Double(stripe) * 15
+                    let x = side < 0 ? x0 - 19 - offset : x1 + 19 + offset
+                    let skew = side * 13
+                    wings.move(to: point(x - 5, lo + 7))
+                    wings.addLine(to: point(x + skew + 5, hi - 7))
+                    wings.addLine(to: point(x + skew + 13, hi - 7))
+                    wings.addLine(to: point(x + 3, lo + 7))
+                    wings.closeSubpath()
+                }
+            }
+            proximityWings.path = wings
+            proximityWings.fillColor = NSColor(
+                calibratedRed: 1, green: 0.33, blue: 0.11, alpha: 0.80)
+            proximityWings.strokeColor = .clear
+            proximityWings.isHidden = false
+            proximityLabel.isHidden = false
+            proximityLabel.position = point(w / 2, centerY)
+            let content = String(format:
+                "⚠  PROXIMITY ALERT   //   ENEMY %.1f TANK LENGTHS",
+                distance / TankProximity.tankLength)
+            proximityLabel.text = content
+            proximityLabel.fontSize = CGFloat(
+                min(22.0, (width - 38) / (Double(content.count) * 0.63)))
+            proximityLabel.fontColor = distance <= TankProximity.tankLength ?
+                NSColor.systemRed : NSColor(
+                    calibratedRed: 1, green: 0.59, blue: 0.31, alpha: 1)
+        } else {
+            proximityLabel.isHidden = true
+            proximityWings.isHidden = true
         }
     }
 
@@ -3406,10 +3455,10 @@ final class BattlefieldScene: SKScene {
             warning.fontSize = modernHUD ? (urgency ? 21 : 18) : (urgency ? 20 : 17)
             warning.fontColor = urgency ? .red : NSColor.systemOrange
             warning.alpha = CGFloat(0.70 + 0.30 * abs(sin(gameClock * 8.0)))
-            warning.text = modernHUD
-                ? String(format: "⚠  PROXIMITY ALERT   //   ENEMY %.1f TANK LENGTHS",
-                         distance / TankProximity.tankLength)
-                : String(format: "⚠  ENEMY PROXIMITY  %.0f", distance)
+            // Modern uses the dedicated correctly fitted warning panel;
+            // never draw the old loose label on top of its frame.
+            warning.text = modernHUD ? "" :
+                String(format: "⚠  ENEMY PROXIMITY  %.0f", distance)
         } else {
             warning.position = modernHUD ? point(w / 2, c.horizon + 100) : warning.position
             warning.fontSize = 12
