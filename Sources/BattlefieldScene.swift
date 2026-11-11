@@ -94,6 +94,7 @@ final class BattlefieldScene: SKScene {
     private var pendingWave: Double = 0
     private var saucerPatrol = SaucerPatrolClock()
     private var waveApproach = 0.0
+    private var waveOrigin = GroundPoint(0, 0)
     private var waveElapsed = 0.0
     private var dronesPending = 0
     private var fightersPending = 0
@@ -1056,30 +1057,64 @@ final class BattlefieldScene: SKScene {
 
     private func spawnWave() {
         enemies.removeAll()
+        waveElapsed = 0
+        // A combined-arms squad approaches from a single randomized side
+        // or rear quadrant, rather than materializing around the commander.
+        let flank = Double.random(in: 1.15...2.75)
+        waveApproach = wrapAngle(heading +
+            (Bool.random() ? flank : -flank))
+        waveOrigin = tankPosition + facing(waveApproach) * 125
         let count = rules.enemies(forWave: wave)
-        // Change the angular starting sectors every wave. Keep the central
-        // aiming cone empty on spawn, even after moving to a new city block.
-        let wavePhase = Double.random(in: (-Double.pi)...Double.pi)
-        let forwardExclusion = Double.pi / 5.0
         for n in 0..<count {
             let occupied = enemies.map { $0.center }
-            guard let target = EnemySpawnLayout.choosePosition(
-                player: tankPosition, heading: heading, index: n, count: count,
-                existing: occupied, phase: wavePhase,
-                forwardExclusion: forwardExclusion,
+            guard let target = SquadSpawnLayout.choose(
+                player: tankPosition, heading: heading,
+                approach: waveApproach, index: n, count: count,
+                existing: occupied,
                 isOpen: { !self.blocked($0, radius: 4) }) else {
-                // Never spawn a pile of tanks: an obstructed sector produces
-                // fewer enemies rather than falling back to an occupied cell.
-                continue
+                continue // A blocked street never creates stacked tanks.
             }
-            let kind: FoeType = (rules.huntersEnabled && wave >= 3 && n % 4 == 2)
-                ? .hunter : ((rules.saucersEnabled && wave >= 2 && n % 6 == 5) ? .saucer : .tank)
-            let initialHeading = atan2(tankPosition.x - target.x,
-                                       tankPosition.z - target.z)
-            enemies.append(Foe(center: target, heading: initialHeading, kind: kind,
-                               reload: Double.random(in: 2.0...4.0),
-                               phase: Double.random(in: 0...6.0),
-                               hitPoints: kind == .hunter ? 2 : 1))
+            let label = BattlefieldWaveDirector.vehicleKind(
+                index: n, wave: wave)
+            let kind: FoeType
+            switch label {
+            case "hunter" where rules.huntersEnabled: kind = .hunter
+            case "apc": kind = .apc
+            case "artillery": kind = .artillery
+            default: kind = .tank
+            }
+            let orientation = atan2(tankPosition.x - target.x,
+                                    tankPosition.z - target.z)
+            enemies.append(Foe(center: target, heading: orientation,
+                               kind: kind,
+                               reload: Double.random(in: 3.2...5.4),
+                               phase: Double.random(in: 0...6),
+                               hitPoints: kind == .hunter || kind == .artillery ? 2 : 1))
+        }
+        dronesPending = BattlefieldWaveDirector.drones(forWave: wave)
+        fightersPending = BattlefieldWaveDirector.fighters(forWave: wave)
+        // Wave introductions expose the squad and upcoming air contingents.
+        chaffCharges = ChaffDefense.chargesPerWave
+        chaffCooldown = 0
+        chaffActive = 0
+    }
+
+    private func deployAirWing(kind: FoeType, count: Int) {
+        guard round == .playing, count > 0 else { return }
+        for n in 0..<count {
+            let angle = waveApproach + (Double(n) -
+                Double(count - 1) / 2) * 0.14
+            let distance = kind == .fighter ? 147.0 : 112.0
+            let position = tankPosition + facing(angle) * distance
+            let safe = GroundPoint(
+                max(-174, min(174, position.x)),
+                max(-174, min(174, position.z)))
+            let approachHeading = atan2(tankPosition.x - safe.x,
+                                         tankPosition.z - safe.z)
+            enemies.append(Foe(center: safe, heading: approachHeading,
+                               kind: kind, reload: kind == .fighter ? 3.5 : 999,
+                               phase: Double(n) * 1.2,
+                               hitPoints: kind == .fighter ? 2 : 1))
         }
     }
 
