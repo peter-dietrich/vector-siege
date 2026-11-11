@@ -931,7 +931,8 @@ enum EnemyNavigation {
     static func nextWaypoint(
         from start: GroundPoint, player: GroundPoint,
         obstacles: [NavigationObstacle], shotBlockers: [NavigationObstacle],
-        otherTanks: [GroundPoint], desiredStandOff: Double = 18
+        otherTanks: [GroundPoint], desiredStandOff: Double = 18,
+        terrainAware: Bool = false
     ) -> GroundPoint? {
         let count = gridCount
         func index(_ point: GroundPoint) -> Int {
@@ -961,7 +962,10 @@ enum EnemyNavigation {
             let clearShot = distance >= max(10, desiredStandOff - 5) &&
                             distance <= 78 &&
                             clearSegment(candidate, player, obstacles: shotBlockers,
-                                         height: 1.5)
+                                         height: 1.5) &&
+                            (!terrainAware ||
+                             LandscapeTopology.clearFiringLine(
+                                 from: candidate, to: player))
             if clearShot {
                 found = currentIndex
                 break
