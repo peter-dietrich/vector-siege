@@ -25,7 +25,7 @@ struct WorldPoint: Codable {
 /// blocks rise away from a raised, clearly visible curb edge.
 enum LandscapeTopology {
     static let roadSpacing = 60.0
-    static let roadHalfWidth = 7.0
+    static let roadHalfWidth = 9.0
 
     static func distanceToRoadAxis(_ n: Double) -> Double {
         abs(n - (n / roadSpacing).rounded() * roadSpacing)
