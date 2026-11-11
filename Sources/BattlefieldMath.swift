@@ -619,6 +619,16 @@ struct SavedSiegeFoe: Codable {
     var reload: Double
     var phase: Double
     var hitPoints: Int
+    // Optional air-state fields keep all previous v1 saves decodable.
+    var droneSeed: Double? = nil
+    var droneOffset: GroundPoint? = nil
+    var droneVelocity: GroundPoint? = nil
+    var droneHasCharge: Bool? = nil
+    var droneDropDelay: Double? = nil
+    var droneDisrupted: Double? = nil
+    var droneAltitude: Double? = nil
+    var attackTimer: Double? = nil
+    var airShotsFired: Int? = nil
 }
 struct SavedSiegeShell: Codable {
     var center: GroundPoint
@@ -627,6 +637,7 @@ struct SavedSiegeShell: Codable {
     var timeLeft: Double
     // Older save slots contain no projectile payload field.
     var payload: String? = nil
+    var launchElevation: Double? = nil
 }
 struct SavedSiegeSpark: Codable {
     var position: WorldPoint
@@ -672,6 +683,7 @@ struct SiegeSnapshot: Codable {
     var chaffCharges: Int? = nil
     var chaffCooldown: Double? = nil
     var chaffActive: Double? = nil
+    var droneAttackClock: Double? = nil
 }
 
 struct SiegeSaveSlot: Codable, Identifiable {
