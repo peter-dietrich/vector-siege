@@ -361,7 +361,8 @@ struct GeometrySmoke {
             center: GroundPoint(0, 0), size: 6, kind: .building)
         let monolith = ObstacleCollision.body(
             center: GroundPoint(0, 0), size: 6, kind: .monolith)
-        precondition(tower.halfX == 3.3 && monolith.halfZ == 2.52)
+        precondition(abs(tower.halfX - 3.3) < 1e-10 &&
+                     abs(monolith.halfZ - 2.52) < 1e-10)
         precondition(abs(building.halfX - 6.3) < 1e-10)
 
         // The same rectangular footprint governs tank driving and AI sight.
