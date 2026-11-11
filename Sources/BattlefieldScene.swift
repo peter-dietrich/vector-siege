@@ -691,6 +691,7 @@ final class BattlefieldScene: SKScene {
             firePlayer()
         }
 
+        var detonatedDrones: [Int] = []
         for idx in enemies.indices {
             let diff = tankPosition - enemies[idx].center
             let distance = max(0.001, diff.length)
@@ -699,24 +700,72 @@ final class BattlefieldScene: SKScene {
             let type = enemies[idx].kind
             // Flying disks travel slowly to preserve their ominous, floating
             // appearance. Their visual rotation speed is independent.
-            let movement = (type == .hunter ? 4.6 : (type == .saucer ? EnemyMotion.saucerBaseSpeed : 2.55))
-                * threatLevel.enemyVelocity * rules.enemySpeed
+            let baseMovement: Double
+            switch type {
+            case .saucer: baseMovement = EnemyMotion.saucerBaseSpeed
+            case .drone: baseMovement = 6.7
+            case .fighter: baseMovement = 12.0
+            case .hunter: baseMovement = 4.6
+            case .apc: baseMovement = 3.3
+            case .artillery: baseMovement = 1.9
+            case .tank: baseMovement = 2.55
+            }
+            let movement = baseMovement * threatLevel.enemyVelocity * rules.enemySpeed
             let aim = atan2(diff.x, diff.z)
             if type == .saucer {
-                let tangent = GroundPoint(cos(enemies[idx].phase * 0.8), sin(enemies[idx].phase * 0.8))
+                let tangent = GroundPoint(cos(enemies[idx].phase * 0.8),
+                                          sin(enemies[idx].phase * 0.8))
                 enemies[idx].center = enemies[idx].center + tangent * (movement * dt)
+            } else if type == .drone {
+                // Small loitering munition: visible slow approach, no remote
+                // instant hit. Chaff/ECM stalls guidance and short-range bursts
+                // safely neutralize it; shield intercepts it at contact.
+                if chaffActive <= 0 {
+                    let direction = diff.normalized
+                    enemies[idx].heading = aim
+                    let position = enemies[idx].center + direction * (movement * dt)
+                    enemies[idx].center = GroundPoint(
+                        max(-179, min(179, position.x)),
+                        max(-179, min(179, position.z)))
+                    if distance < 5.2 {
+                        detonatedDrones.append(idx)
+                        burst(at: WorldPoint(enemies[idx].center, height: 2.7),
+                              count: 25)
+                        if shieldDuration <= 0 && invulnerability <= 0 {
+                            takeDamage()
+                        } else {
+                            sound("impact.wav")
+                        }
+                    }
+                }
+            } else if type == .fighter {
+                // Fast but low-pass, finite aircraft: sweep across the player
+                // and arc away; never park directly above the tank.
+                let orbit = distance < 28 ? 1.13 : 0.26 *
+                    sin(enemies[idx].phase * 0.52)
+                enemies[idx].heading = wrapAngle(aim + orbit)
+                let proposed = enemies[idx].center +
+                    facing(enemies[idx].heading) * movement * dt
+                if abs(proposed.x) < 177 && abs(proposed.z) < 177 {
+                    enemies[idx].center = proposed
+                } else {
+                    enemies[idx].heading = wrapAngle(aim)
+                    enemies[idx].center = enemies[idx].center +
+                        facing(aim) * movement * dt
+                }
             } else {
                 let obstaclesForNavigation = obstacles.map {
                     NavigationObstacle(body: collisionBody(for: $0))
                 }
                 let shotBlockers = obstaclesForNavigation
                 let occupied = enemies.indices
-                    .filter { $0 != idx && enemies[$0].kind != .saucer }
+                    .filter { $0 != idx && enemies[$0].kind.isVehicle }
                     .map { enemies[$0].center }
                 let clearShot = EnemyNavigation.clearSegment(
                     enemies[idx].center, tankPosition, obstacles: shotBlockers,
                     height: 1.5)
-                let desiredDistance = type == .hunter ? 19.0 : 24.0
+                let desiredDistance = type == .hunter ? 19.0 :
+                    (type == .artillery ? 48.0 : 24.0)
 
                 // Replan if the target moves, cover blocks the shot, or the
                 // previous waypoint was reached. Stagger work across frames.
@@ -769,29 +818,54 @@ final class BattlefieldScene: SKScene {
                     }
                 }
             }
-            let visibleTarget = type != .saucer &&
-                EnemyNavigation.clearSegment(
-                    enemies[idx].center, tankPosition,
-                    obstacles: obstacles.map {
-                        NavigationObstacle(body: collisionBody(for: $0))
-                    }, height: 1.5)
-            if enemies[idx].reload <= 0 && visibleTarget &&
-                distance < 79 && distance > 7 {
-                let aimError = threatLevel.enemyAimError / rules.enemyAccuracy
-                let error = Double.random(in: -aimError ... aimError)
+            let targetVisible = !type.isVehicle || EnemyNavigation.clearSegment(
+                enemies[idx].center, tankPosition,
+                obstacles: obstacles.map {
+                    NavigationObstacle(body: collisionBody(for: $0))
+                }, height: 1.5)
+            let hostileShots = shells.filter { $0.hostile }.count
+            if type != .saucer && type != .drone &&
+                enemies[idx].reload <= 0 && targetVisible &&
+                hostileShots < BattlefieldWaveDirector.maximumHostileShots(forWave: wave) &&
+                distance < (type == .fighter ? 125 : 79) && distance > 9 &&
+                (type != .fighter || chaffActive <= 0) {
+                let errorScale = type == .fighter ? 1.7 :
+                                 (type == .artillery ? 1.5 : 1.0)
+                let aimError = threatLevel.enemyAimError /
+                    rules.enemyAccuracy * errorScale
+                let error = Double.random(in: -aimError...aimError)
                 let direction = facing(aim + error)
-                shells.append(Shell(center: enemies[idx].center + direction * 3.0,
-                                    direction: direction, hostile: true, timeLeft: 4.0))
-                enemies[idx].reload = Double.random(in: 2.3 ... 4.0) * threatLevel.enemyReload / rules.enemyReload
+                let explosive = type == .artillery ||
+                    (type == .fighter && Int(enemies[idx].phase * 3) % 4 == 0)
+                let payload = explosive ? "bomb" :
+                    (type == .fighter || type == .apc ? "machinegun" : "cannon")
+                let count = payload == "machinegun" && hostileShots == 0 ? 2 : 1
+                for burstIndex in 0..<count {
+                    let scatter = Double(burstIndex) * 0.055
+                    let flight = facing(aim + error + scatter)
+                    shells.append(Shell(
+                        center: enemies[idx].center + flight * 3,
+                        direction: flight, hostile: true,
+                        timeLeft: 4, payload: payload))
+                }
+                enemies[idx].reload = (type == .fighter ? 4.8 :
+                    type == .artillery ? 5.7 : 3.5) *
+                    threatLevel.enemyReload / rules.enemyReload
                 sound("enemy.wav")
             }
+        }
+        for index in detonatedDrones.sorted(by: >) {
+            enemies.remove(at: index)
         }
 
         var survivingShells: [Shell] = []
         var casualties = Set<Int>()
         for var shell in shells {
             let old = shell.center
-            shell.center = shell.center + shell.direction * (dt * (shell.hostile ? 23 : 90))
+            let shellSpeed = !shell.hostile ? 90.0 :
+                (shell.payload == "bomb" ? 17.0 :
+                    shell.payload == "machinegun" ? 34.0 : 23.0)
+            shell.center = shell.center + shell.direction * (dt * shellSpeed)
             shell.timeLeft -= dt
             if shell.timeLeft <= 0 {
                 if !shell.hostile { shotTally.miss() }
@@ -809,10 +883,17 @@ final class BattlefieldScene: SKScene {
             if shell.hostile {
                 targetTime = ObstacleCollision.firstCircleImpact(
                     from: old, to: shell.center, center: tankPosition,
-                    radius: 2.0)
+                    radius: shell.payload == "bomb" ? 5.0 : 2.0)
             } else {
                 for idx in enemies.indices where !casualties.contains(idx) {
-                    let radius = enemies[idx].kind == .saucer ? 3.1 : 2.9
+                    let radius: Double
+                    switch enemies[idx].kind {
+                    case .fighter: radius = 5.5
+                    case .drone: radius = 3.6
+                    case .saucer: radius = 3.1
+                    case .artillery: radius = 3.3
+                    default: radius = 2.9
+                    }
                     if let hit = ObstacleCollision.firstCircleImpact(
                         from: old, to: shell.center,
                         center: enemies[idx].center, radius: radius),
@@ -833,19 +914,30 @@ final class BattlefieldScene: SKScene {
             if let hit = targetTime {
                 let impact = old + (shell.center - old) * hit
                 if shell.hostile {
-                    burst(at: WorldPoint(impact, height: height), count: 24)
+                    burst(at: WorldPoint(impact, height: height),
+                          count: shell.payload == "bomb" ? 55 : 24)
                     if shieldDuration <= 0 && invulnerability <= 0 { takeDamage() }
                     else { sound("impact.wav") }
                 } else if let idx = targetIndex {
                     shotTally.hit()
                     enemies[idx].hitPoints -= 1
-                    burst(at: WorldPoint(impact,
-                                         height: enemies[idx].kind == .saucer ? 5.1 : 1.45),
-                          count: enemies[idx].hitPoints <= 0 ? 35 : 12)
+                    let impactHeight = enemies[idx].kind.isAir
+                        ? (enemies[idx].kind == .fighter ? 4.0 : 2.8) : 1.45
+                    burst(at: WorldPoint(impact, height: impactHeight),
+                          count: enemies[idx].hitPoints <= 0 ? 40 : 14)
                     if enemies[idx].hitPoints <= 0 {
                         casualties.insert(idx)
-                        addPoints(enemies[idx].kind == .hunter ? 1500 :
-                                  (enemies[idx].kind == .saucer ? 250 : 1000))
+                        let points: Int
+                        switch enemies[idx].kind {
+                        case .drone: points = 225
+                        case .fighter: points = 2200
+                        case .artillery: points = 1650
+                        case .apc: points = 850
+                        case .hunter: points = 1500
+                        case .saucer: points = 250
+                        case .tank: points = 1000
+                        }
+                        addPoints(points)
                         sound("explosion.wav")
                     } else { sound("impact.wav") }
                 }
