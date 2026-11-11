@@ -743,23 +743,24 @@ final class BattlefieldScene: SKScene {
             } else if type == .drone {
                 var drone = enemies[idx]
                 let phase = drone.phase + drone.droneSeed
+                // Independent long-period motion keeps the wider cloud organic.
                 let wander = GroundPoint(
-                    sin(phase * 0.67) * 3.3 + sin(phase * 1.31) * 1.4,
-                    cos(phase * 0.53) * 3.0 + cos(phase * 1.17) * 1.3)
+                    sin(phase * 0.67) * 4.8 + sin(phase * 1.31) * 1.8,
+                    cos(phase * 0.53) * 4.5 + cos(phase * 1.17) * 1.9)
                 let desiredPosition = swarmCenter + drone.droneOffset + wander
                 var separation = GroundPoint(0, 0)
                 for other in enemies.indices where other != idx &&
                     enemies[other].kind == .drone {
                     let away = drone.center - enemies[other].center
                     let range = away.length
-                    if range > 0.001 && range < 4.0 {
-                        separation = separation + away.normalized * ((4 - range) / 4)
+                    if range > 0.001 && range < 6.5 {
+                        separation = separation + away.normalized * ((6.5 - range) / 6.5)
                     }
                 }
                 let speedFactor = 1.0 + 0.18 * sin(phase * 0.47) +
                     0.08 * sin(phase * 1.06)
                 let steering = (desiredPosition - drone.center) * 0.70 +
-                    swarmVelocity + separation * 5
+                    swarmVelocity + separation * 7
                 let speedTarget = min(10.5, max(2.0, steering.length * speedFactor))
                 let desiredVelocity = steering.normalized * speedTarget
                 let previousVelocity = drone.droneVelocity
@@ -794,9 +795,12 @@ final class BattlefieldScene: SKScene {
                     min(1, dt * 6.5)
                 drone.droneRoll += (rollTarget - drone.droneRoll) *
                     min(1, dt * 5)
-                drone.droneAltitude = 3.1 +
-                    0.48 * sin(phase * 1.18) +
-                    0.20 * sin(phase * 2.16)
+                // Distinct height bands with continuous individual bobbing.
+                // Never place rotors beneath the terrain.
+                let altitudeBand = 2.3 + Double(idx % 6) * 0.48
+                drone.droneAltitude = altitudeBand +
+                    0.38 * sin(phase * 1.18) +
+                    0.16 * sin(phase * 2.16)
                 drone.droneDropDelay = max(0, drone.droneDropDelay - dt)
                 let activeCharges = shells.filter {
                     $0.hostile && $0.payload == "droneCharge"
@@ -1302,7 +1306,11 @@ final class BattlefieldScene: SKScene {
             // Reinforcements originate from the *original* enemy staging
             // sector, even after the player has driven across the map.
             let angle = Double(n) * 2.39996323
-            let radius = sqrt(Double(n) / Double(max(1, count))) * 17.0
+            // Broad golden-angle cloud: six of thirty drones orbit farther
+            // from the core, rather than merging into a solid wireframe blob.
+            let outlier = kind == .drone && n % 5 == 0 ? 1.30 : 1.0
+            let radius = sqrt((Double(n) + 0.5) / Double(max(1, count))) *
+                29.5 * outlier
             let sideways = kind == .drone
                 ? facing(waveApproach + .pi / 2) * (cos(angle) * radius)
                 : facing(waveApproach + .pi / 2) *
