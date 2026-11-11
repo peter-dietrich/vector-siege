@@ -62,6 +62,13 @@ private struct Spark {
     var maxLife: Double
 }
 
+private struct ChaffFlake {
+    var position: WorldPoint
+    var velocity: WorldPoint
+    var timeLeft: Double
+    var duration: Double
+}
+
 /// Short-lived multi-stage vector events. World-space effects do not alter
 /// aim, hit testing, enemy movement, or save-file compatibility.
 private struct CombatImpact {
@@ -159,6 +166,7 @@ final class BattlefieldScene: SKScene {
     private var chaffCooldown = 0.0
     private var chaffActive = 0.0
     private var fallingDrones: [FallingDrone] = []
+    private var chaffFlakes: [ChaffFlake] = []
     private var hitFlashRemaining = 0.0
     private var destructionRemaining = 0.0
     private var obstacles: [Obstacle] = []
@@ -199,6 +207,7 @@ final class BattlefieldScene: SKScene {
     private let fighterLines = SKShapeNode()
     private let armoredLines = SKShapeNode()
     private let countermeasureLines = SKShapeNode()
+    private let chaffCloudLines = SKShapeNode()
     private let reticle = SKShapeNode()
     private let shieldBorder = SKShapeNode()
     private let shieldNotice = SKLabelNode(fontNamed: "Menlo-Bold")
@@ -346,7 +355,8 @@ final class BattlefieldScene: SKScene {
             (modernBombShells, 6.4),
             (flashLines, 7.0), (armoredLines, 5.3),
             (droneLines, 5.4), (fighterLines, 5.5),
-            (countermeasureLines, 8.6), (destructionRings, 9.0),
+            (chaffCloudLines, 7.8), (countermeasureLines, 8.6),
+            (destructionRings, 9.0),
             (damageOverlay, 9.3), (combatWorldEffects, 7.25),
             (combatWrecks, 4.8), (muzzleEffects, 9.6),
             (directionalDamageEffects, 10.3), (proximityWings, 15.9),
@@ -654,6 +664,8 @@ final class BattlefieldScene: SKScene {
         chaffCharges = ChaffDefense.chargesPerWave
         chaffCooldown = 0
         chaffActive = 0
+        chaffFlakes.removeAll()
+        droneAttackClock = 0
         hitFlashRemaining = 0
         destructionRemaining = 0
         shells.removeAll()
@@ -727,6 +739,7 @@ final class BattlefieldScene: SKScene {
         shieldDuration = max(0, shieldDuration - dt)
         chaffCooldown = max(0, chaffCooldown - dt)
         chaffActive = max(0, chaffActive - dt)
+        updateChaffCloud(dt)
         swarmDropTimer = max(0, swarmDropTimer - dt)
         waveElapsed += dt
         if enemies.contains(where: { $0.kind == .drone }) {
@@ -1447,6 +1460,22 @@ final class BattlefieldScene: SKScene {
         chaffCharges -= 1
         chaffCooldown = ChaffDefense.cooldown
         chaffActive = ChaffDefense.protectionDuration
+        // Reflective strands disperse for seconds instead of a single flash.
+        chaffFlakes.removeAll()
+        for _ in 0..<82 {
+            let angle = Double.random(in: 0...(2 * .pi))
+            let speed = Double.random(in: 7...20)
+            let drift = Double.random(in: 1.1...3.2)
+            let lifetime = Double.random(in: 1.8...3.3)
+            let origin = tankPosition + facing(angle) *
+                Double.random(in: 1.0...5.5)
+            chaffFlakes.append(ChaffFlake(
+                position: WorldPoint(origin, height: Double.random(in: 1.0...3.8)),
+                velocity: WorldPoint(cos(angle) * speed,
+                                     drift + Double.random(in: -0.6...2.2),
+                                     sin(angle) * speed),
+                timeLeft: lifetime, duration: lifetime))
+        }
         for index in enemies.indices where enemies[index].kind == .drone {
             let distance = enemies[index].center.distance(to: tankPosition)
             if distance <= ChaffDefense.decoyRadius {
@@ -1468,6 +1497,19 @@ final class BattlefieldScene: SKScene {
             $0.center.distance(to: tankPosition) < ChaffDefense.disruptionRadius
         }
         sound("shield.wav")
+    }
+
+    private func updateChaffCloud(_ dt: Double) {
+        for index in chaffFlakes.indices {
+            chaffFlakes[index].position.x += chaffFlakes[index].velocity.x * dt
+            chaffFlakes[index].position.y += chaffFlakes[index].velocity.y * dt
+            chaffFlakes[index].position.z += chaffFlakes[index].velocity.z * dt
+            chaffFlakes[index].velocity.x *= max(0, 1 - dt * 0.80)
+            chaffFlakes[index].velocity.z *= max(0, 1 - dt * 0.80)
+            chaffFlakes[index].velocity.y -= dt * 1.6
+            chaffFlakes[index].timeLeft -= dt
+        }
+        chaffFlakes.removeAll { $0.timeLeft <= 0 }
     }
 
     private func updateFallingDrones(_ dt: Double) {
