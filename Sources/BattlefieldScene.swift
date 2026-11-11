@@ -161,6 +161,7 @@ final class BattlefieldScene: SKScene {
     private let telemetryAmmo = SKLabelNode(fontNamed: "Menlo-Bold")
     // Separate Modern instrument labels, not a screenshot or an image overlay.
     private let modernUpperText = (0..<25).map { _ in SKLabelNode(fontNamed: "Menlo-Bold") }
+    private let modernUpperBands = SKShapeNode()
     private let modernUpperDividers = SKShapeNode()
     private let modernUpperIcons = SKShapeNode()
     private let modernOrangeCorners = SKShapeNode()
@@ -170,6 +171,7 @@ final class BattlefieldScene: SKScene {
     private let modernCockpit = SKNode()
     private let modernTrim = SKShapeNode()
     private let modernLowerDash = SKShapeNode()
+    private let modernCompassPlate = SKShapeNode()
     private let modernLowerLines = SKShapeNode()
     private let modernTankIcon = SKShapeNode()
     private let modernTerrainProfile = SKShapeNode()
@@ -306,8 +308,8 @@ final class BattlefieldScene: SKScene {
             addChild(rail)
         }
         for (shape, depth) in [
-            (modernUpperDividers, 12.7), (modernUpperIcons, 14.0),
-            (modernOrangeCorners, 12.9)
+            (modernUpperBands, 11.4), (modernUpperDividers, 12.7),
+            (modernUpperIcons, 14.0), (modernOrangeCorners, 12.9)
         ] {
             shape.zPosition = depth
             shape.fillColor = .clear
@@ -329,7 +331,7 @@ final class BattlefieldScene: SKScene {
         modernCockpit.zPosition = 11.5
         addChild(modernCockpit)
         for (node, z) in [(modernTrim, 0.6), (modernLowerDash, 0.0),
-                          (modernLowerLines, 0.7), (modernTankIcon, 1.4),
+                          (modernCompassPlate, 0.5), (modernLowerLines, 0.7), (modernTankIcon, 1.4),
                           (modernTerrainProfile, 1.4), (modernHeadingPointer, 1.5),
                           (modernLowerCorners, 1.6), (modernHitTrack, 0.8),
                           (modernHitRing, 0.9), (modernAmmoTrack, 0.6),
@@ -1249,6 +1251,14 @@ final class BattlefieldScene: SKScene {
         modernTrim.glowWidth = 2
         modernLowerDash.fillColor = NSColor(calibratedRed: 0.012, green: 0.052, blue: 0.070, alpha: 0.93)
         modernLowerDash.strokeColor = cyan
+        modernUpperBands.fillColor = NSColor(
+            calibratedRed: 0.08, green: 0.28, blue: 0.31, alpha: 0.19)
+        modernUpperBands.strokeColor = .clear
+        modernCompassPlate.fillColor = NSColor(
+            calibratedRed: 0.014, green: 0.065, blue: 0.077, alpha: 0.95)
+        modernCompassPlate.strokeColor = cyan.withAlphaComponent(0.38)
+        modernCompassPlate.lineWidth = 1
+        modernCompassPlate.glowWidth = 0
         modernLowerLines.strokeColor = cyan.withAlphaComponent(0.45)
         modernLowerLines.lineWidth = 1
         modernTankIcon.strokeColor = cyan
@@ -2950,7 +2960,8 @@ final class BattlefieldScene: SKScene {
         ]
         for label in legacyTexts { label.isHidden = modernHUD }
         for label in modernUpperText { label.isHidden = !modernHUD }
-        for shape in [modernUpperDividers, modernUpperIcons, modernOrangeCorners] {
+        for shape in [modernUpperBands, modernUpperDividers,
+                      modernUpperIcons, modernOrangeCorners] {
             shape.isHidden = !modernHUD
         }
         if modernHUD {
