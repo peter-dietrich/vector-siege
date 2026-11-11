@@ -242,7 +242,9 @@ enum EnemySpawnLayout {
 enum BattlefieldWaveDirector {
     static func drones(forWave wave: Int) -> Int {
         guard wave >= 3 else { return 0 }
-        return min(3, 1 + (wave - 3) / 3)
+        // One visual cloud, introduced at wave three. Keep weapon pressure
+        // bounded separately from the visual density.
+        return 30
     }
     static func fighters(forWave wave: Int) -> Int {
         wave >= 5 ? 1 : 0
