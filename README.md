@@ -38,6 +38,7 @@ Xcode may need to create the scheme when the project first opens; it normally ge
 | **→ / D** | Rotate right |
 | **Space** | Fire cannon (40 rounds, fixed 1-second reload per shot) |
 | **Shift** | Activate brief protective energy shield (cooldown) |
+| **E** | Launch CHAFF/ECM countermeasure (2 charges per wave, 9-second cooldown; disrupts bomb drones and fighter attacks) |
 | **P** | Pause / resume |
 | **R** | Start a new game |
 | **C** | Toggle Classic/Modern graphics in-game |
@@ -46,6 +47,19 @@ Xcode may need to create the scheme when the project first opens; it normally ge
 | **O / L** | Right tread forward / backward |
 
 The two tread controls can be used simultaneously, arcade-style: **I+O** moves forward, **K+L** reverses, **I+L** turns right in place, and **K+O** turns left in place. Standard arrow/WASD controls work as a simpler alternative.
+
+## v2.1 — combined-arms battlefield encounters and threat-response cockpit
+
+- **Clear damage feedback:** larger animated explosions, multiple layers of debris, bright pulsing red/orange full-screen flashes on a direct hit, and an expanding shockwave when the last life is lost. Effects keep animating briefly after GAME OVER rather than freezing.
+- **Rebuilt proximity banner:** the Modern five-tank-length alert uses a properly sized beveled orange/red warning bar with striped hazard wings, text geometrically centered *inside* its frame, and severity-sensitive color/pulse. Classic retains its compact alert.
+- **Coordinated ground squads:** each wave now stages its tanks together in one randomly selected left/rear/right approach quadrant, with collision-safe spacing. Standard tanks are joined by faster one-hit armored personnel carriers (APCs, wave 2+), two-hit hunter tanks (wave 3+, if enabled), and slower two-hit mobile artillery vehicles (wave 4+).
+- **Delayed bomb-drone swarms:** wave 3 introduces one low-altitude drone, wave 6 introduces two, and later waves cap out at three. They launch 8–10 seconds into active play from the original ground-force staging sector, fly toward the tank and explode when close. They can be shot down with ordinary tank ammunition.
+- **Fighter aircraft:** from wave 5, one low-flying two-hit fighter approaches from the same staging sector after 16–18 seconds and performs passes using machine-gun bursts and slow descending explosive bombs. Its projected firing/hit area is deliberately generous to keep tank-only anti-air play achievable; the weapon model is arcade-style, not realistic three-dimensional ballistics.
+- **New defense — E CHAFF / ECM:** press **E** to emit a countermeasure pulse. You receive two charges per wave, with a 9-second recharge delay between uses and 4 seconds of jamming/disruption. Nearby drones are neutralized; other drones suspend guidance, and fighters cannot initiate attacks during the pulse. The existing five-second shield also blocks drone collisions and incoming rounds. The lower cockpit reports charges/cooldown.
+- **Difficulty progression:** Veteran still starts with two tanks. Ground armor caps at eight and air threats cap at three drones plus one fighter; incoming volleys are capped at two in the early levels and three later. A staged group of air reinforcements never forces an empty-wave transition, and quickly cleared ground units accelerate the next arrival. Existing fixed one-second cannon reload and 40-round magazine are unchanged.
+- **Save and compatibility:** new reinforcement timing, staging origin, chaff status, enemy classes and bomb payloads persist in optional fields of version-1 saves; older saves remain readable. No third-party artwork, sounds or licensed vehicle models were added.
+
+**Player advice:** watch for yellow drone radar contacts, use the shield for an imminent impact, press **E** to disperse a nearby drone group, and use normal cannon fire (with generous low-aircraft aim assistance) against planes, artillery and APCs.
 
 ## v2.0 — precision-aligned cockpit instrumentation
 
