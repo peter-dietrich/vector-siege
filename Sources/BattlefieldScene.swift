@@ -3117,6 +3117,10 @@ final class BattlefieldScene: SKScene {
         let rp = CGMutablePath()
         let sight = CGMutablePath()
         let modernHUD = displayMode == .modern
+        if !modernHUD {
+            proximityLabel.isHidden = true
+            proximityWings.isHidden = true
+        }
         let radarRange = 165.0
         let panelHeight = modernHUD ? min(278.0, max(248.0, h * 0.34)) : 154.0
         let outerMargin = modernHUD ? 14.0 : 14.0
@@ -3542,7 +3546,7 @@ final class BattlefieldScene: SKScene {
             message.text = String(format: "FPS %.0f  |  POSITION %+.1f, %+.1f  |  ENEMIES %d  |  SHELLS %d  |  [T] MINIMIZE",
                                   observedFPS, tankPosition.x, tankPosition.z, enemies.count, shells.count)
         } else {
-            message.text = modeName + "   //   [T] DIAGNOSTICS   //   COPY FEEDBACK IN TOOLBAR"
+            message.text = modeName + "   //   [E] CHAFF   //   [T] DIAGNOSTICS"
         }
         message.fontColor = shieldDuration > 0 ? green : accent
 
