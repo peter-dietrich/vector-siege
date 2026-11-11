@@ -2190,6 +2190,16 @@ final class BattlefieldScene: SKScene {
         modernUpperDividers.path = line
         modernUpperDividers.strokeColor = cyan.withAlphaComponent(0.26)
         modernUpperDividers.lineWidth = 0.75
+        // Recess the two primary readout rows into subtle common instrument
+        // wells so metrics read as grouped hardware instead of floating text.
+        let wells = CGMutablePath()
+        for x in [left, right] {
+            wells.addRoundedRect(
+                in: CGRect(x: x + 9, y: top - 101,
+                           width: bankWidth - 18, height: 54),
+                cornerWidth: 6, cornerHeight: 6)
+        }
+        modernUpperBands.path = wells
 
         // Icons are restrained and precisely aligned to the status text.
         let icons = CGMutablePath()
@@ -2436,6 +2446,11 @@ final class BattlefieldScene: SKScene {
         pointer.addLine(to: point(compassX + 7, pointerTip + 17))
         pointer.closeSubpath()
         modernHeadingPointer.path = pointer
+        modernCompassPlate.path = CGPath(
+            roundedRect: CGRect(x: compassX - min(57, (x3 - x2) * 0.20),
+                                y: topY - 50, width: min(114, (x3 - x2) * 0.40),
+                                height: 42),
+            cornerWidth: 7, cornerHeight: 7, transform: nil)
         modernHeadingValue.position = point(compassX, topY - 28)
         modernHeadingValue.fontColor = amber
         modernHeadingValue.fontSize = CGFloat(26 * scale)
