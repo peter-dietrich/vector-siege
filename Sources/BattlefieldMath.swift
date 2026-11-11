@@ -743,6 +743,10 @@ struct SiegeSnapshot: Codable {
     var chaffCooldown: Double? = nil
     var chaffActive: Double? = nil
     var droneAttackClock: Double? = nil
+    var directorPressure: Int? = nil
+    var directorWaveStartLives: Int? = nil
+    var directorWaveStartFired: Int? = nil
+    var directorWaveStartHits: Int? = nil
 }
 
 struct SiegeSaveSlot: Codable, Identifiable {
