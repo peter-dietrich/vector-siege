@@ -338,6 +338,39 @@ enum BattlefieldWaveDirector {
     }
 }
 
+/// Predictable mixed-air encounter pacing. This is intentionally small:
+/// the existing 30-drone cloud remains a visual formation, but only one of
+/// five six-drone wings conducts a brief attack run at a time.
+enum AirEncounterDirector {
+    static let droneWingSize = 6
+    static let droneWingCount = 5
+    static let attackPeriod = 13.0
+    static let attackDuration = 4.0
+    static let fighterLifetime = 19.0
+    static let saucerLifetime = 22.0
+
+    static func activeWing(elapsed: Double) -> Int? {
+        guard elapsed >= 0 else { return nil }
+        let phase = elapsed.truncatingRemainder(dividingBy: attackPeriod)
+        guard phase < attackDuration else { return nil }
+        return Int(elapsed / attackPeriod) % droneWingCount
+    }
+
+    static func isAttacking(droneIndex: Int, elapsed: Double) -> Bool {
+        guard droneIndex >= 0 else { return false }
+        return activeWing(elapsed: elapsed) ==
+            (droneIndex / droneWingSize) % droneWingCount
+    }
+
+    static func mayLaunchAirThreat(groundRemaining: Int,
+                                   simultaneousHostileShots: Int,
+                                   currentAirCount: Int,
+                                   maxHostileShots: Int) -> Bool {
+        groundRemaining > 0 && currentAirCount < 34 &&
+            simultaneousHostileShots < maxHostileShots
+    }
+}
+
 /// Place a squad within the same approach quadrant rather than surrounding
 /// the player in a perfect circle. Always respect a clear central sightline,
 /// street/building exclusions, minimum separation and map boundaries.
