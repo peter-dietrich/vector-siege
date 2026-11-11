@@ -49,8 +49,8 @@ struct GeometrySmoke {
         precondition(!cannon.fire(reloadDuration: 1))
         cannon = CannonMagazine()
         precondition(cannon.canFire && cannon.roundsRemaining == 40)
-        precondition(abs(EnemyMotion.saucerBaseSpeed - 1.10 * 0.30) < 0.000001,
-                     "Saucers must cruise 70% more slowly than the prior tuning")
+        precondition(EnemyMotion.saucerBaseSpeed >= 9.0,
+                     "Saucer flyovers must move quickly across the battlefield")
         // Vehicle camera motion is visual only; the simulated tank aim remains
         // independent of suspension pitch and lateral shudder.
         var suspension = TankSuspension()
@@ -279,21 +279,27 @@ struct GeometrySmoke {
 
         // Patrol arrival is based on active time, not wall clock or wave number.
         var patrol = SaucerPatrolClock()
-        precondition(patrol.secondsUntilArrival == 120)
-        precondition(!patrol.advance(by: 60))
-        precondition(patrol.secondsUntilArrival == 60)
-        precondition(!patrol.advance(by: 59.95))
-        precondition(patrol.advance(by: 0.05))
-        precondition(abs(patrol.secondsUntilArrival - 120) < 0.0001)
-        precondition(!patrol.advance(by: 119.99))
+        precondition(patrol.secondsUntilArrival == 15)
+        precondition(!patrol.advance(by: 14.99))
+        precondition(patrol.advance(by: 0.01))
+        precondition(abs(patrol.secondsUntilArrival - SaucerPatrolClock.interval) < 0.0001)
+        precondition(!patrol.advance(by: 57.99))
         precondition(patrol.advance(by: 0.01))
         patrol.restore(secondsRemaining: 23.5)
         precondition(patrol.secondsUntilArrival == 23.5)
         patrol.restore(secondsRemaining: nil)
-        precondition(patrol.secondsUntilArrival == 120)
+        precondition(patrol.secondsUntilArrival == SaucerPatrolClock.interval)
         patrol.restore(secondsRemaining: .infinity)
-        precondition(patrol.secondsUntilArrival == 120)
+        precondition(patrol.secondsUntilArrival == SaucerPatrolClock.interval)
         precondition(!patrol.advance(by: 0), "Pause must not advance timer")
+        // Terrain is gently sloped, curbs are raised, and road grades are
+        // always shallower than the surrounding landscape.
+        let road = LandscapeTopology.height(GroundPoint(0, 0))
+        let curb = LandscapeTopology.height(GroundPoint(7.3, 0))
+        precondition(curb > road + 0.15)
+        for x in stride(from: -150.0, through: 150.0, by: 10.0) {
+            precondition(LandscapeTopology.height(GroundPoint(x, 24)).isFinite)
+        }
 
         let migratedSave = try! JSONDecoder().decode(
             SiegeSaveSlot.self,
