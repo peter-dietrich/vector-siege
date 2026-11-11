@@ -1202,6 +1202,110 @@ final class BattlefieldScene: SKScene {
         }.min()
     }
 
+    private func registerImpact(at position: GroundPoint, kind: CombatImpact.Kind) {
+        let duration: Double
+        switch kind {
+        case .ground: duration = 0.62
+        case .structure: duration = 0.75
+        case .armor: duration = 0.88
+        case .aircraft: duration = 0.70
+        case .destruction: duration = 1.65
+        }
+        combatImpacts.append(CombatImpact(position: position, kind: kind,
+                                          duration: duration))
+        if combatImpacts.count > 28 {
+            combatImpacts.removeFirst(combatImpacts.count - 28)
+        }
+    }
+
+    private func renderWorldCombatEffects(_ c: CameraProjection) {
+        let effects = CGMutablePath()
+        let wrecks = CGMutablePath()
+        for event in combatImpacts where
+            event.position.distance(to: tankPosition) < 180 {
+            let t = event.age / event.duration
+            let size: Double
+            switch event.kind {
+            case .ground: size = 2.2
+            case .structure: size = 3.0
+            case .armor: size = 4.0
+            case .aircraft: size = 3.7
+            case .destruction: size = 9.2
+            }
+            let center = event.position
+            // The shock front expands and slows; later arcs read as smoke
+            // instead of a permanent opaque particle layer.
+            let radius = size * (0.30 + 1.75 * t)
+            let ringY = event.kind == .aircraft ? 3.0 : 0.32 + t * size * 0.19
+            for section in 0..<12 {
+                let a = Double(section) * .pi / 6
+                let b = Double(section + 1) * .pi / 6
+                if t > 0.65 && section.isMultiple(of: 3) { continue }
+                line(effects,
+                     WorldPoint(center.x + cos(a) * radius, ringY,
+                                center.z + sin(a) * radius),
+                     WorldPoint(center.x + cos(b) * radius, ringY,
+                                center.z + sin(b) * radius), c)
+            }
+            if t < 0.48 {
+                // First-stage cross flash and outward armor fragments.
+                let flare = (1 - t / 0.48) * size * 1.6
+                for spoke in 0..<8 {
+                    let a = Double(spoke) * .pi / 4
+                    line(effects, WorldPoint(center, height: ringY + 0.5),
+                         WorldPoint(center.x + cos(a) * flare,
+                                    ringY + 0.7 + flare * 0.32,
+                                    center.z + sin(a) * flare), c)
+                }
+            }
+            if event.kind == .destruction && t > 0.25 {
+                // Secondary, rising angular smoke plume. It dissipates
+                // before obstructing the next engagement.
+                let plumeY = (t - 0.25) * 8.0
+                let plumeR = size * 0.36 * (1 + t)
+                for petal in 0..<5 {
+                    let a = Double(petal) * 2 * .pi / 5 + t * 0.22
+                    line(effects,
+                         WorldPoint(center.x + cos(a) * plumeR * 0.5,
+                                    plumeY * 0.55,
+                                    center.z + sin(a) * plumeR * 0.5),
+                         WorldPoint(center.x + cos(a) * plumeR,
+                                    plumeY + 1.0,
+                                    center.z + sin(a) * plumeR), c)
+                }
+            }
+        }
+        for wreck in tankWrecks where
+            wreck.position.distance(to: tankPosition) < 150 {
+            let p = wreck.position
+            let forward = facing(wreck.heading)
+            let side = GroundPoint(forward.z, -forward.x)
+            func vertex(_ x: Double, _ y: Double, _ z: Double) -> WorldPoint {
+                WorldPoint(p.x + side.x * x + forward.x * z, y,
+                           p.z + side.z * x + forward.z * z)
+            }
+            // Collapsed, scorched hull and an offset turret, rendered
+            // separately from live enemy hit boxes and pathfinding.
+            let corners = [vertex(-2.1, 0.20, -2.8),
+                           vertex(2.1, 0.20, -2.8),
+                           vertex(2.1, 0.20, 2.8),
+                           vertex(-2.1, 0.20, 2.8)]
+            for i in 0..<4 {
+                line(wrecks, corners[i], corners[(i + 1) % 4], c)
+                line(wrecks, corners[i], vertex(i == 0 || i == 3 ? -1.45 : 1.45,
+                                                0.85,
+                                                i < 2 ? -1.8 : 1.8), c)
+            }
+            line(wrecks, vertex(-0.7, 1.0, -0.3),
+                 vertex(0.9, 1.1, 0.4), c)
+            line(wrecks, vertex(0.9, 1.1, 0.4),
+                 vertex(2.7, 0.45, 1.8), c)
+        }
+        combatWorldEffects.path = effects
+        combatWorldEffects.alpha = 1
+        combatWrecks.path = wrecks
+    }
+
     private func firePlayer() {
         guard cannon.fire() else { return }
         shotTally.fire()
@@ -4176,6 +4280,96 @@ final class BattlefieldScene: SKScene {
             }
             scanlines.path = sl
         } else { scanlines.path = nil }
+    }
+}
+
+
+/// Deep procedural combat transients with short noise attacks and low-frequency
+/// body. Generated in memory to avoid packaging or changing existing sounds.
+private final class TankCombatAudio {
+    enum Kind: Int { case cannon = 0, impact = 1, explosion = 2 }
+    private var players: [AVAudioPlayer?] = [nil, nil, nil]
+
+    init() {
+        for type in [Kind.cannon, .impact, .explosion] {
+            let index = type.rawValue
+            players[index] = try? AVAudioPlayer(data: Self.makeWAV(type))
+            players[index]?.prepareToPlay()
+            players[index]?.volume = type == .impact ? 0.48 : 0.72
+        }
+    }
+
+    func play(_ kind: Kind, enabled: Bool) {
+        guard enabled, let player = players[kind.rawValue] else { return }
+        player.stop()
+        player.currentTime = 0
+        player.play()
+    }
+
+    private static func makeWAV(_ kind: Kind) -> Data {
+        let rate = 22_050
+        let duration: Double = kind == .cannon ? 0.48 :
+            (kind == .impact ? 0.26 : 0.88)
+        let count = Int(Double(rate) * duration)
+        var data = Data(capacity: 44 + count * 2)
+        func put16(_ n: UInt16) {
+            data.append(UInt8(truncatingIfNeeded: n))
+            data.append(UInt8(truncatingIfNeeded: n >> 8))
+        }
+        func put32(_ n: UInt32) {
+            put16(UInt16(truncatingIfNeeded: n))
+            put16(UInt16(truncatingIfNeeded: n >> 16))
+        }
+        data.append(contentsOf: [82,73,70,70])
+        put32(UInt32(36 + count * 2))
+        data.append(contentsOf: [87,65,86,69,102,109,116,32])
+        put32(16)
+        put16(1)
+        put16(1)
+        put32(UInt32(rate))
+        put32(UInt32(rate * 2))
+        put16(2)
+        put16(16)
+        data.append(contentsOf: [100,97,116,97])
+        put32(UInt32(count * 2))
+
+        var seed: UInt32 = 0xC4D7_19B1 &+ UInt32(kind.rawValue)
+        var bassPhase = 0.0
+        var filtered = 0.0
+        for i in 0..<count {
+            let t = Double(i) / Double(rate)
+            let progress = t / duration
+            seed = 1_664_525 &* seed &+ 1_013_904_223
+            let white = Double((seed >> 10) & 0xFFFF) / 32_767.5 - 1
+            filtered = 0.90 * filtered + 0.10 * white
+            let frequency: Double
+            let noiseWeight: Double
+            let decay: Double
+            switch kind {
+            case .cannon:
+                frequency = 93 - 58 * progress
+                noiseWeight = 0.48
+                decay = exp(-t * 7.8)
+            case .impact:
+                frequency = 142 - 66 * progress
+                noiseWeight = 0.68
+                decay = exp(-t * 14)
+            case .explosion:
+                frequency = 78 - 44 * progress
+                noiseWeight = 0.75
+                decay = exp(-t * 4.5)
+            }
+            bassPhase += 2 * .pi * frequency / Double(rate)
+            let low = sin(bassPhase) + 0.30 * sin(bassPhase * 0.5)
+            let transient = white * exp(-t * 85) * 0.62
+            let body = (low * (1 - noiseWeight) + filtered * noiseWeight) * decay
+            let tail = kind == .explosion
+                ? 0.12 * filtered * sin(t * 45) * exp(-t * 3.4) : 0
+            let envelope = min(1, t * 850) * min(1, (duration - t) * 130)
+            let sample = max(-1, min(1, (transient + body + tail) * envelope * 0.88))
+            put16(UInt16(bitPattern: Int16((sample * 32767).rounded())))
+        }
+        return data
     }
 }
 
