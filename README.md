@@ -47,6 +47,14 @@ Xcode may need to create the scheme when the project first opens; it normally ge
 
 The two tread controls can be used simultaneously, arcade-style: **I+O** moves forward, **K+L** reverses, **I+L** turns right in place, and **K+O** turns left in place. Standard arrow/WASD controls work as a simpler alternative.
 
+## v1.9 — solid structural collision and accurate projectile impacts
+
+- **No more ghost shots through building corners:** bullets are tested against the visible building shape, not a small circular hitbox. Blocks use their full square footprint; buildings, towers and monoliths use their rendered rectangular bases; pyramids use height-dependent, tapered cross-sections.
+- **Continuous shell collisions:** the complete distance travelled in each frame is tested against solid structures. The first contact along the swept path determines whether a wall or tank is hit first; impact particles appear on the actual collision boundary instead of at the projectile's advanced endpoint.
+- **Consistent physics:** the player tank, enemy movement grid, enemy firing-lane checks and projectiles now share the same geometric footprints. Tank clearance adds its physical radius to the building footprint; enemy line-of-sight tests use the actual shell height.
+- **Regression coverage:** new geometry tests check square-block corners, narrow buildings, pyramids, roof clearance, frame-skipping shots, navigation blocking, and priority when a tank and a wall overlap a projectile's path.
+- **Compatibility:** saved games and older obstacle lists retain the existing format, deriving their collision body from stored kind/size/position; Classic and Modern use the same collision rules. This is an arcade approximation rather than a fully 3-D physics engine: shell flight is at fixed vertical heights, and pyramid taper is evaluated at that height.
+
 ## v1.8 — readable telemetry, slower saucers and crisp radar
 
 - **Saucers:** slow aerial movement by another **70%** from the prior 1.10 base speed to **0.33 world units/second**, before difficulty/Custom Game multipliers. Spin animation and two-minute encounter timing are unchanged.
