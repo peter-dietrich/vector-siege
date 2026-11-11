@@ -236,6 +236,85 @@ enum EnemySpawnLayout {
     }
 }
 
+/// Mixed-arms difficulty is deliberately bounded. Ground vehicles deploy
+/// together; drones and one aircraft arrive later as optional reinforcements.
+/// None of the air units are bullet sponges or require a separate weapon.
+enum BattlefieldWaveDirector {
+    static func drones(forWave wave: Int) -> Int {
+        guard wave >= 3 else { return 0 }
+        return min(3, 1 + (wave - 3) / 3)
+    }
+    static func fighters(forWave wave: Int) -> Int {
+        wave >= 5 ? 1 : 0
+    }
+    static func droneDelay(forWave wave: Int) -> Double {
+        8.0 + Double(wave % 3)
+    }
+    static func fighterDelay(forWave wave: Int) -> Double {
+        16.0 + Double(wave % 3)
+    }
+    static func maximumHostileShots(forWave wave: Int) -> Int {
+        // One volley at a time early on; never more than three in late waves.
+        wave < 5 ? 2 : 3
+    }
+    static func vehicleKind(index: Int, wave: Int) -> String {
+        if wave >= 4 && index == 0 { return "artillery" }
+        if wave >= 3 && index % 4 == 2 { return "hunter" }
+        if wave >= 2 && index % 3 == 1 { return "apc" }
+        return "tank"
+    }
+}
+
+/// Place a squad within the same approach quadrant rather than surrounding
+/// the player in a perfect circle. Always respect a clear central sightline,
+/// street/building exclusions, minimum separation and map boundaries.
+enum SquadSpawnLayout {
+    static let angularHalfWidth = 0.72
+
+    static func choose(
+        player: GroundPoint, heading: Double, approach: Double,
+        index: Int, count: Int, existing: [GroundPoint],
+        isOpen: (GroundPoint) -> Bool
+    ) -> GroundPoint? {
+        let slot = index % 5
+        let row = index / 5
+        let slotOffsets: [Double] = [-0.62, -0.30, 0, 0.30, 0.62]
+        let baseAngle = approach + slotOffsets[slot]
+        let primaryRadii: [Double] = [78, 112, 144, 92, 128, 158]
+        for offset in [0.0, 0.12, -0.12, 0.24, -0.24] {
+            let bearing = baseAngle + offset
+            guard abs(wrapAngle(bearing - approach)) <= angularHalfWidth + 0.18,
+                  abs(wrapAngle(bearing - heading)) > Double.pi / 5 else { continue }
+            for delta in [0, 24, -24, 43, -43] {
+                for radius in primaryRadii {
+                    let distance = radius + Double(row) * 12 + Double(delta)
+                    guard distance >= 50 && distance <= 170 else { continue }
+                    let point = player + facing(bearing) * distance
+                    if abs(point.x) >= 177 || abs(point.z) >= 177 { continue }
+                    if EnemySpawnLayout.isSeparated(point, from: existing) &&
+                        isOpen(point) {
+                        return point
+                    }
+                }
+            }
+        }
+        return nil
+    }
+}
+
+/// Anti-drone countermeasure uses finite charges and a real cooldown, so the
+/// player must choose between chaff, shield and accurate cannon fire.
+enum ChaffDefense {
+    static let chargesPerWave = 2
+    static let cooldown = 9.0
+    static let protectionDuration = 4.0
+    static let disruptionRadius = 34.0
+    static let decoyRadius = 80.0
+    static func disrupts(distance: Double) -> Bool {
+        distance >= 0 && distance <= disruptionRadius
+    }
+}
+
 /// Pure sweep geometry used by the tactical-radar fill and regression tests.
 /// A ray is clipped to the edges of a square to prevent sweep glow escaping
 /// the panel even when the beam passes near a corner.
