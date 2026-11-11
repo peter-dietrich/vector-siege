@@ -1262,6 +1262,7 @@ final class BattlefieldScene: SKScene {
                 chaffCharges = ChaffDefense.chargesPerWave
                 chaffCooldown = 0
                 chaffActive = 0
+                chaffFlakes.removeAll()
                 invulnerability = 1.0
                 pressedKeys.removeAll()
                 driveSpeed = 0
@@ -1745,6 +1746,8 @@ final class BattlefieldScene: SKScene {
     private func spawnWave() {
         enemies.removeAll()
         waveElapsed = 0
+        droneAttackClock = 0
+        chaffFlakes.removeAll()
         // Evaluate several randomized approach quadrants. Keep the squad
         // together and favor an approach with enough clear positions even
         // when the commander is near the city's edge.
@@ -1946,11 +1949,21 @@ final class BattlefieldScene: SKScene {
             enemies: enemies.map { SavedSiegeFoe(
                 center: $0.center, heading: $0.heading,
                 kind: foeKindName($0.kind),
-                reload: $0.reload, phase: $0.phase, hitPoints: $0.hitPoints) },
+                reload: $0.reload, phase: $0.phase, hitPoints: $0.hitPoints,
+                droneSeed: $0.kind == .drone ? $0.droneSeed : nil,
+                droneOffset: $0.kind == .drone ? $0.droneOffset : nil,
+                droneVelocity: $0.kind == .drone ? $0.droneVelocity : nil,
+                droneHasCharge: $0.kind == .drone ? $0.droneHasCharge : nil,
+                droneDropDelay: $0.kind == .drone ? $0.droneDropDelay : nil,
+                droneDisrupted: $0.kind == .drone ? $0.droneDisrupted : nil,
+                droneAltitude: $0.kind == .drone ? $0.droneAltitude : nil,
+                attackTimer: $0.kind.isAir ? $0.attackTimer : nil,
+                airShotsFired: $0.kind.isAir ? $0.airShotsFired : nil) },
             shells: shells.map { SavedSiegeShell(
                 center: $0.center, direction: $0.direction,
                 hostile: $0.hostile, timeLeft: $0.timeLeft,
-                payload: $0.payload) },
+                payload: $0.payload,
+                launchElevation: $0.launchElevation) },
             sparks: sparks.map { SavedSiegeSpark(
                 position: $0.position, velocity: $0.velocity,
                 timeLeft: $0.timeLeft, maxLife: $0.maxLife) },
@@ -1963,7 +1976,8 @@ final class BattlefieldScene: SKScene {
             fightersPending: fightersPending,
             chaffCharges: chaffCharges,
             chaffCooldown: chaffCooldown,
-            chaffActive: chaffActive
+            chaffActive: chaffActive,
+            droneAttackClock: droneAttackClock
         )
     }
 
@@ -1994,12 +2008,17 @@ final class BattlefieldScene: SKScene {
         waveApproach = saved.waveApproach ?? heading
         waveOrigin = saved.waveOrigin ?? tankPosition
         waveElapsed = max(0, saved.waveElapsed ?? 0)
+        droneAttackClock = saved.droneAttackClock ??
+            max(0, waveElapsed - BattlefieldWaveDirector.droneDelay(forWave: wave))
         dronesPending = max(0, saved.dronesPending ?? 0)
         fightersPending = max(0, saved.fightersPending ?? 0)
         chaffCharges = max(0, min(ChaffDefense.chargesPerWave,
                                   saved.chaffCharges ?? ChaffDefense.chargesPerWave))
         chaffCooldown = max(0, saved.chaffCooldown ?? 0)
         chaffActive = max(0, saved.chaffActive ?? 0)
+        chaffFlakes.removeAll()
+        swarmCenter = waveOrigin - facing(waveApproach) * 8
+        swarmVelocity = GroundPoint(0, 0)
         hitFlashRemaining = 0
         destructionRemaining = 0
         cannon = saved.cannon
@@ -2016,14 +2035,31 @@ final class BattlefieldScene: SKScene {
         fallingDrones.removeAll()
         makeVegetation()
         selectSolidBuildings()
-        enemies = saved.enemies.map { Foe(
-            center: $0.center, heading: $0.heading,
-            kind: foeKind(named: $0.kind),
-            reload: $0.reload, phase: $0.phase, hitPoints: $0.hitPoints) }
+        enemies = saved.enemies.enumerated().map { entry -> Foe in
+            let stored = entry.element
+            let kind = foeKind(named: stored.kind)
+            var foe = Foe(center: stored.center, heading: stored.heading,
+                          kind: kind, reload: stored.reload,
+                          phase: stored.phase, hitPoints: stored.hitPoints)
+            if kind == .drone {
+                foe.droneSeed = stored.droneSeed ?? Double(entry.offset) * 1.618
+                foe.droneOffset = stored.droneOffset ?? (stored.center - swarmCenter)
+                foe.droneVelocity = stored.droneVelocity ??
+                    facing(stored.heading) * 2.0
+                foe.droneHasCharge = stored.droneHasCharge ?? true
+                foe.droneDropDelay = stored.droneDropDelay ?? 2.0
+                foe.droneDisrupted = stored.droneDisrupted ?? 0
+                foe.droneAltitude = stored.droneAltitude ?? 3.1
+            }
+            foe.attackTimer = stored.attackTimer ?? 0
+            foe.airShotsFired = stored.airShotsFired ?? 0
+            return foe
+        }
         shells = saved.shells.map { Shell(
             center: $0.center, direction: $0.direction,
             hostile: $0.hostile, timeLeft: $0.timeLeft,
-            payload: $0.payload ?? "cannon") }
+            payload: $0.payload ?? "cannon",
+            launchElevation: $0.launchElevation) }
         sparks = saved.sparks.map { Spark(
             position: $0.position, velocity: $0.velocity,
             timeLeft: $0.timeLeft, maxLife: $0.maxLife) }
