@@ -56,6 +56,7 @@ struct CameraProjection {
     var viewportWidth: Double
     var viewportHeight: Double
     var eyeHeight = 1.5
+    var terrainEnabled = false
     var cameraLateral: Double = 0
     var pitchPoints: Double = 0
 
@@ -65,7 +66,7 @@ struct CameraProjection {
     func local(_ world: WorldPoint) -> (right: Double, up: Double, forward: Double) {
         let dx = world.x - position.x
         let dz = world.z - position.z
-        return (dx * cos(yaw) - dz * sin(yaw) - cameraLateral, world.y + LandscapeTopology.height(GroundPoint(world.x, world.z)) - eyeHeight,
+        return (dx * cos(yaw) - dz * sin(yaw) - cameraLateral, world.y + (terrainEnabled ? LandscapeTopology.height(GroundPoint(world.x, world.z)) : 0) - eyeHeight,
                 dx * sin(yaw) + dz * cos(yaw))
     }
 
@@ -210,7 +211,7 @@ struct TankSuspension {
 /// Shared baseline movement speeds (before skill/custom multipliers).
 /// Saucer motion was reduced from 1.10 to 0.33, a 70% decrease.
 enum EnemyMotion {
-    static let saucerBaseSpeed = 0.33
+    static let saucerBaseSpeed = 10.0
 }
 
 /// Spread initial enemies into angular sectors instead of clustering around
@@ -663,8 +664,8 @@ enum SiegeGameStore {
 /// Guarantees one patrol arrival per 120 seconds of active, unpaused play.
 /// Codable so the clock survives Save Game / Resume without restarting.
 struct SaucerPatrolClock: Codable {
-    static let interval = 120.0
-    private(set) var secondsUntilArrival = interval
+    static let interval = 58.0
+    private(set) var secondsUntilArrival = 15.0
 
     mutating func advance(by elapsed: Double) -> Bool {
         guard elapsed > 0 else { return false }
