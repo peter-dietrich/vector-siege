@@ -390,6 +390,71 @@ struct GeometrySmoke {
         precondition(enemyBefore! < wall!,
                      "A target in front of a wall must not be hidden by it")
 
+        // Combined-arms waves ramp gradually and always stay within a
+        // tank-defeatable target budget, including a two-hit aircraft.
+        precondition(BattlefieldWaveDirector.drones(forWave: 1) == 0)
+        precondition(BattlefieldWaveDirector.drones(forWave: 2) == 0)
+        precondition(BattlefieldWaveDirector.drones(forWave: 3) == 1)
+        precondition(BattlefieldWaveDirector.drones(forWave: 6) == 2)
+        precondition(BattlefieldWaveDirector.drones(forWave: 15) == 3)
+        precondition(BattlefieldWaveDirector.fighters(forWave: 4) == 0)
+        precondition(BattlefieldWaveDirector.fighters(forWave: 5) == 1)
+        let veteran = SiegeRules().validated()
+        for level in 1...20 {
+            let ground = veteran.enemies(forWave: level)
+            let drones = BattlefieldWaveDirector.drones(forWave: level)
+            let fighters = BattlefieldWaveDirector.fighters(forWave: level)
+            precondition(ground + drones + fighters <= 12,
+                         "No Veteran wave may become an unfair swarm")
+            precondition(ground * 2 + drones + fighters * 2 <=
+                         veteran.ammoCapacity,
+                         "Full Veteran wave defeat must fit one ammo magazine")
+            precondition(BattlefieldWaveDirector.maximumHostileShots(
+                forWave: level) <= 3)
+            precondition(BattlefieldWaveDirector.droneDelay(forWave: level) >= 8)
+            precondition(BattlefieldWaveDirector.fighterDelay(forWave: level) >= 16)
+        }
+        precondition(ChaffDefense.chargesPerWave == 2)
+        precondition(ChaffDefense.cooldown >= 8)
+        precondition(ChaffDefense.disrupts(distance: 25))
+        precondition(!ChaffDefense.disrupts(distance: 40))
+
+        // Each ground squad must originate from one approach sector, not
+        // cardinally around the player, and never overlap or spawn ahead.
+        for approach in [1.55, 2.15, -2.10] {
+            var squad: [GroundPoint] = []
+            for i in 0..<6 {
+                guard let candidate = SquadSpawnLayout.choose(
+                    player: GroundPoint(0, 0), heading: 0,
+                    approach: approach, index: i, count: 6,
+                    existing: squad, isOpen: { _ in true }) else {
+                    fatalError("Six squad positions should fit a clear city")
+                }
+                let direction = atan2(candidate.x, candidate.z)
+                precondition(abs(wrapAngle(direction - approach)) <= 0.91)
+                precondition(abs(wrapAngle(direction)) > Double.pi / 5)
+                precondition(EnemySpawnLayout.isSeparated(candidate, from: squad))
+                squad.append(candidate)
+            }
+        }
+
+        // New field defaults must round trip without invalidating legacy v1
+        // archive decoding. Bomb payload is optional for old saves.
+        let magazine = SavedSiegeShell(
+            center: GroundPoint(2, 3), direction: GroundPoint(0, 1),
+            hostile: true, timeLeft: 3.5, payload: "bomb")
+        let encodedPayload = try! JSONEncoder().encode(magazine)
+        let roundTripped = try! JSONDecoder().decode(
+            SavedSiegeShell.self, from: encodedPayload)
+        precondition(roundTripped.payload == "bomb")
+        let legacyProjectileJSON = """
+        {"center":{"x":2,"z":3},"direction":{"x":0,"z":1},
+         "hostile":true,"timeLeft":3.5}
+        """
+        let legacyProjectile = try! JSONDecoder().decode(
+            SavedSiegeShell.self, from: Data(legacyProjectileJSON.utf8))
+        precondition(legacyProjectile.payload == nil)
+
         // A tank facing a building must be able to choose a reachable
         // intermediate waypoint around cover rather than driving into it.
         let cover = [NavigationObstacle(center: GroundPoint(42, 0), radius: 13)]
