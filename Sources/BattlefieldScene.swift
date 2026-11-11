@@ -1079,7 +1079,8 @@ final class BattlefieldScene: SKScene {
                     shells.append(Shell(
                         center: enemies[idx].center + flight * 3,
                         direction: flight, hostile: true,
-                        timeLeft: payload == "bomb" ? 7.2 : 4.0,
+                        timeLeft: payload == "bomb" ? 7.2 :
+                            payload == "saucerPulse" ? 7.0 : 4.0,
                         payload: payload,
                         launchElevation: type.isVehicle && payload != "bomb"
                             ? LandscapeTopology.height(enemies[idx].center) : nil))
