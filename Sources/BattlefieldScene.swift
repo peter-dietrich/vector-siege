@@ -126,6 +126,11 @@ final class BattlefieldScene: SKScene {
     private lazy var proximityAudio = TankProximityAudio()
     private var proximityCountdown = 0.0
     private var nearestTankDistance: Double? = nil
+    private typealias TargetTrack = (range: Double, error: Double,
+                                     position: GroundPoint, ground: Bool,
+                                     clearShot: Bool)
+    private var targetingCache: TargetTrack? = nil
+    private var targetingCacheValid = false
     private var steerHoldSeconds: Double = 0
     private var previousSteerDirection: Double = 0
     private var score = 0
@@ -1928,9 +1933,8 @@ final class BattlefieldScene: SKScene {
         run(SKAction.playSoundFileNamed(name, waitForCompletion: false))
     }
 
-    private func targetTelemetry() -> (range: Double, error: Double,
-                                       position: GroundPoint, ground: Bool,
-                                       clearShot: Bool)? {
+    private func targetTelemetry() -> TargetTrack? {
+        if targetingCacheValid { return targetingCache }
         // Choose an actually aimable contact; favor ground vehicles by a
         // narrow angular margin so dense drones do not steal tank targeting.
         let candidate = enemies.compactMap { foe ->
@@ -1945,7 +1949,11 @@ final class BattlefieldScene: SKScene {
             let bCost = abs(b.error) - (b.foe.kind.isVehicle ? 0.035 : 0)
             return aCost < bCost
         }
-        guard let chosen = candidate else { return nil }
+        guard let chosen = candidate else {
+            targetingCacheValid = true
+            targetingCache = nil
+            return nil
+        }
         let ground = chosen.foe.kind.isVehicle
         let clearShot = !ground || (
             firstObstacleImpact(from: tankPosition, to: chosen.foe.center,
@@ -1953,7 +1961,11 @@ final class BattlefieldScene: SKScene {
                 worldAltitude: LandscapeTopology.height(tankPosition) + 1.65) == nil &&
             LandscapeTopology.clearFiringLine(
                 from: tankPosition, to: chosen.foe.center))
-        return (chosen.range, chosen.error, chosen.foe.center, ground, clearShot)
+        let result: TargetTrack = (chosen.range, chosen.error,
+                                   chosen.foe.center, ground, clearShot)
+        targetingCache = result
+        targetingCacheValid = true
+        return result
     }
 
     private func obstacleKindName(_ kind: Obstacle.Kind) -> String {
@@ -2471,6 +2483,10 @@ final class BattlefieldScene: SKScene {
     }
 
     private func render() {
+        // Each frame computes the expensive cover-aware target solution only
+        // once, shared by radar, both HUD layouts, and warning telemetry.
+        targetingCacheValid = false
+        targetingCache = nil
         let w = Double(size.width)
         let h = Double(size.height)
         guard w > 100 && h > 100 else { return }
