@@ -394,9 +394,9 @@ struct GeometrySmoke {
         // tank-defeatable target budget, including a two-hit aircraft.
         precondition(BattlefieldWaveDirector.drones(forWave: 1) == 0)
         precondition(BattlefieldWaveDirector.drones(forWave: 2) == 0)
-        precondition(BattlefieldWaveDirector.drones(forWave: 3) == 1)
-        precondition(BattlefieldWaveDirector.drones(forWave: 6) == 2)
-        precondition(BattlefieldWaveDirector.drones(forWave: 15) == 3)
+        precondition(BattlefieldWaveDirector.drones(forWave: 3) == 30)
+        precondition(BattlefieldWaveDirector.drones(forWave: 6) == 30)
+        precondition(BattlefieldWaveDirector.drones(forWave: 15) == 30)
         precondition(BattlefieldWaveDirector.fighters(forWave: 4) == 0)
         precondition(BattlefieldWaveDirector.fighters(forWave: 5) == 1)
         let veteran = SiegeRules().validated()
@@ -404,11 +404,11 @@ struct GeometrySmoke {
             let ground = veteran.enemies(forWave: level)
             let drones = BattlefieldWaveDirector.drones(forWave: level)
             let fighters = BattlefieldWaveDirector.fighters(forWave: level)
-            precondition(ground + drones + fighters <= 12,
-                         "No Veteran wave may become an unfair swarm")
-            precondition(ground * 2 + drones + fighters * 2 <=
-                         veteran.ammoCapacity,
-                         "Full Veteran wave defeat must fit one ammo magazine")
+            // Thirty independent targets form one group; finite chaff
+            // charges and normal cannon reload enable swarm attrition.
+            precondition(ground <= 8)
+            precondition(drones == 0 || drones == 30)
+            precondition(ground * 2 + fighters * 2 <= veteran.ammoCapacity)
             precondition(BattlefieldWaveDirector.maximumHostileShots(
                 forWave: level) <= 3)
             precondition(BattlefieldWaveDirector.droneDelay(forWave: level) >= 8)

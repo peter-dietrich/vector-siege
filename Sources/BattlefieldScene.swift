@@ -25,6 +25,14 @@ private struct Foe {
     var navigationWaypoint: GroundPoint? = nil
     var routeRefreshRemaining: Double = 0
     var attackTimer: Double = 0
+    var droneVelocity = GroundPoint(0, 0)
+    var droneOffset = GroundPoint(0, 0)
+    var droneSeed = 0.0
+    var dronePitch = 0.0
+    var droneRoll = 0.0
+    var droneAltitude = 3.1
+    var droneHasCharge = true
+    var droneDropDelay = 0.0
 }
 
 private struct Shell {
@@ -98,6 +106,9 @@ final class BattlefieldScene: SKScene {
     private var waveElapsed = 0.0
     private var dronesPending = 0
     private var fightersPending = 0
+    private var swarmCenter = GroundPoint(0, 0)
+    private var swarmVelocity = GroundPoint(0, 0)
+    private var swarmDropTimer = 0.0
     private var chaffCharges = ChaffDefense.chargesPerWave
     private var chaffCooldown = 0.0
     private var chaffActive = 0.0
@@ -643,6 +654,7 @@ final class BattlefieldScene: SKScene {
         shieldDuration = max(0, shieldDuration - dt)
         chaffCooldown = max(0, chaffCooldown - dt)
         chaffActive = max(0, chaffActive - dt)
+        swarmDropTimer = max(0, swarmDropTimer - dt)
         waveElapsed += dt
         // Reinforcements emerge from the same approach quadrant as the
         // ground force. They are delayed so wave starts remain readable.
@@ -696,7 +708,14 @@ final class BattlefieldScene: SKScene {
             firePlayer()
         }
 
-        var detonatedDrones: [Int] = []
+        // Cohesive cloud: approach the player but remain at a playable standoff.
+        if enemies.contains(where: { $0.kind == .drone }) {
+            let target = tankPosition - facing(waveApproach) * 34
+            let desired = (target - swarmCenter).normalized * 5.8
+            swarmVelocity = swarmVelocity +
+                (desired - swarmVelocity) * min(1, dt * 0.65)
+            swarmCenter = swarmCenter + swarmVelocity * dt
+        }
         for idx in enemies.indices {
             let diff = tankPosition - enemies[idx].center
             let distance = max(0.001, diff.length)
@@ -722,27 +741,84 @@ final class BattlefieldScene: SKScene {
                                           sin(enemies[idx].phase * 0.8))
                 enemies[idx].center = enemies[idx].center + tangent * (movement * dt)
             } else if type == .drone {
-                // Small loitering munition: visible slow approach, no remote
-                // instant hit. Chaff/ECM stalls guidance and short-range bursts
-                // safely neutralize it; shield intercepts it at contact.
-                if chaffActive <= 0 {
-                    let direction = diff.normalized
-                    enemies[idx].heading = aim
-                    let position = enemies[idx].center + direction * (movement * dt)
-                    enemies[idx].center = GroundPoint(
-                        max(-179, min(179, position.x)),
-                        max(-179, min(179, position.z)))
-                    if distance < 5.2 {
-                        detonatedDrones.append(idx)
-                        burst(at: WorldPoint(enemies[idx].center, height: 2.7),
-                              count: 25)
-                        if shieldDuration <= 0 && invulnerability <= 0 {
-                            takeDamage()
-                        } else {
-                            sound("impact.wav")
-                        }
+                var drone = enemies[idx]
+                let phase = drone.phase + drone.droneSeed
+                let wander = GroundPoint(
+                    sin(phase * 0.67) * 3.3 + sin(phase * 1.31) * 1.4,
+                    cos(phase * 0.53) * 3.0 + cos(phase * 1.17) * 1.3)
+                let desiredPosition = swarmCenter + drone.droneOffset + wander
+                var separation = GroundPoint(0, 0)
+                for other in enemies.indices where other != idx &&
+                    enemies[other].kind == .drone {
+                    let away = drone.center - enemies[other].center
+                    let range = away.length
+                    if range > 0.001 && range < 4.0 {
+                        separation = separation + away.normalized * ((4 - range) / 4)
                     }
                 }
+                let speedFactor = 1.0 + 0.18 * sin(phase * 0.47) +
+                    0.08 * sin(phase * 1.06)
+                let steering = (desiredPosition - drone.center) * 0.70 +
+                    swarmVelocity + separation * 5
+                let speedTarget = min(10.5, max(2.0, steering.length * speedFactor))
+                let desiredVelocity = steering.normalized * speedTarget
+                let previousVelocity = drone.droneVelocity
+                var change = desiredVelocity - previousVelocity
+                if change.length > 11 * dt {
+                    change = change.normalized * (11 * dt)
+                }
+                drone.droneVelocity = previousVelocity + change
+                let next = drone.center + drone.droneVelocity * dt
+                drone.center = GroundPoint(
+                    max(-176, min(176, next.x)),
+                    max(-176, min(176, next.z)))
+                let speed = drone.droneVelocity.length
+                if speed > 0.15 {
+                    let desiredHeading = atan2(
+                        drone.droneVelocity.x, drone.droneVelocity.z)
+                    drone.heading = wrapAngle(drone.heading +
+                        wrapAngle(desiredHeading - drone.heading) * min(1, dt * 4))
+                }
+                let acceleration = (drone.droneVelocity - previousVelocity) *
+                    (1 / max(0.001, dt))
+                let forward = facing(drone.heading)
+                let right = GroundPoint(forward.z, -forward.x)
+                let forwardAccel = acceleration.x * forward.x +
+                    acceleration.z * forward.z
+                let lateralAccel = acceleration.x * right.x +
+                    acceleration.z * right.z
+                let pitchTarget = max(-0.44, min(0.26,
+                    -0.035 * forwardAccel - 0.009 * speed))
+                let rollTarget = max(-0.24, min(0.24, -0.031 * lateralAccel))
+                drone.dronePitch += (pitchTarget - drone.dronePitch) *
+                    min(1, dt * 6.5)
+                drone.droneRoll += (rollTarget - drone.droneRoll) *
+                    min(1, dt * 5)
+                drone.droneAltitude = 3.1 +
+                    0.48 * sin(phase * 1.18) +
+                    0.20 * sin(phase * 2.16)
+                drone.droneDropDelay = max(0, drone.droneDropDelay - dt)
+                let activeCharges = shells.filter {
+                    $0.hostile && $0.payload == "droneCharge"
+                }.count
+                let hostileCount = shells.filter { $0.hostile }.count
+                if drone.droneHasCharge && drone.droneDropDelay <= 0 &&
+                    swarmDropTimer <= 0 && chaffActive <= 0 &&
+                    distance < 78 && distance > 12 &&
+                    activeCharges < 5 &&
+                    hostileCount < BattlefieldWaveDirector.maximumHostileShots(forWave: wave) {
+                    let direction = (tankPosition - drone.center).normalized
+                    shells.append(Shell(
+                        center: drone.center + direction * 1.4,
+                        direction: direction, hostile: true,
+                        timeLeft: 5.5, payload: "droneCharge"))
+                    drone.droneHasCharge = false
+                    swarmDropTimer = Double.random(in: 1.0...1.8)
+                    burst(at: WorldPoint(drone.center, height: drone.droneAltitude - 0.7),
+                          count: 5)
+                    sound("enemy.wav")
+                }
+                enemies[idx] = drone
             } else if type == .fighter {
                 // Fast but low-pass, finite aircraft: sweep across the player
                 // and arc away; never park directly above the tank.
@@ -860,16 +936,12 @@ final class BattlefieldScene: SKScene {
                 sound("enemy.wav")
             }
         }
-        for index in detonatedDrones.sorted(by: >) {
-            enemies.remove(at: index)
-        }
-
         var survivingShells: [Shell] = []
         var casualties = Set<Int>()
         for var shell in shells {
             let old = shell.center
             let shellSpeed = !shell.hostile ? 90.0 :
-                (shell.payload == "bomb" ? 22.0 :
+                (shell.payload == "bomb" || shell.payload == "droneCharge" ? 22.0 :
                     shell.payload == "machinegun" ? 34.0 : 23.0)
             shell.center = shell.center + shell.direction * (dt * shellSpeed)
             shell.timeLeft -= dt
@@ -889,13 +961,14 @@ final class BattlefieldScene: SKScene {
             if shell.hostile {
                 targetTime = ObstacleCollision.firstCircleImpact(
                     from: old, to: shell.center, center: tankPosition,
-                    radius: shell.payload == "bomb" ? 5.0 : 2.0)
+                    radius: shell.payload == "bomb" ? 5.0 :
+                        shell.payload == "droneCharge" ? 2.7 : 2.0)
             } else {
                 for idx in enemies.indices where !casualties.contains(idx) {
                     let radius: Double
                     switch enemies[idx].kind {
                     case .fighter: radius = 5.5
-                    case .drone: radius = 3.6
+                    case .drone: radius = 1.8
                     case .saucer: radius = 3.1
                     case .artillery: radius = 3.3
                     default: radius = 2.9
@@ -921,14 +994,16 @@ final class BattlefieldScene: SKScene {
                 let impact = old + (shell.center - old) * hit
                 if shell.hostile {
                     burst(at: WorldPoint(impact, height: height),
-                          count: shell.payload == "bomb" ? 55 : 24)
+                          count: shell.payload == "bomb" ? 55 :
+                            shell.payload == "droneCharge" ? 20 : 24)
                     if shieldDuration <= 0 && invulnerability <= 0 { takeDamage() }
                     else { sound("impact.wav") }
                 } else if let idx = targetIndex {
                     shotTally.hit()
                     enemies[idx].hitPoints -= 1
                     let impactHeight = enemies[idx].kind.isAir
-                        ? (enemies[idx].kind == .fighter ? 4.0 : 2.8) : 1.45
+                        ? (enemies[idx].kind == .fighter ? 4.0 :
+                            enemies[idx].kind == .drone ? enemies[idx].droneAltitude : 2.8) : 1.45
                     burst(at: WorldPoint(impact, height: impactHeight),
                           count: enemies[idx].hitPoints <= 0 ? 40 : 14)
                     if enemies[idx].hitPoints <= 0 {
@@ -1218,23 +1293,42 @@ final class BattlefieldScene: SKScene {
 
     private func deployAirWing(kind: FoeType, count: Int) {
         guard round == .playing, count > 0 else { return }
+        if kind == .drone {
+            swarmCenter = waveOrigin - facing(waveApproach) * 8
+            swarmVelocity = GroundPoint(0, 0)
+            swarmDropTimer = 3.0
+        }
         for n in 0..<count {
             // Reinforcements originate from the *original* enemy staging
             // sector, even after the player has driven across the map.
-            let sideways = facing(waveApproach + .pi / 2) *
-                ((Double(n) - Double(count - 1) / 2) * 13)
+            let angle = Double(n) * 2.39996323
+            let radius = sqrt(Double(n) / Double(max(1, count))) * 17.0
+            let sideways = kind == .drone
+                ? facing(waveApproach + .pi / 2) * (cos(angle) * radius)
+                : facing(waveApproach + .pi / 2) *
+                    ((Double(n) - Double(count - 1) / 2) * 13)
             let depth = facing(waveApproach) *
-                (kind == .fighter ? 17.0 : -8.0)
+                (kind == .fighter ? 17.0 :
+                    kind == .drone ? -8.0 + sin(angle) * radius : -8.0)
             let position = waveOrigin + sideways + depth
             let safe = GroundPoint(
                 max(-174, min(174, position.x)),
                 max(-174, min(174, position.z)))
             let approachHeading = atan2(tankPosition.x - safe.x,
                                          tankPosition.z - safe.z)
-            enemies.append(Foe(center: safe, heading: approachHeading,
-                               kind: kind, reload: kind == .fighter ? 3.5 : 999,
-                               phase: Double(n) * 1.2,
-                               hitPoints: kind == .fighter ? 2 : 1))
+            var foe = Foe(center: safe, heading: approachHeading,
+                          kind: kind, reload: kind == .fighter ? 3.5 : 999,
+                          phase: Double(n) * 0.29,
+                          hitPoints: kind == .fighter ? 2 : 1)
+            if kind == .drone {
+                foe.droneOffset = sideways + facing(waveApproach) *
+                    (sin(angle) * radius)
+                foe.droneSeed = Double(n) * 1.618
+                foe.droneVelocity = facing(approachHeading) *
+                    Double.random(in: 2.0...4.0)
+                foe.droneDropDelay = Double.random(in: 2.0...6.0)
+            }
+            enemies.append(foe)
         }
     }
 
@@ -2301,33 +2395,77 @@ final class BattlefieldScene: SKScene {
 
     private func drawDrone(_ e: Foe, on path: CGMutablePath,
                            camera c: CameraProjection) {
-        let y = 2.7 + 0.26 * sin(gameClock * 5.8 + e.phase)
+        // Apply full 3D body attitude before yaw, so forward thrust pitches
+        // the nose down and braking presents the underbelly to the player.
         func v(_ x: Double, _ rise: Double, _ z: Double) -> WorldPoint {
+            let cr = cos(e.droneRoll), sr = sin(e.droneRoll)
+            let cp = cos(e.dronePitch), sp = sin(e.dronePitch)
+            let rx = x * cr - rise * sr
+            let ry = x * sr + rise * cr
+            let py = ry * cp - z * sp
+            let pz = ry * sp + z * cp
             let cs = cos(e.heading), sn = sin(e.heading)
-            return WorldPoint(e.center.x + x*cs + z*sn, y + rise,
-                              e.center.z - x*sn + z*cs)
+            return WorldPoint(e.center.x + rx * cs + pz * sn,
+                              e.droneAltitude + py,
+                              e.center.z - rx * sn + pz * cs)
         }
-        // Small easily targeted quad-rotor airframe, original vector design.
-        let core = [v(-0.55, 0, -0.65), v(0.55, 0, -0.65),
-                    v(0.55, 0, 0.65), v(-0.55, 0, 0.65)]
-        for i in core.indices {
-            line(path, core[i], core[(i + 1) % core.count], c)
-        }
-        for side in [-1.0, 1.0] {
-            for z in [-1.25, 1.25] {
-                line(path, v(0, 0, 0), v(side * 1.65, 0.1, z), c)
-                let n = 7
-                for k in 0..<n {
-                    let a = Double(k) * 2 * .pi / Double(n)
-                    let b = Double(k + 1) * 2 * .pi / Double(n)
-                    line(path, v(side * 1.65 + cos(a) * 0.55,
-                                 0.1, z + sin(a) * 0.55),
-                         v(side * 1.65 + cos(b) * 0.55,
-                           0.1, z + sin(b) * 0.55), c)
-                }
+        func poly(_ vertices: [WorldPoint]) {
+            for i in vertices.indices {
+                line(path, vertices[i], vertices[(i + 1) % vertices.count], c)
             }
         }
-        line(path, v(0, 0, 0.65), v(0, -0.38, 1.25), c)
+        // Compact fuselage with depth, a raised canopy, and rear electronics.
+        poly([v(-0.48, 0, -0.69), v(0.48, 0, -0.69),
+              v(0.48, 0, 0.69), v(-0.48, 0, 0.69)])
+        poly([v(-0.36, 0.23, -0.40), v(0.36, 0.23, -0.40),
+              v(0.36, 0.23, 0.40), v(-0.36, 0.23, 0.40)])
+        for x in [-0.36, 0.36] {
+            for z in [-0.40, 0.40] {
+                line(path, v(x, 0.23, z), v(x * 1.33, 0, z * 1.725), c)
+            }
+        }
+        for side in [-1.0, 1.0] {
+            for z in [-1.12, 1.12] {
+                let x = side * 1.43
+                line(path, v(side * 0.40, 0.03, z * 0.20),
+                     v(x, 0.10, z), c)
+                // Rotor hub, motor mast, circular guard and swept blade.
+                line(path, v(x, 0.08, z), v(x, 0.23, z), c)
+                for k in 0..<8 {
+                    let a = Double(k) * .pi / 4
+                    let b = Double(k + 1) * .pi / 4
+                    line(path,
+                         v(x + cos(a) * 0.44, 0.23, z + sin(a) * 0.44),
+                         v(x + cos(b) * 0.44, 0.23, z + sin(b) * 0.44), c)
+                }
+                let spin = gameClock * 22 + e.droneSeed
+                line(path, v(x + cos(spin) * 0.38, 0.25,
+                             z + sin(spin) * 0.38),
+                     v(x - cos(spin) * 0.38, 0.25,
+                       z - sin(spin) * 0.38), c)
+            }
+        }
+        // Skids and antenna, plus a distinct underslung charge while armed.
+        for side in [-1.0, 1.0] {
+            line(path, v(side * 0.45, -0.13, -0.56),
+                 v(side * 0.56, -0.42, -0.56), c)
+            line(path, v(side * 0.45, -0.13, 0.56),
+                 v(side * 0.56, -0.42, 0.56), c)
+            line(path, v(side * 0.56, -0.42, -0.76),
+                 v(side * 0.56, -0.42, 0.76), c)
+        }
+        line(path, v(0, 0.24, -0.32), v(0, 0.70, -0.46), c)
+        if e.droneHasCharge {
+            line(path, v(0, -0.12, 0), v(0, -0.40, 0), c)
+            poly([v(-0.28, -0.43, -0.36), v(0.28, -0.43, -0.36),
+                  v(0.28, -0.43, 0.36), v(-0.28, -0.43, 0.36)])
+            poly([v(-0.20, -0.76, -0.28), v(0.20, -0.76, -0.28),
+                  v(0.20, -0.76, 0.28), v(-0.20, -0.76, 0.28)])
+            line(path, v(-0.28, -0.43, -0.36), v(-0.20, -0.76, -0.28), c)
+            line(path, v(0.28, -0.43, -0.36), v(0.20, -0.76, -0.28), c)
+            line(path, v(0.28, -0.43, 0.36), v(0.20, -0.76, 0.28), c)
+            line(path, v(-0.28, -0.43, 0.36), v(-0.20, -0.76, 0.28), c)
+        }
     }
 
     private func drawFighter(_ e: Foe, on path: CGMutablePath,
