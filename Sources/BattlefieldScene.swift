@@ -56,6 +56,22 @@ private struct Spark {
     var maxLife: Double
 }
 
+/// Short-lived multi-stage vector events. World-space effects do not alter
+/// aim, hit testing, enemy movement, or save-file compatibility.
+private struct CombatImpact {
+    enum Kind { case ground, structure, armor, aircraft, destruction }
+    var position: GroundPoint
+    var kind: Kind
+    var age: Double = 0
+    var duration: Double = 0.9
+}
+private struct TankWreck {
+    var position: GroundPoint
+    var heading: Double
+    var age: Double = 0
+    var duration: Double = 9
+}
+
 private enum RoundState { case title, levelReady, playing, paused, gameOver }
 
 // Render-only face; the existing world obstacle geometry still owns collisions.
@@ -103,6 +119,15 @@ final class BattlefieldScene: SKScene {
     private var lives = 3
     private var bestScore = UserDefaults.standard.integer(forKey: "VectorSiegeHighScore")
     private var shotTally = ShotTally()
+    private lazy var combatAudio = TankCombatAudio()
+    private var muzzleRemaining = 0.0
+    private var recoilRemaining = 0.0
+    private var screenKickRemaining = 0.0
+    private var screenKickStrength = 0.0
+    private var incomingBearing = 0.0
+    private var damageDirectionRemaining = 0.0
+    private var combatImpacts: [CombatImpact] = []
+    private var tankWrecks: [TankWreck] = []
     private var observedFPS: Double = 60
     private var showDetailedTelemetry = false
     private var cannon = CannonMagazine()
@@ -158,6 +183,10 @@ final class BattlefieldScene: SKScene {
     private let flashLines = SKShapeNode()
     private let damageOverlay = SKShapeNode()
     private let destructionRings = SKShapeNode()
+    private let combatWorldEffects = SKShapeNode()
+    private let combatWrecks = SKShapeNode()
+    private let muzzleEffects = SKShapeNode()
+    private let directionalDamageEffects = SKShapeNode()
     private let droneLines = SKShapeNode()
     private let fighterLines = SKShapeNode()
     private let armoredLines = SKShapeNode()
@@ -310,7 +339,9 @@ final class BattlefieldScene: SKScene {
             (flashLines, 7.0), (armoredLines, 5.3),
             (droneLines, 5.4), (fighterLines, 5.5),
             (countermeasureLines, 8.6), (destructionRings, 9.0),
-            (damageOverlay, 9.3), (proximityWings, 15.9),
+            (damageOverlay, 9.3), (combatWorldEffects, 7.25),
+            (combatWrecks, 4.8), (muzzleEffects, 9.6),
+            (directionalDamageEffects, 10.3), (proximityWings, 15.9),
             (scanlines, 8.0), (reticle, 10.0), (hudLines, 12.0), (radar, 13.0)
         ] {
             layer.zPosition = z
@@ -584,6 +615,12 @@ final class BattlefieldScene: SKScene {
         wave = 1
         lives = rules.startingLives
         shotTally = ShotTally()
+        combatImpacts.removeAll()
+        tankWrecks.removeAll()
+        muzzleRemaining = 0
+        recoilRemaining = 0
+        screenKickRemaining = 0
+        damageDirectionRemaining = 0
         observedFPS = 60
         nearestTankDistance = nil
         proximityCountdown = 0
@@ -632,6 +669,14 @@ final class BattlefieldScene: SKScene {
         // of freezing sparks and the blast on the game-over frame.
         hitFlashRemaining = max(0, hitFlashRemaining - dt)
         destructionRemaining = max(0, destructionRemaining - dt)
+        muzzleRemaining = max(0, muzzleRemaining - dt)
+        recoilRemaining = max(0, recoilRemaining - dt)
+        screenKickRemaining = max(0, screenKickRemaining - dt)
+        damageDirectionRemaining = max(0, damageDirectionRemaining - dt)
+        for index in combatImpacts.indices { combatImpacts[index].age += dt }
+        combatImpacts.removeAll { $0.age >= $0.duration }
+        for index in tankWrecks.indices { tankWrecks[index].age += dt }
+        tankWrecks.removeAll { $0.age >= $0.duration }
         if round == .gameOver {
             updateSparks(dt)
         }
@@ -1018,8 +1063,11 @@ final class BattlefieldScene: SKScene {
             if let wall = wallTime, wall <= (targetTime ?? .infinity) {
                 let impact = old + (shell.center - old) * wall
                 if !shell.hostile { shotTally.miss() }
-                burst(at: WorldPoint(impact, height: height), count: 9)
-                sound("impact.wav")
+                burst(at: WorldPoint(impact, height: height),
+                      count: shell.hostile ? 11 : 23)
+                registerImpact(at: impact, kind: .structure)
+                if !shell.hostile { combatAudio.play(.impact, enabled: soundOn) }
+                else { sound("impact.wav") }
                 continue
             }
             if let hit = targetTime {
@@ -1028,18 +1076,27 @@ final class BattlefieldScene: SKScene {
                     burst(at: WorldPoint(impact, height: height),
                           count: shell.payload == "bomb" ? 55 :
                             shell.payload == "droneCharge" ? 20 : 24)
-                    if shieldDuration <= 0 && invulnerability <= 0 { takeDamage() }
-                    else { sound("impact.wav") }
+                    if shieldDuration <= 0 && invulnerability <= 0 {
+                        takeDamage(from: shell.center - tankPosition)
+                    } else {
+                        registerImpact(at: impact, kind: .armor)
+                        sound("impact.wav")
+                    }
                 } else if let idx = targetIndex {
                     shotTally.hit()
                     enemies[idx].hitPoints -= 1
                     let impactHeight = enemies[idx].kind.isAir
                         ? (enemies[idx].kind == .fighter ? 4.0 :
                             enemies[idx].kind == .drone ? enemies[idx].droneAltitude : 2.8) : 1.45
+                    let killed = enemies[idx].hitPoints <= 0
+                    let kind: CombatImpact.Kind = enemies[idx].kind.isAir
+                        ? .aircraft : .armor
                     burst(at: WorldPoint(impact, height: impactHeight),
                           count: enemies[idx].kind == .drone ? 9 :
-                            (enemies[idx].hitPoints <= 0 ? 40 : 14))
-                    if enemies[idx].hitPoints <= 0 {
+                            (killed ? 55 : 26))
+                    registerImpact(at: impact, kind: killed && enemies[idx].kind.isVehicle
+                        ? .destruction : kind)
+                    if killed {
                         casualties.insert(idx)
                         let points: Int
                         switch enemies[idx].kind {
@@ -1052,9 +1109,20 @@ final class BattlefieldScene: SKScene {
                         case .tank: points = 1000
                         }
                         addPoints(points)
-                        // Drones spark on impact and explode after hitting terrain.
-                        sound(enemies[idx].kind == .drone ? "impact.wav" : "explosion.wav")
-                    } else { sound("impact.wav") }
+                        if enemies[idx].kind.isVehicle {
+                            tankWrecks.append(TankWreck(position: enemies[idx].center,
+                                                        heading: enemies[idx].heading))
+                            if tankWrecks.count > 10 { tankWrecks.removeFirst() }
+                            // Primary armor burst and secondary debris bloom.
+                            burst(at: WorldPoint(enemies[idx].center, height: 2.4), count: 46)
+                            combatAudio.play(.explosion, enabled: soundOn)
+                        } else {
+                            sound(enemies[idx].kind == .drone
+                                ? "impact.wav" : "explosion.wav")
+                        }
+                    } else {
+                        combatAudio.play(.impact, enabled: soundOn)
+                    }
                 }
                 continue
             }
@@ -1141,7 +1209,22 @@ final class BattlefieldScene: SKScene {
         shells.append(Shell(center: tankPosition + direction * 2.5,
                             direction: direction, hostile: false, timeLeft: rules.projectileLifetime))
         pulse = 0.13
-        sound("shot.wav")
+        muzzleRemaining = 0.23
+        recoilRemaining = 0.30
+        screenKickRemaining = 0.19
+        screenKickStrength = 1.0
+        // Short-lived dust in front of the muzzle, not in the reticle.
+        for _ in 0..<12 {
+            let lateral = facing(heading + .pi / 2) * Double.random(in: -2.5...2.5)
+            let position = tankPosition + direction * Double.random(in: 3.5...7.5) + lateral
+            let life = Double.random(in: 0.28...0.75)
+            sparks.append(Spark(position: WorldPoint(position, height: 0.2),
+                                velocity: WorldPoint(Double.random(in: -2...2),
+                                                     Double.random(in: 0.6...2.5),
+                                                     Double.random(in: -2...2)),
+                                timeLeft: life, maxLife: life))
+        }
+        combatAudio.play(.cannon, enabled: soundOn)
     }
 
     private func launchChaff() {
@@ -1209,7 +1292,11 @@ final class BattlefieldScene: SKScene {
         sound("shield.wav")
     }
 
-    private func takeDamage() {
+    private func takeDamage(from incoming: GroundPoint = GroundPoint(0, 0)) {
+        incomingBearing = wrapAngle(atan2(incoming.x, incoming.z) - heading)
+        damageDirectionRemaining = 1.15
+        screenKickRemaining = 0.47
+        screenKickStrength = 1.6
         lives -= 1
         invulnerability = 2.8
         driveSpeed = -6.0
@@ -1221,12 +1308,14 @@ final class BattlefieldScene: SKScene {
         burst(at: WorldPoint(tankPosition + facing(heading) * 2.0,
                              height: 2.8), count: 30)
         sound("damage.wav")
+        registerImpact(at: tankPosition, kind: .armor)
         if lives <= 0 {
             destructionRemaining = 1.65
             hitFlashRemaining = 1.28
             burst(at: WorldPoint(tankPosition, height: 3.2), count: 115)
             burst(at: WorldPoint(tankPosition, height: 0.65), count: 65)
-            sound("explosion.wav")
+            registerImpact(at: tankPosition, kind: .destruction)
+            combatAudio.play(.explosion, enabled: soundOn)
             round = .gameOver
             if score > bestScore {
                 bestScore = score
@@ -1633,6 +1722,12 @@ final class BattlefieldScene: SKScene {
         destructionRemaining = 0
         cannon = saved.cannon
         shotTally = saved.shotTally
+        combatImpacts.removeAll()
+        tankWrecks.removeAll()
+        muzzleRemaining = 0
+        recoilRemaining = 0
+        screenKickRemaining = 0
+        damageDirectionRemaining = 0
         obstacles = saved.obstacles.map { Obstacle(
             center: $0.center, size: $0.size,
             kind: obstacleKind(named: $0.kind)) }
@@ -1956,12 +2051,21 @@ final class BattlefieldScene: SKScene {
                                                + 0.012 * sin(gameClock * 11.5))
         worldCamera.cameraLateral = driveAmount * 0.018 * sin(gameClock * 19)
                                    + turnAmount * 0.024 * sin(gameClock * 15.3)
+        // Camera-only recoil and impacts: targeting uses the unmodified camera.
+        let recoil = recoilRemaining > 0
+            ? sin((0.30 - recoilRemaining) / 0.30 * .pi) : 0
+        let kick = screenKickRemaining > 0
+            ? (screenKickRemaining / 0.47) * screenKickStrength : 0
         worldCamera.pitchPoints = suspension.pitch * 138
                                   + driveAmount * 0.9 * sin(gameClock * 21)
+                                  + recoil * (displayMode == .modern ? 9 : 5)
+                                  + kick * 3.0 * sin(gameClock * 77)
+        worldCamera.cameraLateral += kick * 0.028 * sin(gameClock * 63)
         renderMountains(worldCamera)
         renderGround(worldCamera)
         renderObjects(worldCamera)
         renderProjectiles(worldCamera)
+        renderWorldCombatEffects(worldCamera)
         renderHUD(camera)
         renderCombatEffects(camera)
     }
@@ -1969,6 +2073,45 @@ final class BattlefieldScene: SKScene {
     private func renderCombatEffects(_ c: CameraProjection) {
         let w = c.viewportWidth
         let h = c.viewportHeight
+        let muzzlePath = CGMutablePath()
+        if muzzleRemaining > 0 {
+            let scale = muzzleRemaining / 0.23
+            let cx = w * 0.5
+            let cy = c.horizon - (displayMode == .modern ? 72 : 42)
+            let radius = (displayMode == .modern ? 40.0 : 25.0) * scale
+            for index in 0..<8 {
+                let angle = Double(index) * .pi / 4
+                let extent = index.isMultiple(of: 2) ? 1.75 : 1.0
+                segment(muzzlePath, point(cx, cy),
+                        point(cx + cos(angle) * radius * extent,
+                              cy + sin(angle) * radius * extent))
+            }
+            muzzlePath.addEllipse(in: CGRect(x: cx - radius * 0.35,
+                                              y: cy - radius * 0.35,
+                                              width: radius * 0.7, height: radius * 0.7))
+        }
+        muzzleEffects.path = muzzlePath
+        muzzleEffects.alpha = CGFloat(min(1, muzzleRemaining / 0.10))
+        let warningPath = CGMutablePath()
+        if damageDirectionRemaining > 0 {
+            let side = sin(incomingBearing)
+            let forward = cos(incomingBearing)
+            let cx = w * 0.5 + side * min(120, w * 0.12)
+            let cy = c.horizon + 90 * forward
+            let intensity = damageDirectionRemaining / 1.15
+            let radius = 22 + 12 * intensity
+            for step in 0..<3 {
+                let a = Double(step) * 2 * .pi / 3 + incomingBearing
+                segment(warningPath,
+                        point(cx + cos(a) * radius, cy + sin(a) * radius),
+                        point(cx + cos(a + 0.45) * (radius + 10),
+                              cy + sin(a + 0.45) * (radius + 10)))
+            }
+        }
+        directionalDamageEffects.path = warningPath
+        directionalDamageEffects.alpha = CGFloat(
+            min(1, damageDirectionRemaining * 1.5) *
+            (0.70 + 0.30 * abs(sin(gameClock * 15))))
         if hitFlashRemaining > 0 {
             let path = CGMutablePath()
             path.addRect(CGRect(x: 0, y: 0, width: w, height: h))
