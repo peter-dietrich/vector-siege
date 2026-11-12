@@ -835,6 +835,11 @@ final class BattlefieldScene: SKScene {
             firePlayer()
         }
 
+        // Every ground vehicle uses the same immutable collision map this
+        // frame. Do not rebuild an 80+ building navigation array per tank.
+        let navigationBodies = obstacles.map {
+            NavigationObstacle(body: collisionBody(for: $0))
+        }
         // Cohesive cloud: approach the player but remain at a playable standoff.
         if enemies.contains(where: { $0.kind == .drone }) {
             let target = tankPosition - facing(waveApproach) * 42
@@ -979,10 +984,8 @@ final class BattlefieldScene: SKScene {
                     facing(enemies[idx].heading) * max(14, movement) * dt
                 enemies[idx].attackTimer += dt
             } else {
-                let obstaclesForNavigation = obstacles.map {
-                    NavigationObstacle(body: collisionBody(for: $0))
-                }
-                let shotBlockers = obstaclesForNavigation
+                let obstaclesForNavigation = navigationBodies
+                let shotBlockers = navigationBodies
                 let occupied = enemies.indices
                     .filter { $0 != idx && enemies[$0].kind.isVehicle }
                     .map { enemies[$0].center }
@@ -1068,9 +1071,7 @@ final class BattlefieldScene: SKScene {
             let targetVisible = !type.isVehicle || (
                 EnemyNavigation.clearSegment(
                     enemies[idx].center, tankPosition,
-                    obstacles: obstacles.map {
-                        NavigationObstacle(body: collisionBody(for: $0))
-                    }, height: 1.5) &&
+                    obstacles: navigationBodies, height: 1.5) &&
                 LandscapeTopology.clearFiringLine(
                     from: enemies[idx].center, to: tankPosition))
             let hostileShots = shells.filter { $0.hostile }.count
@@ -1846,6 +1847,17 @@ final class BattlefieldScene: SKScene {
                 chosenApproach = candidateApproach
             }
             if bestPositions.count == count { break }
+        }
+        // Last-resort sector scan if a dense block or map edge prevents
+        // the formation search from finding even one legal ground target.
+        // Without a ground target, a level would auto-complete immediately.
+        if bestPositions.isEmpty, let fallback = EnemySpawnLayout.choosePosition(
+            player: tankPosition, heading: heading, index: 0, count: 1,
+            existing: [], phase: .pi, forwardExclusion: .pi / 6,
+            isOpen: { !self.blocked($0, radius: 4) }) {
+            bestPositions = [fallback]
+            chosenApproach = atan2(fallback.x - tankPosition.x,
+                                   fallback.z - tankPosition.z)
         }
         waveApproach = chosenApproach
         waveOrigin = bestPositions.isEmpty
