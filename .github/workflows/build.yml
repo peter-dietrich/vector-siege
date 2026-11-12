@@ -11,3 +11,10 @@ jobs:
         run: bash Tests/check-geometry.sh
       - name: Build Vector Siege
         run: xcodebuild -project VectorSiege.xcodeproj -scheme VectorSiege -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO build
+      - name: Build release candidate
+        run: |
+          xcodebuild -project VectorSiege.xcodeproj -scheme VectorSiege \
+            -configuration Release -derivedDataPath "$RUNNER_TEMP/siege-rc" \
+            -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO build
+      - name: Validate release app and Fun City identity
+        run: bash Tests/check-release-candidate.sh "$RUNNER_TEMP/siege-rc/Build/Products/Release/VectorSiege.app"
