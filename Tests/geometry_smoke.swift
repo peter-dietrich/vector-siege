@@ -361,6 +361,59 @@ struct GeometrySmoke {
         precondition(loadedIntro.awaitingLevelStart == true,
                      "Save/Resume must preserve a pending level-intro")
 
+        // v3.6 combat fairness and predictable route refreshes.
+        for cap in 1...5 {
+            for active in 0...(cap + 2) {
+                for requested in 1...4 {
+                    let volley = CombatBalance.permittedVolley(
+                        requested: requested, alreadyHostile: active,
+                        maximumHostile: cap)
+                    precondition(volley >= 0 && volley <= requested)
+                    precondition(active >= cap ? volley == 0 :
+                        active + volley <= cap)
+                }
+            }
+        }
+        precondition(CombatBalance.permittedVolley(
+            requested: 2, alreadyHostile: 2, maximumHostile: 3) == 1)
+        precondition(CombatBalance.permittedVolley(
+            requested: 2, alreadyHostile: 0, maximumHostile: 2) == 2)
+        precondition(CombatBalance.permittedVolley(
+            requested: 2, alreadyHostile: 3, maximumHostile: 3) == 0)
+        precondition(CombatBalance.routeRefreshDelay(
+            index: 2, recentlyBlocked: true) > 0.2)
+        precondition(CombatBalance.routeRefreshDelay(
+            index: 2, recentlyBlocked: false) >
+            CombatBalance.routeRefreshDelay(index: 2, recentlyBlocked: true))
+        precondition(CombatBalance.shouldFlank(
+            stillSeconds: 6, index: 0, wave: 3, distance: 44))
+        precondition(!CombatBalance.shouldFlank(
+            stillSeconds: 2, index: 0, wave: 3, distance: 44))
+        precondition(!CombatBalance.shouldFlank(
+            stillSeconds: 6, index: 0, wave: 3, distance: 9))
+        precondition(CombatBalance.evasionDuration(
+            cannonDistance: 55, lateralError: 3, enemyIndex: 0) > 0)
+        precondition(CombatBalance.evasionDuration(
+            cannonDistance: 55, lateralError: 3, enemyIndex: 1) == 0)
+        precondition(CombatBalance.evasionDuration(
+            cannonDistance: 55, lateralError: 15, enemyIndex: 0) == 0)
+        // At least one ground unit is required to make a wave meaningful.
+        for request in [-1, 0, 1, 4, 8] {
+            precondition(CombatBalance.minimumSpawnedGroundUnits(
+                requested: request) >= 1)
+        }
+        // Late-game constraints remain within established arcade caps.
+        let veteran = SiegeRules().validated()
+        for wave in 1...40 {
+            let requested = veteran.enemies(forWave: wave)
+            precondition(requested >= 1 && requested <= veteran.maxEnemies)
+            let cap = DynamicBattlefieldDirector.hostileShotLimit(
+                wave: wave, pressure: 1)
+            precondition(cap <= 3)
+            precondition(BattlefieldWaveDirector.fighters(forWave: wave) <= 1)
+            precondition(BattlefieldWaveDirector.drones(forWave: wave) <= 30)
+        }
+
         // Dynamic pressure never creates extra opponents or increases the
         // permitted number of simultaneous hostile rounds.
         precondition(DynamicBattlefieldDirector.nextPressure(
