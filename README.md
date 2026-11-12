@@ -1,5 +1,15 @@
 # Vector Siege
 
+## v3.7 — Release candidate preparation (November 2026)
+
+The current development version includes terrain-aware combat, flat and readable downtown streets, opaque building cover, full ammo replenishment per level, staggered air encounters and adaptive difficulty. **v3.7 introduces release-validation checks, not a public release**. See [v3.7 release candidate gate](docs/RELEASE_CANDIDATE_V3_7.md) for the exact Xcode commands, acceptance checklist and Fun City distribution contract.
+
+- GitHub CI now tests gameplay geometry and both **Debug and Release** macOS builds, then inspects the Release app bundle for Fun City-compatible identity (`io.vectorsiege.game`).
+- The existing signed and notarized release workflow runs the same geometry and bundle preflight before any tag-triggered packaging.
+- No public tag or signed download is created until Apple Developer ID credentials, manual playtests and asset-provenance review are complete.
+
+**Historical change log:** Sections labeled v1.x–v2.x below describe the game at those earlier milestones. Where counts, speeds or features differ, the current source and [v3.7 release candidate gate](docs/RELEASE_CANDIDATE_V3_7.md) take precedence.
+
 ## Maintainer documentation (2026 audit)
 
 - [Architecture and development](docs/DEVELOPMENT.md) — code structure, local workflow, data and gameplay scope.
