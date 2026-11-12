@@ -381,6 +381,46 @@ enum DynamicBattlefieldDirector {
     }
 }
 
+/// Shared combat fairness rules. Separating these calculations from the
+/// SpriteKit update loop keeps Veteran and custom presets predictable and
+/// makes important encounter limits easy to regression-test.
+enum CombatBalance {
+    /// No machine-gun burst may exceed remaining hostile projectile slots.
+    static func permittedVolley(requested: Int, alreadyHostile: Int,
+                                maximumHostile: Int) -> Int {
+        max(0, min(max(0, requested), max(0, maximumHostile - alreadyHostile)))
+    }
+
+    /// Route refreshes are staggered; rushing replans on every blocked step
+    /// creates CPU spikes and visibly twitchy tanks at city intersections.
+    static func routeRefreshDelay(index: Int, recentlyBlocked: Bool) -> Double {
+        if recentlyBlocked { return 0.26 + Double(abs(index) % 4) * 0.055 }
+        return 0.68 + Double(abs(index) % 4) * 0.16
+    }
+
+    /// Only a subset of tanks flanks a stationary player; seeking a flank
+    /// never overrides the requirement to navigate around solid geometry.
+    static func shouldFlank(stillSeconds: Double, index: Int,
+                            wave: Int, distance: Double) -> Bool {
+        stillSeconds >= 5.0 && distance > 13 && distance < 95 &&
+            (index + wave) % 3 == 0
+    }
+
+    /// Once enemy fire is imminent, don't have every tank instantly dodge.
+    /// Preserve the player's opportunity to aim and fire deliberately.
+    static func evasionDuration(cannonDistance: Double, lateralError: Double,
+                                enemyIndex: Int) -> Double {
+        guard cannonDistance > 9 && cannonDistance < 110,
+              lateralError < 8.5 else { return 0 }
+        return enemyIndex % 3 == 0 ? 1.4 : 0
+    }
+
+    static func minimumSpawnedGroundUnits(requested: Int) -> Int {
+        // A valid wave always needs at least one ground target to complete.
+        max(1, requested)
+    }
+}
+
 /// Predictable mixed-air encounter pacing. This is intentionally small:
 /// the existing 30-drone cloud remains a visual formation, but only one of
 /// five six-drone wings conducts a brief attack run at a time.
