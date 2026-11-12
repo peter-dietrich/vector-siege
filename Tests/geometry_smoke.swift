@@ -403,10 +403,10 @@ struct GeometrySmoke {
                 requested: request) >= 1)
         }
         // Late-game constraints remain within established arcade caps.
-        let veteran = SiegeRules().validated()
+        let lateGameRules = SiegeRules().validated()
         for wave in 1...40 {
-            let requested = veteran.enemies(forWave: wave)
-            precondition(requested >= 1 && requested <= veteran.maxEnemies)
+            let requested = lateGameRules.enemies(forWave: wave)
+            precondition(requested >= 1 && requested <= lateGameRules.maxEnemies)
             let cap = DynamicBattlefieldDirector.hostileShotLimit(
                 wave: wave, pressure: 1)
             precondition(cap <= 3)
