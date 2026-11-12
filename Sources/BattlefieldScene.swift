@@ -1003,8 +1003,9 @@ final class BattlefieldScene: SKScene {
                     // One in three vehicles seeks a flank if the player
                     // camps. Others briefly change lanes under cannon fire.
                     let evasive = enemies[idx].evasiveSeconds > 0
-                    let flank = playerStillSeconds > 4.0 &&
-                        (idx + wave) % 3 == 0
+                    let flank = CombatBalance.shouldFlank(
+                        stillSeconds: playerStillSeconds, index: idx,
+                        wave: wave, distance: distance)
                     let shouldMove = !clearShot ||
                         distance > desiredDistance + 7 || evasive || flank
                     let lateral = facing(heading + .pi / 2) *
@@ -1021,7 +1022,8 @@ final class BattlefieldScene: SKScene {
                             terrainAware: true)
                         : nil
                     enemies[idx].routeRefreshRemaining =
-                        0.55 + Double(idx % 4) * 0.12
+                        CombatBalance.routeRefreshDelay(index: idx,
+                            recentlyBlocked: false)
                 }
 
                 // When a tank is already in range and has a clear line of
@@ -1031,7 +1033,9 @@ final class BattlefieldScene: SKScene {
                 let shouldAdvance = destination != nil &&
                     (!clearShot || distance > desiredDistance + 6 ||
                      enemies[idx].evasiveSeconds > 0 ||
-                     (playerStillSeconds > 4.0 && (idx + wave) % 3 == 0))
+                     CombatBalance.shouldFlank(
+                        stillSeconds: playerStillSeconds, index: idx,
+                        wave: wave, distance: distance))
                 let steeringVector = shouldAdvance
                     ? (destination! - enemies[idx].center) : diff
                 let aimHeading = atan2(steeringVector.x, steeringVector.z)
@@ -1055,7 +1059,9 @@ final class BattlefieldScene: SKScene {
                         // Obstacles or another tank can block the planned step;
                         // discard the stale route so next frame finds a detour.
                         enemies[idx].navigationWaypoint = nil
-                        enemies[idx].routeRefreshRemaining = 0
+                        enemies[idx].routeRefreshRemaining =
+                            CombatBalance.routeRefreshDelay(index: idx,
+                                recentlyBlocked: true)
                     }
                 }
             }
@@ -1097,7 +1103,10 @@ final class BattlefieldScene: SKScene {
                 let payload = type == .saucer ? "saucerPulse" :
                     explosive ? "bomb" :
                     (type == .fighter || type == .apc ? "machinegun" : "cannon")
-                let count = payload == "machinegun" && hostileShots == 0 ? 2 : 1
+                let requested = payload == "machinegun" ? 2 : 1
+                let count = CombatBalance.permittedVolley(
+                    requested: requested, alreadyHostile: hostileShots,
+                    maximumHostile: hostileShotLimit)
                 for burstIndex in 0..<count {
                     let scatter = Double(burstIndex) * 0.055
                     let flight = facing(aim + error + scatter)
@@ -1488,8 +1497,12 @@ final class BattlefieldScene: SKScene {
             let forward = relative.x * direction.x + relative.z * direction.z
             let lateral = abs(relative.x * direction.z -
                               relative.z * direction.x)
-            if forward > 8 && forward < 115 && lateral < 11 {
-                enemies[index].evasiveSeconds = 2.1
+            let reaction = CombatBalance.evasionDuration(
+                cannonDistance: forward, lateralError: lateral,
+                enemyIndex: index)
+            if reaction > 0 {
+                enemies[index].evasiveSeconds = max(
+                    enemies[index].evasiveSeconds, reaction)
                 enemies[index].routeRefreshRemaining = 0
             }
         }
