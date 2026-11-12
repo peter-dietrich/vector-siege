@@ -15,12 +15,17 @@ jobs:
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
+      - name: Geometry and gameplay regression checks
+        run: bash Tests/check-geometry.sh
       - name: Build release configuration
         run: |
           xcodebuild -project VectorSiege.xcodeproj -scheme VectorSiege -configuration Release \
             -derivedDataPath "$RUNNER_TEMP/derived" -destination 'platform=macOS' \
             CODE_SIGNING_ALLOWED=NO build
           test -d "$RUNNER_TEMP/derived/Build/Products/Release/VectorSiege.app"
+
+      - name: Validate release artifact and Fun City compatibility
+        run: bash Tests/check-release-candidate.sh "$RUNNER_TEMP/derived/Build/Products/Release/VectorSiege.app"
 
       - name: Import Developer ID signing certificate
         if: startsWith(github.ref, 'refs/tags/v')
