@@ -263,23 +263,22 @@ struct GeometrySmoke {
         waveCannon.rearmForNextLevel()
         precondition(waveCannon.canFire && waveCannon.roundsRemaining == 3)
 
-        // v4.0 cockpit shell reserves the same visual ratio across common
-        // macOS window sizes, without moving Classic-mode geometry.
+        // The restored top-mounted cockpit scales with the original
+        // four-panel instrumentation and leaves the center battlefield open.
         for h in [640.0, 690.0, 790.0, 900.0, 1080.0] {
-            let top = CommandCockpitLayout.deckTop(height: h)
-            let bottom = CommandCockpitLayout.deckFloor(height: h)
-            let offset = CommandCockpitLayout.deckOffset(height: h)
-            let moduleHeight = CommandCockpitLayout.panelHeight(height: h)
-            precondition(top < h - 80)
-            precondition(bottom > 0)
-            precondition(abs((h - 16 + offset) - top) < 0.001)
-            precondition(bottom + moduleHeight + 10 <= top + 0.001)
-            precondition(CommandCockpitLayout.windshieldHeightFraction(
-                height: h) >= 0.50)
+            let top = CommandCockpitLayout.panelTop(height: h)
+            let bottom = CommandCockpitLayout.panelBottom(height: h)
+            let panelHeight = CommandCockpitLayout.panelHeight(height: h)
+            let battlefield = CommandCockpitLayout.openBattlefieldHeight(height: h)
+            precondition(abs(top - (h - 16)) < 0.001)
+            precondition(abs(top - bottom - panelHeight) < 0.001)
+            precondition(panelHeight >= 248 && panelHeight <= 278)
+            precondition(battlefield >= 180)
+            precondition(bottom > 27 +
+                         CommandCockpitLayout.lowerDashboardHeight(height: h))
         }
-        precondition(CommandCockpitLayout.deckTop(height: 790) <
-                     CommandCockpitLayout.deckTop(height: 1080))
-        precondition(CommandCockpitLayout.panelHeight(height: 640) >= 248)
+        precondition(CommandCockpitLayout.panelBottom(height: 900) >
+                     CommandCockpitLayout.panelBottom(height: 690))
 
         // Culling reduces distant geometry without hiding close contacts,
         // and the segmented hull occluder retains exposed gun details.
