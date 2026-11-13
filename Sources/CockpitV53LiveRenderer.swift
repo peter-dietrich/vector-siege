@@ -32,6 +32,14 @@ final class CockpitV53LiveRenderer {
     private weak var scene: SKScene?
     private let root = SKNode()
     private let blanking = SKShapeNode()
+    // Independent bottom anchoring prevents the upper hardware alignment
+    // from dragging the command deck into the center of the battlefield.
+    private let lowerRoot = SKNode()
+    private let lowerCurtain = SKShapeNode()
+    private let lowerCannonBar = SKShapeNode()
+    private let lowerMGBar = SKShapeNode()
+    private let lowerMGHeatBar = SKShapeNode()
+    private let lowerStatusPlate = SKShapeNode()
     struct MapBuilding {
         let x: Double
         let z: Double
@@ -124,6 +132,7 @@ final class CockpitV53LiveRenderer {
     private let pale = NSColor(calibratedRed: 0.88, green: 0.92, blue: 0.89, alpha: 1)
     private let mint = NSColor(calibratedRed: 0.43, green: 0.95, blue: 0.72, alpha: 1)
     private let amber = NSColor(calibratedRed: 1, green: 0.68, blue: 0.28, alpha: 1)
+    private let critical = NSColor(calibratedRed: 1, green: 0.32, blue: 0.27, alpha: 1)
     private let muted = NSColor(calibratedRed: 0.52, green: 0.66, blue: 0.64, alpha: 1)
     private let cyan = NSColor(calibratedRed: 0.51, green: 0.86, blue: 0.87, alpha: 1)
     private let images: URL
@@ -140,7 +149,15 @@ final class CockpitV53LiveRenderer {
         scene.addChild(blanking)
         root.zPosition = 36
         scene.addChild(root)
+        lowerCurtain.zPosition = 36.5
+        lowerCurtain.fillColor = NSColor(calibratedRed: 0.008, green: 0.018,
+                                        blue: 0.023, alpha: 1)
+        lowerCurtain.strokeColor = .clear
+        scene.addChild(lowerCurtain)
+        lowerRoot.zPosition = 37
+        scene.addChild(lowerRoot)
         assemble()
+        assembleLowerConsole()
     }
 
     private func sprite(_ file: String, frame: CGRect, z: CGFloat, parent: SKNode? = nil) {
@@ -336,6 +353,189 @@ final class CockpitV53LiveRenderer {
              y: systemsY+47, size: 7, color: muted, align: .right)
     }
 
+
+    // Lower hardware is drawn separately from the v5.3 raster modules,
+    // using their amber bevel / dark glass / muted cyan palette. No gameplay
+    // values are hard-coded into the artwork.
+    private func deckShape(_ frame: CGRect, fill: NSColor, border: NSColor,
+                           radius: CGFloat = 5, z: CGFloat = 1) -> SKShapeNode {
+        let node = SKShapeNode(rect: frame, cornerRadius: radius)
+        node.fillColor = fill
+        node.strokeColor = border
+        node.lineWidth = 1
+        node.zPosition = z
+        lowerRoot.addChild(node)
+        return node
+    }
+
+    private func deckLabel(_ key: String, _ value: String,
+                           x: CGFloat, y: CGFloat, size: CGFloat,
+                           color: NSColor? = nil,
+                           align: SKLabelHorizontalAlignmentMode = .left) {
+        let node = SKLabelNode(fontNamed: "Menlo-Bold")
+        node.text = value
+        node.position = CGPoint(x: x, y: y)
+        node.fontSize = size
+        node.fontColor = color ?? pale
+        node.horizontalAlignmentMode = align
+        node.verticalAlignmentMode = .center
+        node.zPosition = 5
+        lowerRoot.addChild(node)
+        labels[key] = node
+    }
+
+    private func deckMeter(_ node: SKShapeNode, x: CGFloat, y: CGFloat,
+                           width: CGFloat, color: NSColor) {
+        let shadow = SKShapeNode(rect: CGRect(x: x, y: y, width: width, height: 5),
+                                 cornerRadius: 2)
+        shadow.fillColor = NSColor(calibratedWhite: 0.18, alpha: 1)
+        shadow.strokeColor = .clear
+        shadow.zPosition = 3
+        lowerRoot.addChild(shadow)
+        node.path = CGPath(roundedRect: CGRect(x: x, y: y,
+                                              width: width, height: 5),
+                           cornerWidth: 2, cornerHeight: 2, transform: nil)
+        node.fillColor = color
+        node.strokeColor = .clear
+        node.zPosition = 4
+        lowerRoot.addChild(node)
+    }
+
+    private func assembleLowerConsole() {
+        let metal = NSColor(calibratedRed: 0.11, green: 0.14, blue: 0.15, alpha: 1)
+        let glass = NSColor(calibratedRed: 0.018, green: 0.055, blue: 0.065, alpha: 1)
+        let edge = NSColor(calibratedRed: 0.35, green: 0.38, blue: 0.36, alpha: 1)
+        deckShape(CGRect(x: 20, y: 15, width: 1560, height: 143),
+                  fill: metal, border: edge, radius: 11)
+        deckShape(CGRect(x: 29, y: 22, width: 1542, height: 126),
+                  fill: glass, border: mint.withAlphaComponent(0.35))
+        // Separate functional zones share the same height and baseline.
+        for x in [337.0, 649.0, 964.0, 1267.0] {
+            let rule = SKShapeNode(rect: CGRect(x: x, y: 29, width: 1, height: 110))
+            rule.fillColor = muted.withAlphaComponent(0.34)
+            rule.strokeColor = .clear
+            rule.zPosition = 3
+            lowerRoot.addChild(rule)
+        }
+        for x in [42.0, 350.0, 662.0, 979.0, 1280.0] {
+            deckShape(CGRect(x: x, y: 142, width: 37, height: 3),
+                      fill: amber, border: .clear, radius: 1, z: 3)
+        }
+        deckLabel("deckMobilityTitle", "01 / MOBILITY", x: 48, y: 129, size: 10, color: amber)
+        deckLabel("deckHull", "LIVES 03", x: 48, y: 96, size: 19, color: pale)
+        deckLabel("deckSpeed", "0.0 MPH", x: 315, y: 96, size: 17,
+                  color: mint, align: .right)
+        deckLabel("deckDrive", "DRIVE / STANDBY", x: 48, y: 63, size: 10, color: cyan)
+        deckLabel("deckDifficulty", "VETERAN", x: 315, y: 43, size: 10,
+                  color: muted, align: .right)
+
+        deckLabel("deckWeaponsTitle", "02 / WEAPON CONTROL", x: 353, y: 129,
+                  size: 10, color: amber)
+        deckLabel("deckCannon", "MAIN 40/40", x: 353, y: 105, size: 13)
+        deckMeter(lowerCannonBar, x: 499, y: 103, width: 124, color: mint)
+        deckLabel("deckMG", "TWIN MG 180", x: 353, y: 78, size: 13, color: pale)
+        deckMeter(lowerMGBar, x: 499, y: 77, width: 124, color: cyan)
+        deckLabel("deckMGState", "F / READY", x: 353, y: 48, size: 10, color: mint)
+        deckLabel("deckHeat", "HEAT 00%", x: 622, y: 48, size: 10,
+                  color: muted, align: .right)
+        deckMeter(lowerMGHeatBar, x: 499, y: 34, width: 124, color: amber)
+
+        deckLabel("deckThreatTitle", "03 / THREAT INTELLIGENCE", x: 665, y: 129,
+                  size: 10, color: amber)
+        deckLabel("deckGround", "GROUND 00", x: 665, y: 99, size: 14)
+        deckLabel("deckAir", "AIR 00", x: 810, y: 99, size: 14, color: cyan)
+        deckLabel("deckIncoming", "INBOUND 00", x: 665, y: 71, size: 13)
+        deckLabel("deckTarget", "NO TRACK", x: 665, y: 44, size: 10, color: muted)
+
+        deckLabel("deckDefenseTitle", "04 / DEFENSIVE SUITE", x: 981, y: 129,
+                  size: 10, color: amber)
+        deckLabel("deckShield", "SHIELD / READY", x: 981, y: 100, size: 14, color: mint)
+        deckLabel("deckChaff", "CHAFF / 02", x: 981, y: 71, size: 13)
+        lowerStatusPlate.path = CGPath(roundedRect: CGRect(x: 978, y: 31,
+                                            width: 265, height: 28),
+                                            cornerWidth: 4, cornerHeight: 4,
+                                            transform: nil)
+        lowerStatusPlate.fillColor = NSColor(calibratedRed: 0.035, green: 0.13,
+                                             blue: 0.11, alpha: 1)
+        lowerStatusPlate.strokeColor = mint.withAlphaComponent(0.6)
+        lowerStatusPlate.lineWidth = 0.8
+        lowerStatusPlate.zPosition = 3
+        lowerRoot.addChild(lowerStatusPlate)
+        deckLabel("deckThreatState", "STATUS / NOMINAL",
+                  x: 993, y: 45, size: 10, color: mint)
+
+        deckLabel("deckNavTitle", "05 / NAVIGATION", x: 1282, y: 129,
+                  size: 10, color: amber)
+        deckLabel("deckHeading", "HDG 000°", x: 1282, y: 100, size: 19,
+                  color: pale)
+        deckLabel("deckSector", "SECTOR D-04", x: 1282, y: 72, size: 12, color: cyan)
+        deckLabel("deckCoordinates", "X +0 / Z +0", x: 1282, y: 48,
+                  size: 10, color: muted)
+        deckLabel("deckElevation", "ELEV +0 FT", x: 1554, y: 48,
+                  size: 9.5, color: muted, align: .right)
+    }
+
+    private func updateLowerConsole(_ snapshot: CockpitV5Snapshot,
+                                    mgAmmo: Int, mgHeat: Double, mgLocked: Bool,
+                                    groundCount: Int, airCount: Int) {
+        set("deckHull", String(format: "LIVES %02d", snapshot.lives))
+        set("deckSpeed", String(format: "%.1f MPH", powertrain.speedMPH))
+        set("deckDrive", abs(snapshot.speedWorldUnitsPerSecond) < 0.5
+            ? "DRIVE / STANDBY"
+            : (snapshot.speedWorldUnitsPerSecond >= 0 ? "DRIVE / FORWARD" : "DRIVE / REVERSE"))
+        set("deckDifficulty", snapshot.difficultyLabel.uppercased())
+        set("deckCannon", String(format: "MAIN %02d/%02d",
+                                  snapshot.roundsRemaining, snapshot.magazineCapacity))
+        set("deckMG", String(format: "TWIN MG %03d", mgAmmo))
+        set("deckHeat", String(format: "HEAT %02.0f%%", mgHeat))
+        set("deckMGState", mgLocked ? "F / OVERHEAT"
+            : mgAmmo == 0 ? "F / EMPTY" : "F / READY")
+        labels["deckMGState"]?.fontColor = mgLocked || mgAmmo == 0 ? amber : mint
+        let maxMagazine = max(1, snapshot.magazineCapacity)
+        let cannonFill = CGFloat(max(0, snapshot.roundsRemaining)) / CGFloat(maxMagazine)
+        updateBar(lowerCannonBar, x: 499, y: 103, full: 124, fraction: Double(cannonFill))
+        updateBar(lowerMGBar, x: 499, y: 77, full: 124,
+                  fraction: Double(max(0, mgAmmo)) / 180)
+        updateBar(lowerMGHeatBar, x: 499, y: 34, full: 124,
+                  fraction: mgHeat / 100)
+        lowerMGHeatBar.fillColor = mgHeat > 80 ? critical : amber
+        set("deckGround", String(format: "GROUND %02d", groundCount))
+        set("deckAir", String(format: "AIR %02d", airCount))
+        let incoming = snapshot.projectiles.filter { $0.hostile }.count
+        set("deckIncoming", String(format: "INBOUND %02d", incoming))
+        labels["deckIncoming"]?.fontColor = incoming > 0 ? amber : pale
+        set("deckTarget", snapshot.target.map {
+            String(format: "TRACK %.0f / %@",
+                   $0.rangeWorldUnits, $0.clearFiringLine ? "CLEAR" : "COVER")
+        } ?? "NO TRACK")
+        let shield: String
+        if snapshot.shieldRemainingSeconds > 0 {
+            shield = String(format: "SHIELD / ON %.1fS", snapshot.shieldRemainingSeconds)
+        } else if snapshot.shieldCooldownSeconds > 0 {
+            shield = String(format: "SHIELD / CD %.1fS", snapshot.shieldCooldownSeconds)
+        } else {
+            shield = "SHIELD / READY"
+        }
+        set("deckShield", shield)
+        labels["deckShield"]?.fontColor =
+            snapshot.shieldCooldownSeconds > 0 && snapshot.shieldRemainingSeconds <= 0
+            ? amber : mint
+        set("deckChaff", String(format: "CHAFF / %02d", snapshot.chaffCharges))
+        let defensiveAlert = incoming > 0 || snapshot.lives <= 1
+        set("deckThreatState", defensiveAlert ? "STATUS / THREAT" : "STATUS / NOMINAL")
+        labels["deckThreatState"]?.fontColor = defensiveAlert ? amber : mint
+        lowerStatusPlate.strokeColor = defensiveAlert ? amber : mint.withAlphaComponent(0.6)
+        lowerStatusPlate.fillColor = defensiveAlert
+            ? NSColor(calibratedRed: 0.18, green: 0.09, blue: 0.025, alpha: 1)
+            : NSColor(calibratedRed: 0.035, green: 0.13, blue: 0.11, alpha: 1)
+        set("deckHeading", String(format: "HDG %03.0f°", snapshot.headingDegrees))
+        set("deckSector", "SECTOR " + snapshot.sector)
+        set("deckCoordinates", String(format: "X %+.0f / Z %+.0f",
+                                     snapshot.playerPosition.x, snapshot.playerPosition.z))
+        set("deckElevation", String(format: "ELEV %+.0f FT",
+                                  snapshot.terrainElevationWorldUnits * 3.28084))
+    }
+
     private func updateBar(_ shape: SKShapeNode, x: CGFloat, y: CGFloat,
                            full: CGFloat, fraction: Double) {
         let width = full * CGFloat(max(0, min(1, fraction)))
@@ -492,6 +692,8 @@ final class CockpitV53LiveRenderer {
         labels["engineTemp"]?.fontColor = powertrain.engineC > 103 ? amber : mint
         labels["oilLevel"]?.fontColor = powertrain.oilPercent < 45 ? amber : mint
         labels["fuelLevel"]?.fontColor = powertrain.fuelPercent < 18 ? amber : mint
+        updateLowerConsole(snapshot, mgAmmo: mgAmmo, mgHeat: mgHeat,
+                           mgLocked: mgLocked, groundCount: ground, airCount: air)
     }
 
     /// Final per-frame pass. Legacy HUD draws underneath; never draw opaque
@@ -512,6 +714,16 @@ final class CockpitV53LiveRenderer {
                                transform: nil)
         root.isHidden = false
         blanking.isHidden = false
+        // A separate physical deck is pinned to the window bottom; unlike
+        // the upper modules, it never follows the top alignment transform.
+        lowerRoot.setScale(scale)
+        lowerRoot.position = CGPoint(x: left, y: 0)
+        lowerRoot.isHidden = false
+        lowerCurtain.path = CGPath(rect: CGRect(x: 0, y: 0,
+                                                 width: view.width,
+                                                 height: 167*scale),
+                                    transform: nil)
+        lowerCurtain.isHidden = false
 
         // The camera is already rendered with real world objects and shadows
         // by BattlefieldScene. Reparent to the v5.3 optics screen rectangle.
@@ -532,6 +744,8 @@ final class CockpitV53LiveRenderer {
     func deactivate(_ rearCamera: SKCropNode) {
         root.isHidden = true
         blanking.isHidden = true
+        lowerRoot.isHidden = true
+        lowerCurtain.isHidden = true
         if let scene, rearCamera.parent === root {
             rearCamera.removeFromParent()
             rearCamera.setScale(1)
