@@ -4311,6 +4311,214 @@ final class BattlefieldScene: SKScene {
         }
     }
 
+    /// v4.0 hard-shell cockpit surrounds the relocated live instruments.
+    /// The glass windshield is deliberately left clear at the center;
+    /// trim geometry, illuminated fasteners, and low-profile status rails
+    /// provide depth without pretending unsupported systems are simulated.
+    private func renderCommandCockpitShell(width w: Double, height h: Double,
+                                           bankWidth: Double,
+                                           radarWidth: Double,
+                                           rearWidth: Double,
+                                           gap: Double, margin: Double) {
+        let deckTop = CommandCockpitLayout.deckTop(height: h)
+        let panelHeight = CommandCockpitLayout.panelHeight(height: h)
+        let panelBottom = deckTop - panelHeight
+        let green = NSColor(calibratedRed: 0.40, green: 0.93, blue: 0.71, alpha: 1)
+        let cyan = NSColor(calibratedRed: 0.30, green: 0.77, blue: 0.81, alpha: 1)
+        let amber = NSColor(calibratedRed: 1.0, green: 0.66, blue: 0.30, alpha: 1)
+
+        // One continuous dark-gunmetal equipment bay; the side walls and
+        // roof are cut as angular armored profiles rather than square HUDs.
+        let backing = CGMutablePath()
+        backing.move(to: point(0, 0))
+        backing.addLine(to: point(w, 0))
+        backing.addLine(to: point(w, deckTop + 13))
+        backing.addLine(to: point(w - 16, deckTop + 18))
+        backing.addLine(to: point(16, deckTop + 18))
+        backing.addLine(to: point(0, deckTop + 13))
+        backing.closeSubpath()
+        // Beveled pillars follow the sides without consuming the sightline.
+        backing.move(to: point(0, deckTop))
+        backing.addLine(to: point(0, h))
+        backing.addLine(to: point(min(42, w * 0.035), h))
+        backing.addLine(to: point(28, h - 50))
+        backing.addLine(to: point(13, deckTop + 24))
+        backing.closeSubpath()
+        backing.move(to: point(w, deckTop))
+        backing.addLine(to: point(w, h))
+        backing.addLine(to: point(w - min(42, w * 0.035), h))
+        backing.addLine(to: point(w - 28, h - 50))
+        backing.addLine(to: point(w - 13, deckTop + 24))
+        backing.closeSubpath()
+        backing.move(to: point(0, h))
+        backing.addLine(to: point(w, h))
+        backing.addLine(to: point(w - 18, h - 20))
+        backing.addLine(to: point(18, h - 20))
+        backing.closeSubpath()
+        commandShellBack.path = backing
+        commandShellBack.fillColor = NSColor(
+            calibratedRed: 0.028, green: 0.042, blue: 0.050, alpha: 0.995)
+        commandShellBack.strokeColor = NSColor(
+            calibratedRed: 0.14, green: 0.20, blue: 0.23, alpha: 1)
+        commandShellBack.lineWidth = 1.0
+
+        // Three structural monitor groups: fire control, battlespace
+        // (radar + rear optics), and vehicle/weapon systems.
+        let leftMin = margin
+        let middleMin = margin + bankWidth + gap
+        let middleWidth = radarWidth + rearWidth + gap
+        let rightMin = middleMin + middleWidth + gap
+        let groups: [(Double, Double)] = [
+            (leftMin, bankWidth),
+            (middleMin, middleWidth),
+            (rightMin, bankWidth)
+        ]
+        let frames = CGMutablePath()
+        let highlights = CGMutablePath()
+        let hardware = CGMutablePath()
+        for (index, item) in groups.enumerated() {
+            let x = item.0
+            let width = item.1
+            let cut = 10.0
+            let minY = panelBottom - 7
+            let maxY = deckTop + 7
+            frames.move(to: point(x + cut, minY))
+            frames.addLine(to: point(x + width - cut, minY))
+            frames.addLine(to: point(x + width, minY + cut))
+            frames.addLine(to: point(x + width, maxY - cut))
+            frames.addLine(to: point(x + width - cut, maxY))
+            frames.addLine(to: point(x + cut, maxY))
+            frames.addLine(to: point(x, maxY - cut))
+            frames.addLine(to: point(x, minY + cut))
+            frames.closeSubpath()
+            segment(highlights,
+                    point(x + 14, maxY + 2),
+                    point(x + width - 14, maxY + 2))
+            segment(highlights,
+                    point(x + 14, minY - 2),
+                    point(x + width - 14, minY - 2))
+            for sx in [x + 11, x + width - 11] {
+                for sy in [minY + 14, maxY - 14] {
+                    hardware.addEllipse(in: CGRect(
+                        x: sx - 2.5, y: sy - 2.5, width: 5, height: 5))
+                    segment(hardware, point(sx - 1.5, sy),
+                            point(sx + 1.5, sy))
+                }
+            }
+            // Each module gets a tiny amber status tab on the upper bezel.
+            let tab = x + width - 35
+            segment(highlights, point(tab, maxY + 1),
+                    point(tab + 14, maxY + 1))
+            if index == 1 {
+                // Two screens live beneath the common battlespace frame.
+                let splitX = middleMin + radarWidth + gap / 2
+                segment(frames, point(splitX, minY + 18),
+                        point(splitX, maxY - 18))
+            }
+        }
+        // Windshield posts, roof locator and three recessed button rails.
+        segment(frames, point(17, deckTop + 20),
+                point(30, h - 47))
+        segment(frames, point(w - 17, deckTop + 20),
+                point(w - 30, h - 47))
+        segment(highlights, point(48, h - 25),
+                point(w / 2 - 54, h - 25))
+        segment(highlights, point(w / 2 + 54, h - 25),
+                point(w - 48, h - 25))
+        let footerY = max(12.0, panelBottom * 0.50)
+        segment(frames, point(16, footerY + 19),
+                point(w - 16, footerY + 19))
+        for i in 0..<3 {
+            let x = 22 + Double(i) * 25
+            let x2 = w - 22 - Double(i) * 25
+            for markerX in [x, x2] {
+                hardware.addRoundedRect(
+                    in: CGRect(x: markerX - 7, y: footerY - 8,
+                               width: 15, height: 9),
+                    cornerWidth: 2, cornerHeight: 2)
+            }
+        }
+        commandShellEdges.path = frames
+        commandShellEdges.strokeColor = NSColor(
+            calibratedRed: 0.30, green: 0.43, blue: 0.47, alpha: 0.94)
+        commandShellEdges.lineWidth = 2.8
+        commandShellEdges.glowWidth = 0
+        commandShellEdges.fillColor = .clear
+        commandShellHighlights.path = highlights
+        commandShellHighlights.strokeColor = cyan.withAlphaComponent(0.64)
+        commandShellHighlights.lineWidth = 1.1
+        commandShellHighlights.glowWidth = 1.1
+        commandShellHighlights.fillColor = .clear
+        commandShellHardware.path = hardware
+        commandShellHardware.strokeColor = amber.withAlphaComponent(0.70)
+        commandShellHardware.fillColor = NSColor(
+            calibratedRed: 0.12, green: 0.17, blue: 0.18, alpha: 1)
+        commandShellHardware.lineWidth = 1.0
+
+        func label(_ index: Int, _ value: String, _ x: Double, _ y: Double,
+                   _ size: Double, _ color: NSColor) {
+            let node = commandShellLabels[index]
+            node.text = value
+            node.position = point(x, y)
+            node.fontSize = CGFloat(size)
+            node.fontColor = color
+            node.horizontalAlignmentMode = .left
+        }
+        let font = max(8.0, min(10.5, w / 138))
+        label(0, "01 / WEAPONS + FIRE CONTROL",
+              leftMin + 12, deckTop + 11, font, green)
+        label(1, "02 / BATTLESPACE + OPTICS",
+              middleMin + 12, deckTop + 11, font, green)
+        label(2, "03 / VEHICLE SYSTEMS",
+              rightMin + 12, deckTop + 11, font, green)
+        label(3, String(format: "CANNON %02d/%02d   %@",
+                        cannon.roundsRemaining, cannon.maxRounds,
+                        cannon.reloadRemaining > 0 ? "CYCLING" : "READY"),
+              leftMin + 14, footerY, font, green)
+        label(4, String(format: "WAVE %02d  /  CONTACTS %02d",
+                        wave, enemies.filter { $0.kind.isVehicle }.count),
+              middleMin + 14, footerY, font, cyan)
+        let shield = shieldDuration > 0 ? "ACTIVE" :
+            shieldCooldown > 0 ? "CHARGING" : "READY"
+        label(5, String(format: "SHIELD %@  /  CHAFF %d",
+                        shield, chaffCharges),
+              rightMin + 14, footerY, font, shieldDuration > 0 ? green : amber)
+        label(6, String(format: "TCS // %03d°", Int((heading * 180 / .pi + 360)
+            .truncatingRemainder(dividingBy: 360))), w / 2 - 35,
+              h - 12, 10, green)
+        commandShellLabels[6].horizontalAlignmentMode = .center
+
+        // An essential warning floats just above the instrument combing.
+        // It replaces the old full-width Modern proximity alarm, and is
+        // the only high-saturation overlay allowed over the windshield.
+        let distance = nearestTankDistance.flatMap {
+            TankProximity.isClose($0) ? $0 : nil
+        }
+        let isAlert = round == .playing && distance != nil
+        commandShellAlert.isHidden = !isAlert
+        commandShellLabels[7].isHidden = !isAlert
+        if let distance = distance, isAlert {
+            let barWidth = min(w * 0.66, 650.0)
+            let barX = (w - barWidth) / 2
+            let barY = deckTop + 29
+            commandShellAlert.path = CGPath(
+                roundedRect: CGRect(x: barX, y: barY,
+                                    width: barWidth, height: 32),
+                cornerWidth: 4, cornerHeight: 4, transform: nil)
+            commandShellAlert.fillColor = NSColor(
+                calibratedRed: 0.24, green: 0.042,
+                blue: 0.033, alpha: 0.92)
+            commandShellAlert.strokeColor = amber
+            commandShellAlert.lineWidth = 1.5
+            commandShellAlert.alpha = CGFloat(
+                0.74 + 0.26 * abs(sin(gameClock * 8)))
+            label(7, String(format: "PROXIMITY // %.1f TANK LENGTHS",
+                            distance / TankProximity.tankLength),
+                  w / 2, barY + 16, 11, amber)
+            commandShellLabels[7].horizontalAlignmentMode = .center
+        }
+    }
+
     private func renderHUD(_ c: CameraProjection) {
         let w = c.viewportWidth
         let h = c.viewportHeight
@@ -4824,6 +5032,17 @@ final class BattlefieldScene: SKScene {
             renderModernUpperHUD(width: w, height: h,
                                  leftCenter: leftCenterX, rightCenter: rightCenterX,
                                  bankWidth: bankWidth, panelHeight: panelHeight)
+            // The old Modern lower dashboard is superseded by the compact
+            // hardware sill of the Command Cockpit. Preserve its data in
+            // the translated live modules; leave Classic entirely intact.
+            proximityLabel.isHidden = true
+            proximityWings.isHidden = true
+            renderCommandCockpitShell(
+                width: w, height: h,
+                bankWidth: bankWidth,
+                radarWidth: radarPanelWidth,
+                rearWidth: rearPanelWidth,
+                gap: panelGap, margin: outerMargin)
         }
 
         // Center game-state messaging inside its panel; keep title and
