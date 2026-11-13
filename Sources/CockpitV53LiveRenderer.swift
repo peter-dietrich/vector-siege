@@ -49,6 +49,53 @@ final class CockpitV53LiveRenderer {
     private let reloadBar = SKShapeNode()
     private let ammoBar = SKShapeNode()
     private let shieldBar = SKShapeNode()
+    private var powertrain = PowertrainModel()
+    private struct PowertrainModel {
+        private(set) var engineC = 41.0
+        private(set) var coolantC = 38.0
+        private(set) var oilPercent = 99.0
+        private(set) var fuelPercent = 96.0
+        private(set) var oilPressureKPa = 282.0
+        private(set) var voltage = 27.6
+        private(set) var loadPercent = 18.0
+        private var lastClock: Double?
+        private var lastLives: Int?
+        private var leakRate = 0.0
+
+        mutating func sample(clock: Double, speed: Double, lives: Int) {
+            if let previous = lastClock, clock < previous - 0.5 {
+                self = PowertrainModel()
+            }
+            let dt = min(0.25, max(0, clock - (lastClock ?? clock)))
+            if let before = lastLives, lives < before {
+                let impacts = Double(before - lives)
+                oilPercent = max(0, oilPercent - impacts * 3.5)
+                leakRate += impacts * 0.004
+            }
+            lastClock = clock
+            lastLives = lives
+            let moving = min(1, abs(speed)/17)
+            loadPercent = 16 + 73*moving
+            // Gameplay-relative model, not a real vehicle's physical sensors.
+            // Heat and fuel change only while game time advances.
+            let targetTemp = 70 + 31*moving
+            engineC += (targetTemp - engineC) * min(1, dt * 0.035)
+            coolantC += (engineC - 5 - coolantC) * min(1, dt * 0.06)
+            fuelPercent = max(0, fuelPercent - dt * (0.002 + 0.014*moving))
+            oilPercent = max(0, oilPercent - dt * leakRate)
+            oilPressureKPa = max(75, min(400,
+                (270 + 78*moving) * (0.60 + 0.40*oilPercent/100)
+                - max(0, engineC-97)*2))
+            voltage = 27.2 + 0.7*moving - (oilPercent < 50 ? 0.4 : 0)
+        }
+        var warning: String {
+            if oilPercent < 35 || oilPressureKPa < 125 { return "OIL SYSTEM CRITICAL" }
+            if engineC > 105 || coolantC > 100 { return "OVERHEAT WARNING" }
+            if fuelPercent < 15 { return "LOW FUEL" }
+            if oilPercent < 75 { return "SERVICE / OIL LOSS" }
+            return "POWERTRAIN NORMAL"
+        }
+    }
     private var labels: [String: SKLabelNode] = [:]
     private let pale = NSColor(calibratedRed: 0.88, green: 0.92, blue: 0.89, alpha: 1)
     private let mint = NSColor(calibratedRed: 0.43, green: 0.95, blue: 0.72, alpha: 1)
@@ -159,8 +206,8 @@ final class CockpitV53LiveRenderer {
         text("mapTarget", "NO TRACK", x: mapX+33, y: mapY+55, size: 8, color: amber)
         // Real road grid, structural footprints, threat symbols and shells are
         // clipped to the live map screen; no decorative/fabricated contacts.
-        let mask = SKShapeNode(rect: CGRect(x: 425, y: mapY+72,
-                                            width: 304, height: 139), cornerRadius: 2)
+        let mask = SKShapeNode(rect: CGRect(x: 416, y: mapY+68,
+                                            width: 318, height: 146), cornerRadius: 2)
         mask.fillColor = .white
         mask.strokeColor = .clear
         radarViewport.maskNode = mask
@@ -212,23 +259,31 @@ final class CockpitV53LiveRenderer {
         let systemsY: CGFloat = 900-78-263
         text("systemsTitle", "VEHICLE SYSTEMS", x: systemsX+31, y: systemsY+223, size: 12)
         text("systemsSubtitle", "BATTLE STATUS / LIVE", x: systemsX+250, y: systemsY+223, size: 7.5, color: muted)
-        text("scoreCaption", "SCORE", x: systemsX+30, y: systemsY+191, size: 8, color: muted)
-        text("score", "000000", x: systemsX+30, y: systemsY+168, size: 19)
-        text("bestCaption", "BEST", x: systemsX+195, y: systemsY+191, size: 8, color: muted)
-        text("best", "000000", x: systemsX+195, y: systemsY+171, size: 13, color: mint)
-        text("wave", "WAVE 01", x: systemsX+30, y: systemsY+147, size: 8.5)
-        text("lives", "LIVES 03", x: systemsX+113, y: systemsY+147, size: 8.5, color: mint)
-        text("difficulty", "VETERAN", x: systemsX+231, y: systemsY+147, size: 8, color: amber)
-        text("systemsThreatTitle", "THREAT / SENSOR SUMMARY", x: systemsX+31, y: systemsY+118, size: 8, color: amber)
-        text("systemsGround", "GROUND 00", x: systemsX+31, y: systemsY+99, size: 11, color: pale)
-        text("systemsAir", "AIR 00", x: systemsX+31, y: systemsY+82, size: 11, color: cyan)
-        text("systemsIncoming", "INBOUND 00", x: systemsX+31, y: systemsY+65, size: 11, color: amber)
-        text("mainGun", "DEFENSIVE SYSTEMS", x: systemsX+232, y: systemsY+121, size: 8, color: muted)
-        text("ammo", "SHIELD READY", x: systemsX+232, y: systemsY+103, size: 12, color: mint)
-        bar(ammoBar, frame: CGRect(x: systemsX+232, y: systemsY+91, width: 159, height: 5), color: mint)
-        text("shieldCaption", "COUNTERMEASURES", x: systemsX+232, y: systemsY+75, size: 8, color: muted)
-        text("shield", "2 CHARGES", x: systemsX+347, y: systemsY+75, size: 8, color: mint)
-        bar(shieldBar, frame: CGRect(x: systemsX+232, y: systemsY+61, width: 159, height: 5), color: amber)
+        text("systemsRun", "SIMULATED TANK SENSORS", x: systemsX+31, y: systemsY+193,
+             size: 9, color: amber)
+        text("systemsScore", "SCORE 000000", x: systemsX+256, y: systemsY+193,
+             size: 9, color: pale)
+        text("engineTemp", "ENGINE   41°C", x: systemsX+31, y: systemsY+167,
+             size: 12, color: mint)
+        text("coolantTemp", "COOLANT  38°C", x: systemsX+31, y: systemsY+141,
+             size: 12)
+        text("oilPressure", "OIL PSI  41", x: systemsX+31, y: systemsY+115,
+             size: 12)
+        text("oilLevel", "OIL LVL  99%", x: systemsX+31, y: systemsY+89,
+             size: 12, color: cyan)
+        text("fuelLevel", "FUEL     96%", x: systemsX+238, y: systemsY+167,
+             size: 12, color: mint)
+        text("voltage", "VOLT    27.6V", x: systemsX+238, y: systemsY+141,
+             size: 12)
+        text("engineLoad", "ENG LOAD 18%", x: systemsX+238, y: systemsY+115,
+             size: 12)
+        text("waveStatus", "WAVE 01  /  03", x: systemsX+238, y: systemsY+89,
+             size: 12, color: cyan)
+        text("engineWarning", "POWERTRAIN NORMAL", x: systemsX+31,
+             y: systemsY+48, size: 11, color: mint)
+        text("systemsDisclaimer", "MODELLED / LIVE GAME STATE", x: systemsX+238,
+             y: systemsY+48, size: 8, color: muted)
+
     }
 
     private func updateBar(_ shape: SKShapeNode, x: CGFloat, y: CGFloat,
@@ -264,8 +319,8 @@ final class CockpitV53LiveRenderer {
             let dz = z - snapshot.playerPosition.z
             let right = dx*cos(snapshot.headingRadians) - dz*sin(snapshot.headingRadians)
             let ahead = dx*sin(snapshot.headingRadians) + dz*cos(snapshot.headingRadians)
-            return CGPoint(x: mapCenter.x + CGFloat(right/165)*96,
-                           y: mapCenter.y + CGFloat(ahead/165)*74)
+            return CGPoint(x: mapCenter.x + CGFloat(right/165)*137,
+                           y: mapCenter.y + CGFloat(ahead/165)*75)
         }
         // Actual city road centerlines at 60-unit intervals. The crop region
         // prevents any road/building/shell symbol from leaving the glass.
@@ -287,16 +342,16 @@ final class CockpitV53LiveRenderer {
         let footprint = CGMutablePath()
         for building in buildings {
             let p = radarPoint(building.x, building.z)
-            let r = max(1.5, CGFloat(building.size/165)*75)
+            let r = max(1.5, CGFloat(building.size/165)*96)
             footprint.addRect(CGRect(x: p.x-r, y: p.y-r,
                                      width: 2*r, height: 2*r))
         }
         mapBuildings.path = footprint
         let rings = CGMutablePath()
-        for radius in [CGFloat(25), CGFloat(49), CGFloat(73)] {
+        for radius in [CGFloat(35), CGFloat(72), CGFloat(112)] {
             rings.addEllipse(in: CGRect(x: mapCenter.x-radius,
-                                        y: mapCenter.y-radius*0.78,
-                                        width: radius*2, height: radius*1.56))
+                                        y: mapCenter.y-radius*0.64,
+                                        width: radius*2, height: radius*1.28))
         }
         mapRings.path = rings
         let ground = snapshot.contacts.filter {
@@ -348,21 +403,23 @@ final class CockpitV53LiveRenderer {
 
         set("opticsBearing", String(format: "AZ %03.0f°", (snapshot.headingDegrees+180).truncatingRemainder(dividingBy: 360)))
         set("opticsThreat", t == nil ? "NO TRACK" : "TARGET")
-        set("score", String(format: "%06d", snapshot.score))
-        set("best", String(format: "%06d", snapshot.bestScore))
-        set("wave", String(format: "WAVE %02d", snapshot.wave))
-        set("lives", String(format: "LIVES %02d", snapshot.lives))
-        set("difficulty", snapshot.difficultyLabel.uppercased())
-        set("ammo", snapshot.shieldRemainingSeconds > 0 ? "SHIELD ACTIVE" : snapshot.shieldCooldownSeconds > 0 ? "RECHARGING" : "SHIELD READY")
-        set("shield", String(format: "%d CHARGES", snapshot.chaffCharges))
-        let systemsX: CGFloat = 1137
-        let systemsY: CGFloat = 900-78-263
-        updateBar(ammoBar, x: systemsX+232, y: systemsY+91, full: 159,
-                  fraction: snapshot.shieldRemainingSeconds > 0 ? 1 :
-                    snapshot.shieldCooldownSeconds > 0 ? 0 : 1)
-        let shieldFraction = Double(snapshot.chaffCharges) /
-            Double(max(1, ChaffDefense.chargesPerWave))
-        updateBar(shieldBar, x: systemsX+232, y: systemsY+61, full: 159, fraction: shieldFraction)
+        powertrain.sample(clock: clock,
+                          speed: snapshot.speedWorldUnitsPerSecond,
+                          lives: snapshot.lives)
+        set("systemsScore", String(format("SCORE %06d", snapshot.score))
+        set("engineTemp", String(format("ENGINE  %3.0f°C", powertrain.engineC))
+        set("coolantTemp", String(format("COOLANT %3.0f°C", powertrain.coolantC))
+        set("oilPressure", String(format("OIL PSI %3.0f",
+            powertrain.oilPressureKPa * 0.1450377))
+        set("oilLevel", String(format("OIL LVL %3.0f%%", powertrain.oilPercent))
+        set("fuelLevel", String(format("FUEL    %3.0f%%", powertrain.fuelPercent))
+        set("voltage", String(format("VOLT    %.1fV", powertrain.voltage))
+        set("engineLoad", String(format("ENG LOAD %2.0f%%", powertrain.loadPercent))
+        set("waveStatus", String(format("WAVE %02d / %02d",
+                                       snapshot.wave, snapshot.lives))
+        set("engineWarning", powertrain.warning)
+        labels["engineWarning"]?.fontColor =
+            powertrain.warning == "POWERTRAIN NORMAL" ? mint : amber
     }
 
     /// Final per-frame pass. Legacy HUD draws underneath; never draw opaque
@@ -373,8 +430,8 @@ final class CockpitV53LiveRenderer {
         let left = (view.width - 1600*scale)/2
         let bottom = (view.height - 900*scale)/2
         root.setScale(scale)
-        root.position = CGPoint(x: left, y: bottom)
-        blanking.path = CGPath(rect: CGRect(x: 0, y: bottom+550*scale,
+        root.position = CGPoint(x: left, y: bottom + 68*scale)
+        blanking.path = CGPath(rect: CGRect(x: 0, y: bottom+620*scale,
                                            width: view.width,
                                            height: max(0, view.height-bottom-550*scale)),
                                transform: nil)
