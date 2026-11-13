@@ -32,7 +32,18 @@ final class CockpitV53LiveRenderer {
     private weak var scene: SKScene?
     private let root = SKNode()
     private let blanking = SKShapeNode()
+    struct MapBuilding {
+        let x: Double
+        let z: Double
+        let size: Double
+        let isSolid: Bool
+    }
     private let mapMarkers = SKNode()
+    private let mapGrid = SKShapeNode()
+    private let mapBuildings = SKShapeNode()
+    private let mapRings = SKShapeNode()
+    private let mapShots = SKNode()
+    private let radarViewport = SKCropNode()
     private let mapPlayer = SKShapeNode()
     private let mapSweep = SKShapeNode()
     private let reloadBar = SKShapeNode()
@@ -120,7 +131,6 @@ final class CockpitV53LiveRenderer {
         sprite("cockpit_optics_bezel", frame: rect(766, 78, 358, 263), z: 20)
 
         sprite("systems_screen_underlay", frame: rect(1153, 94, 407, 231), z: 2)
-        sprite("tank_technical_art", frame: rect(1171, 163, 178, 112), z: 3)
         sprite("systems_glass_overlay", frame: rect(1153, 94, 407, 231), z: 5)
         sprite("cockpit_systems_bezel", frame: rect(1137, 78, 439, 263), z: 20)
 
@@ -147,8 +157,28 @@ final class CockpitV53LiveRenderer {
         text("mapContacts", "HOSTILE 00 / AIR 00", x: mapX+33, y: mapY+36, size: 9, color: mint)
         text("mapMode", "HDG UP / 165", x: mapX+214, y: mapY+36, size: 8, color: muted)
         text("mapTarget", "NO TRACK", x: mapX+33, y: mapY+55, size: 8, color: amber)
+        // Real road grid, structural footprints, threat symbols and shells are
+        // clipped to the live map screen; no decorative/fabricated contacts.
+        let mask = SKShapeNode(rect: CGRect(x: 425, y: mapY+72,
+                                            width: 304, height: 139), cornerRadius: 2)
+        mask.fillColor = .white
+        mask.strokeColor = .clear
+        radarViewport.maskNode = mask
+        radarViewport.zPosition = 7
+        root.addChild(radarViewport)
+        for shape in [mapGrid, mapBuildings, mapRings] {
+            shape.fillColor = .clear
+            shape.lineWidth = 0.8
+            radarViewport.addChild(shape)
+        }
+        mapGrid.strokeColor = cyan.withAlphaComponent(0.28)
+        mapBuildings.strokeColor = mint.withAlphaComponent(0.30)
+        mapBuildings.fillColor = mint.withAlphaComponent(0.12)
+        mapRings.strokeColor = cyan.withAlphaComponent(0.45)
         mapMarkers.zPosition = 8
-        root.addChild(mapMarkers)
+        radarViewport.addChild(mapMarkers)
+        mapShots.zPosition = 9
+        radarViewport.addChild(mapShots)
         let radarShape = CGMutablePath()
         radarShape.move(to: .zero)
         radarShape.addLine(to: CGPoint(x: 0, y: 83))
@@ -157,7 +187,7 @@ final class CockpitV53LiveRenderer {
         mapSweep.lineWidth = 1
         mapSweep.position = mapCenter
         mapSweep.zPosition = 7
-        root.addChild(mapSweep)
+        radarViewport.addChild(mapSweep)
         let markerPath = CGMutablePath()
         markerPath.move(to: CGPoint(x: 0, y: 8))
         markerPath.addLine(to: CGPoint(x: 5, y: -5))
@@ -168,7 +198,7 @@ final class CockpitV53LiveRenderer {
         mapPlayer.fillColor = mint
         mapPlayer.strokeColor = .black
         mapPlayer.zPosition = 10
-        root.addChild(mapPlayer)
+        radarViewport.addChild(mapPlayer)
 
         let rearX: CGFloat = 766
         let rearY: CGFloat = 900-78-263
@@ -189,6 +219,10 @@ final class CockpitV53LiveRenderer {
         text("wave", "WAVE 01", x: systemsX+30, y: systemsY+147, size: 8.5)
         text("lives", "LIVES 03", x: systemsX+113, y: systemsY+147, size: 8.5, color: mint)
         text("difficulty", "VETERAN", x: systemsX+231, y: systemsY+147, size: 8, color: amber)
+        text("systemsThreatTitle", "THREAT / SENSOR SUMMARY", x: systemsX+31, y: systemsY+118, size: 8, color: amber)
+        text("systemsGround", "GROUND 00", x: systemsX+31, y: systemsY+99, size: 11, color: pale)
+        text("systemsAir", "AIR 00", x: systemsX+31, y: systemsY+82, size: 11, color: cyan)
+        text("systemsIncoming", "INBOUND 00", x: systemsX+31, y: systemsY+65, size: 11, color: amber)
         text("mainGun", "MAIN GUN", x: systemsX+232, y: systemsY+121, size: 8, color: muted)
         text("ammo", "40 / 40", x: systemsX+232, y: systemsY+103, size: 13)
         bar(ammoBar, frame: CGRect(x: systemsX+232, y: systemsY+91, width: 159, height: 5), color: mint)
@@ -206,7 +240,8 @@ final class CockpitV53LiveRenderer {
                             cornerWidth: 2, cornerHeight: 2, transform: nil)
     }
 
-    func update(_ snapshot: CockpitV5Snapshot, clock: Double) {
+    func update(_ snapshot: CockpitV5Snapshot, clock: Double,
+                buildings: [MapBuilding]) {
         guard snapshot.validate() else { return }
         set("fireHeading", String(format: "%03.0f°", snapshot.headingDegrees))
         set("fireSpeed", String(format: "%04.1f", snapshot.speedWorldUnitsPerSecond))
@@ -224,28 +259,91 @@ final class CockpitV53LiveRenderer {
                                                    width: max(0.01, 38*CGFloat(fraction)), height: 4),
                                 cornerWidth: 2, cornerHeight: 2, transform: nil)
 
-        var ground = 0
-        var air = 0
+        // World-to-tank projection, identical heading convention to the
+        // live contact renderer. 165 game units = full map range.
+        func radarPoint(_ x: Double, _ z: Double) -> CGPoint {
+            let dx = x - snapshot.playerPosition.x
+            let dz = z - snapshot.playerPosition.z
+            let right = dx*cos(snapshot.headingRadians) - dz*sin(snapshot.headingRadians)
+            let ahead = dx*sin(snapshot.headingRadians) + dz*cos(snapshot.headingRadians)
+            return CGPoint(x: mapCenter.x + CGFloat(right/165)*96,
+                           y: mapCenter.y + CGFloat(ahead/165)*74)
+        }
+        // Actual city road centerlines at 60-unit intervals. The crop region
+        // prevents any road/building/shell symbol from leaving the glass.
+        let streets = CGMutablePath()
+        for road in -3...3 {
+            let axis = Double(road)*60
+            for offset in [-5.5, 5.5] {
+                let a = radarPoint(axis+offset, -180)
+                let b = radarPoint(axis+offset, 180)
+                streets.move(to: a)
+                streets.addLine(to: b)
+                let c = radarPoint(-180, axis+offset)
+                let d = radarPoint(180, axis+offset)
+                streets.move(to: c)
+                streets.addLine(to: d)
+            }
+        }
+        mapGrid.path = streets
+        let footprint = CGMutablePath()
+        for building in buildings {
+            let p = radarPoint(building.x, building.z)
+            let r = max(1.5, CGFloat(building.size/165)*75)
+            footprint.addRect(CGRect(x: p.x-r, y: p.y-r,
+                                     width: 2*r, height: 2*r))
+        }
+        mapBuildings.path = footprint
+        let rings = CGMutablePath()
+        for radius in [CGFloat(25), CGFloat(49), CGFloat(73)] {
+            rings.addEllipse(in: CGRect(x: mapCenter.x-radius,
+                                        y: mapCenter.y-radius*0.78,
+                                        width: radius*2, height: radius*1.56))
+        }
+        mapRings.path = rings
+        let ground = snapshot.contacts.filter {
+            $0.visible && $0.kind != .drone && $0.kind != .fighter && $0.kind != .saucer
+        }.count
+        let air = snapshot.contacts.filter {
+            $0.visible && ($0.kind == .drone || $0.kind == .fighter || $0.kind == .saucer)
+        }.count
         mapMarkers.removeAllChildren()
         for contact in snapshot.contacts where contact.visible {
             let dx = contact.position.x - snapshot.playerPosition.x
             let dz = contact.position.z - snapshot.playerPosition.z
-            // Heading-up: rotate relative world displacement into the tank frame.
-            let right = dx*cos(snapshot.headingRadians) - dz*sin(snapshot.headingRadians)
-            let ahead = dx*sin(snapshot.headingRadians) + dz*cos(snapshot.headingRadians)
-            let distance = hypot(right, ahead)
+            guard hypot(dx, dz) <= 165 else { continue }
+            let p = radarPoint(contact.position.x, contact.position.z)
             let airborne = contact.kind == .drone || contact.kind == .fighter || contact.kind == .saucer
-            if airborne { air += 1 } else { ground += 1 }
-            guard distance <= 165 else { continue }
-            let node = SKShapeNode(circleOfRadius: contact.isPrimaryTarget ? 5 : 3)
-            node.position = CGPoint(x: mapCenter.x + CGFloat(right/165)*96,
-                                    y: mapCenter.y + CGFloat(ahead/165)*74)
-            node.strokeColor = .black
+            let node = SKShapeNode(circleOfRadius: contact.isPrimaryTarget ? 5 : 2.6)
+            node.position = p
+            node.strokeColor = contact.isPrimaryTarget ? amber : .black
             node.fillColor = contact.isPrimaryTarget ? amber : airborne ? cyan : mint
-            node.lineWidth = 1
-            node.zPosition = 8
+            node.lineWidth = contact.isPrimaryTarget ? 2 : 1
             mapMarkers.addChild(node)
+            if contact.isPrimaryTarget {
+                let cue = SKShapeNode(circleOfRadius: 8)
+                cue.position = p
+                cue.strokeColor = amber
+                cue.fillColor = .clear
+                cue.lineWidth = 1
+                mapMarkers.addChild(cue)
+            }
         }
+        mapShots.removeAllChildren()
+        for shot in snapshot.projectiles {
+            let dx = shot.position.x - snapshot.playerPosition.x
+            let dz = shot.position.z - snapshot.playerPosition.z
+            guard hypot(dx, dz) <= 165 else { continue }
+            let dot = SKShapeNode(circleOfRadius: 2)
+            dot.position = radarPoint(shot.position.x, shot.position.z)
+            dot.fillColor = shot.hostile ? amber : mint
+            dot.strokeColor = .clear
+            mapShots.addChild(dot)
+        }
+        set("systemsGround", String(format: "GROUND %02d", ground))
+        set("systemsAir", String(format: "AIR %02d", air))
+        set("systemsIncoming", String(format: "INBOUND %02d",
+                                      snapshot.projectiles.filter { $0.hostile }.count))
         set("mapContacts", String(format: "HOSTILE %02d / AIR %02d", ground, air))
         set("mapTarget", t.map { String(format: "TRACK / %.0f", $0.rangeWorldUnits) } ?? "NO TRACK")
         mapSweep.zRotation = CGFloat(clock * 0.48)
