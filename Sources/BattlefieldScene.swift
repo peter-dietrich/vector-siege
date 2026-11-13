@@ -2475,7 +2475,7 @@ final class BattlefieldScene: SKScene {
         let orange = NSColor(calibratedRed: 1, green: 0.45, blue: 0.14, alpha: 1)
         modernTrim.strokeColor = cyan
         modernTrim.lineWidth = 1.3
-        modernTrim.glowWidth = 2
+        modernTrim.glowWidth = 0.7
         modernLowerDash.fillColor = NSColor(calibratedRed: 0.012, green: 0.052, blue: 0.070, alpha: 0.93)
         modernLowerDash.strokeColor = cyan
         modernUpperBands.fillColor = NSColor(
@@ -2490,16 +2490,16 @@ final class BattlefieldScene: SKScene {
         modernLowerLines.lineWidth = 1
         modernTankIcon.strokeColor = cyan
         modernTankIcon.lineWidth = 2
-        modernTankIcon.glowWidth = 3
+        modernTankIcon.glowWidth = 0.8
         modernTerrainProfile.strokeColor = cyan.withAlphaComponent(0.94)
         modernTerrainProfile.lineWidth = 1.8
-        modernTerrainProfile.glowWidth = 1.8
+        modernTerrainProfile.glowWidth = 0.7
         modernHeadingPointer.strokeColor = amber
         modernHeadingPointer.lineWidth = 2
         modernHeadingPointer.glowWidth = 3
         modernLowerCorners.strokeColor = amber
         modernLowerCorners.lineWidth = 2
-        modernLowerCorners.glowWidth = 3.5
+        modernLowerCorners.glowWidth = 1.1
         modernHitTrack.strokeColor = cyan.withAlphaComponent(0.18)
         modernHitTrack.lineWidth = 8
         modernHitRing.strokeColor = NSColor(calibratedRed: 0.16, green: 1, blue: 0.49, alpha: 1)
@@ -3911,7 +3911,7 @@ final class BattlefieldScene: SKScene {
         modernUpperIcons.path = icons
         modernUpperIcons.strokeColor = greenBright.withAlphaComponent(0.9)
         modernUpperIcons.lineWidth = 1.3
-        modernUpperIcons.glowWidth = 0.6
+        modernUpperIcons.glowWidth = 0.3
 
         // Minimal corner accents: two deliberate orange signals, not a
         // competing tangle of decorative traces.
