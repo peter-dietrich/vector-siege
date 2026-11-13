@@ -1,0 +1,344 @@
+{
+  "schema_version": "5.0.0-draft.1",
+  "status": "contract_only_no_final_artwork",
+  "design_space": {
+    "width": 1600,
+    "height": 900,
+    "origin": "top-left",
+    "coordinate_units": "logical-px",
+    "preserve_aspect_ratio": true,
+    "letterbox_strategy": "fit-and-center",
+    "spritekit_y_transform": "sceneHeight - top - height",
+    "safe_insets": {
+      "top": 12,
+      "right": 24,
+      "bottom": 12,
+      "left": 24
+    }
+  },
+  "regions": {
+    "top_bar": {
+      "x": 0,
+      "y": 0,
+      "width": 1600,
+      "height": 66
+    },
+    "top_instruments": {
+      "x": 24,
+      "y": 76,
+      "width": 1552,
+      "height": 269
+    },
+    "battlefield": {
+      "x": 0,
+      "y": 350,
+      "width": 1600,
+      "height": 398,
+      "render_source": "existing SpriteKit battlefield; NO artwork or opaque overlay",
+      "min_visible_fraction": 0.44
+    },
+    "lower_console": {
+      "x": 24,
+      "y": 757,
+      "width": 1552,
+      "height": 131
+    }
+  },
+  "screens": [
+    {
+      "id": "fire_control",
+      "title": "FIRE CONTROL",
+      "rect": {
+        "x": 40,
+        "y": 94,
+        "width": 326,
+        "height": 231
+      },
+      "dynamic_fields": [
+        "heading_deg",
+        "speed",
+        "target_distance",
+        "target_bearing",
+        "target_cover",
+        "ammo_remaining",
+        "ammo_capacity",
+        "reload_fraction"
+      ],
+      "asset_frame": "cockpit_fire_bezel",
+      "panel_style": "gunmetal"
+    },
+    {
+      "id": "tactical_map",
+      "title": "BATTLESPACE",
+      "rect": {
+        "x": 411,
+        "y": 94,
+        "width": 326,
+        "height": 231
+      },
+      "dynamic_fields": [
+        "player_position",
+        "player_heading",
+        "ground_contacts",
+        "air_contacts",
+        "building_footprints",
+        "terrain_profile",
+        "selected_target",
+        "hostile_projectiles"
+      ],
+      "asset_frame": "cockpit_map_bezel",
+      "panel_style": "low-glare tactical glass"
+    },
+    {
+      "id": "rear_optics",
+      "title": "REAR OPTICS",
+      "rect": {
+        "x": 782,
+        "y": 94,
+        "width": 326,
+        "height": 231
+      },
+      "dynamic_fields": [
+        "rear_camera_texture",
+        "rear_bearing",
+        "threat_brackets"
+      ],
+      "asset_frame": "cockpit_optics_bezel",
+      "panel_style": "sensor display"
+    },
+    {
+      "id": "vehicle_systems",
+      "title": "VEHICLE SYSTEMS",
+      "rect": {
+        "x": 1153,
+        "y": 94,
+        "width": 407,
+        "height": 231
+      },
+      "dynamic_fields": [
+        "lives",
+        "score",
+        "best_score",
+        "wave",
+        "difficulty",
+        "shield_remaining",
+        "shield_cooldown",
+        "chaff_charges",
+        "ammo_remaining",
+        "ammo_capacity"
+      ],
+      "asset_frame": "cockpit_systems_bezel",
+      "panel_style": "systems readout"
+    }
+  ],
+  "artwork": [
+    {
+      "id": "cockpit_top_chassis",
+      "path": "Resources/CockpitV5/cockpit_top_chassis.png",
+      "rect": {
+        "x": 0,
+        "y": 66,
+        "width": 1600,
+        "height": 282
+      },
+      "pixel_scale": 2,
+      "dimensions_px": [
+        3200,
+        564
+      ],
+      "alpha": "transparent over battlefield and screen cutouts",
+      "stretch": "none",
+      "layer": 10,
+      "contains_text": false
+    },
+    {
+      "id": "cockpit_fire_bezel",
+      "path": "Resources/CockpitV5/cockpit_fire_bezel.png",
+      "rect": {
+        "x": 24,
+        "y": 78,
+        "width": 358,
+        "height": 263
+      },
+      "pixel_scale": 2,
+      "dimensions_px": [
+        716,
+        526
+      ],
+      "alpha": "transparent screen opening",
+      "stretch": "none",
+      "layer": 15,
+      "contains_text": false
+    },
+    {
+      "id": "cockpit_map_bezel",
+      "path": "Resources/CockpitV5/cockpit_map_bezel.png",
+      "rect": {
+        "x": 395,
+        "y": 78,
+        "width": 358,
+        "height": 263
+      },
+      "pixel_scale": 2,
+      "dimensions_px": [
+        716,
+        526
+      ],
+      "alpha": "transparent screen opening",
+      "stretch": "none",
+      "layer": 15,
+      "contains_text": false
+    },
+    {
+      "id": "cockpit_optics_bezel",
+      "path": "Resources/CockpitV5/cockpit_optics_bezel.png",
+      "rect": {
+        "x": 766,
+        "y": 78,
+        "width": 358,
+        "height": 263
+      },
+      "pixel_scale": 2,
+      "dimensions_px": [
+        716,
+        526
+      ],
+      "alpha": "transparent screen opening",
+      "stretch": "none",
+      "layer": 15,
+      "contains_text": false
+    },
+    {
+      "id": "cockpit_systems_bezel",
+      "path": "Resources/CockpitV5/cockpit_systems_bezel.png",
+      "rect": {
+        "x": 1137,
+        "y": 78,
+        "width": 439,
+        "height": 263
+      },
+      "pixel_scale": 2,
+      "dimensions_px": [
+        878,
+        526
+      ],
+      "alpha": "transparent screen opening",
+      "stretch": "none",
+      "layer": 15,
+      "contains_text": false
+    },
+    {
+      "id": "cockpit_lower_chassis",
+      "path": "Resources/CockpitV5/cockpit_lower_chassis.png",
+      "rect": {
+        "x": 0,
+        "y": 749,
+        "width": 1600,
+        "height": 151
+      },
+      "pixel_scale": 2,
+      "dimensions_px": [
+        3200,
+        302
+      ],
+      "alpha": "transparent in all live instrument windows",
+      "stretch": "none",
+      "layer": 10,
+      "contains_text": false
+    },
+    {
+      "id": "cockpit_screw_atlas",
+      "path": "Resources/CockpitV5/cockpit_screw_atlas.png",
+      "rect": null,
+      "pixel_scale": 2,
+      "dimensions_px": [
+        256,
+        256
+      ],
+      "alpha": "transparent",
+      "stretch": "sprite atlas",
+      "layer": 20,
+      "contains_text": false
+    },
+    {
+      "id": "cockpit_glass_reflection",
+      "path": "Resources/CockpitV5/cockpit_glass_reflection.png",
+      "rect": {
+        "x": 24,
+        "y": 78,
+        "width": 1552,
+        "height": 263
+      },
+      "pixel_scale": 2,
+      "dimensions_px": [
+        3104,
+        526
+      ],
+      "alpha": "mostly transparent; never covers legible labels",
+      "stretch": "none",
+      "layer": 45,
+      "contains_text": false
+    }
+  ],
+  "layer_order": [
+    {
+      "layer": 0,
+      "owner": "battlefield",
+      "content": "unchanged vector world"
+    },
+    {
+      "layer": 10,
+      "owner": "art",
+      "content": "matte chassis"
+    },
+    {
+      "layer": 12,
+      "owner": "code",
+      "content": "live screen backgrounds"
+    },
+    {
+      "layer": 15,
+      "owner": "art",
+      "content": "four physical bezels"
+    },
+    {
+      "layer": 20,
+      "owner": "art",
+      "content": "localized hardware atlas decals"
+    },
+    {
+      "layer": 30,
+      "owner": "code",
+      "content": "live instruments, contacts, optics and text"
+    },
+    {
+      "layer": 40,
+      "owner": "code",
+      "content": "warnings and interaction"
+    },
+    {
+      "layer": 45,
+      "owner": "art",
+      "content": "subtle anti-reflective highlights only"
+    }
+  ],
+  "lifecycle": {
+    "state_source": "read-only cockpit snapshot; extracted from BattlefieldScene",
+    "refresh_hz": {
+      "position": 30,
+      "radar": 12,
+      "diagnostics": 10,
+      "text": 6
+    },
+    "no_new_gameplay_state": true,
+    "classic_mode": "untouched",
+    "v4_modern_mode": "retained as fallback pending visual approval"
+  },
+  "rules": [
+    "Art assets must NEVER include legible numbers, labels, radar contacts, moving pointers, score, warnings or gameplay scene.",
+    "Every transparency cutout must align with its declared screen rect; a single flattened render is prohibited as a runtime asset.",
+    "No UI elements are encoded in the game environment; the battlefield viewport remains unobstructed.",
+    "Art exports must match exact declared pixel dimensions and contain RGBA transparency.",
+    "No dynamic values without source telemetry; unimplemented system meters must be omitted, not invented."
+  ]
+}
