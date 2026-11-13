@@ -884,6 +884,29 @@ struct SaucerPatrolClock: Codable {
 }
 
 
+/// v4.0 Modern cockpit geometry. Source telemetry remains expressed in
+/// legacy upper-panel coordinates; the instrument deck is translated as a
+/// single layer so the battlefield gains a full-height panoramic windshield.
+/// Classic remains at offset zero and never uses these shell dimensions.
+enum CommandCockpitLayout {
+    static func deckTop(height: Double) -> Double {
+        max(235, height * 0.41)
+    }
+    static func deckOffset(height: Double) -> Double {
+        deckTop(height: height) - (height - 16)
+    }
+    static func panelHeight(height: Double) -> Double {
+        min(278, max(248, height * 0.34))
+    }
+    static func deckFloor(height: Double) -> Double {
+        max(10, deckTop(height: height) - panelHeight(height: height) - 10)
+    }
+    static func windshieldHeightFraction(height: Double) -> Double {
+        guard height > 0 else { return 0 }
+        return (height - deckTop(height: height)) / height
+    }
+}
+
 /// Predictable visual detail tiers for vector rendering. Gameplay collision
 /// distances never change; only redundant distant line segments are reduced.
 enum BattlefieldRenderLOD {
