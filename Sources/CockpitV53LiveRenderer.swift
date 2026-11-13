@@ -229,8 +229,6 @@ final class CockpitV53LiveRenderer {
         text("shieldCaption", "COUNTERMEASURES", x: systemsX+232, y: systemsY+75, size: 8, color: muted)
         text("shield", "2 CHARGES", x: systemsX+347, y: systemsY+75, size: 8, color: mint)
         bar(shieldBar, frame: CGRect(x: systemsX+232, y: systemsY+61, width: 159, height: 5), color: amber)
-        text("chaff", "ACCURACY 0%", x: systemsX+31, y: systemsY+38, size: 9, color: mint)
-        text("reload", "FIRED 000", x: systemsX+162, y: systemsY+38, size: 9)
     }
 
     private func updateBar(_ shape: SKShapeNode, x: CGFloat, y: CGFloat,
@@ -357,8 +355,6 @@ final class CockpitV53LiveRenderer {
         set("difficulty", snapshot.difficultyLabel.uppercased())
         set("ammo", snapshot.shieldRemainingSeconds > 0 ? "SHIELD ACTIVE" : snapshot.shieldCooldownSeconds > 0 ? "RECHARGING" : "SHIELD READY")
         set("shield", String(format: "%d CHARGES", snapshot.chaffCharges))
-        set("chaff", String(format: "ACCURACY %.0f%%", snapshot.accuracyPercent))
-        set("reload", String(format: "FIRED %03d", snapshot.shotsFired))
         let systemsX: CGFloat = 1137
         let systemsY: CGFloat = 900-78-263
         updateBar(ammoBar, x: systemsX+232, y: systemsY+91, full: 159,
