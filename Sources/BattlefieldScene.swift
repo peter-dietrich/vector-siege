@@ -876,7 +876,14 @@ final class BattlefieldScene: SKScene {
                 let snapshot = makeCockpitV5Snapshot()
                 onCockpitV5Snapshot?(snapshot)
                 if displayMode == .cockpitV53 {
-                    approvedCockpit?.update(snapshot, clock: gameClock)
+                    approvedCockpit?.update(
+                        snapshot, clock: gameClock,
+                        buildings: obstacles.map {
+                            CockpitV53LiveRenderer.MapBuilding(
+                                x: $0.center.x, z: $0.center.z,
+                                size: $0.size,
+                                isSolid: $0.kind == .building || $0.kind == .block)
+                        })
                 }
             }
         }
