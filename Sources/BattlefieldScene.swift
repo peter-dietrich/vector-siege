@@ -4481,9 +4481,9 @@ final class BattlefieldScene: SKScene {
         let sectorZ = min(5, max(0, Int(floor(
             (tankPosition.z + CityLayout.cityExtent) /
             CityLayout.streetSpacing))))
-        let sectorLetter = Character(UnicodeScalar(65 + sectorX)!)
+        let sectorLetter = String(UnicodeScalar(65 + sectorX)!)
         label(4, String(format: "SECTOR %@-%02d  /  GROUND %02d",
-                        String(sectorLetter), sectorZ + 1,
+                        sectorLetter, sectorZ + 1,
                         enemies.filter { $0.kind.isVehicle }.count),
               middleMin + 14, footerY, font, cyan)
         let shield = shieldDuration > 0 ? "ACTIVE" :
