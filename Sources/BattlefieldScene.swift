@@ -134,7 +134,6 @@ final class BattlefieldScene: SKScene {
     // v5 cockpit observer: read-only data, never gameplay authority.
     var onCockpitV5Snapshot: ((CockpitV5Snapshot) -> Void)?
     private var cockpitV5Clock = 0.0
-    private var cockpitV5Renderer: CockpitV5Renderer?
     private var steerHoldSeconds: Double = 0
     private var previousSteerDirection: Double = 0
     private var score = 0
@@ -722,11 +721,7 @@ final class BattlefieldScene: SKScene {
         case 15: // R
             restart()
         case 8: // C
-            switch displayMode {
-            case .classic: displayMode = .modern
-            case .modern: displayMode = .realistic
-            case .realistic: displayMode = .classic
-            }
+            displayMode = displayMode == .classic ? .modern : .classic
         case 17: // T: show extra local diagnostic details
             showDetailedTelemetry.toggle()
         case 14: // E: defensive chaff/ECM countermeasure pulse
@@ -871,12 +866,8 @@ final class BattlefieldScene: SKScene {
         cockpitV5Clock += dt
         if cockpitV5Clock >= 0.1 {
             cockpitV5Clock = 0
-            if onCockpitV5Snapshot != nil || displayMode == .realistic {
-                let snapshot = makeCockpitV5Snapshot()
-                onCockpitV5Snapshot?(snapshot)
-                if displayMode == .realistic {
-                    cockpitV5Renderer?.render(snapshot, size: size, rearView: rearView)
-                }
+            if let sink = onCockpitV5Snapshot {
+                sink(makeCockpitV5Snapshot())
             }
         }
     }
@@ -1602,7 +1593,7 @@ final class BattlefieldScene: SKScene {
         for flake in chaffFlakes {
             let life = max(0, flake.timeLeft / flake.duration)
             if life <= 0 { continue }
-            let width = (displayMode != .classic ? 0.8 : 0.55) * life
+            let width = (displayMode == .modern ? 0.8 : 0.55) * life
             line(chaffPath,
                  WorldPoint(flake.position.x - width,
                             flake.position.y - width * 0.45,
@@ -2391,7 +2382,7 @@ final class BattlefieldScene: SKScene {
 
     /// Manual, local-only snapshot for copying into bug reports. No automatic upload.
     func feedbackReport() -> String {
-        let mode = displayMode.rawValue
+        let mode = displayMode == .classic ? "Classic" : "Modern"
         let state: String
         switch round {
         case .title: state = "Title"
@@ -2526,23 +2517,16 @@ final class BattlefieldScene: SKScene {
             (flashLines, accent, 2.0, displayMode == .classic ? 1 : 5),
             (reticle, accent, displayMode == .classic ? 1.05 : 1.5,
              displayMode == .classic ? 0.15 : 0.55),
-            (radar, displayMode != .classic
+            (radar, displayMode == .modern
              ? NSColor(calibratedRed: 0.38, green: 0.56, blue: 0.53, alpha: 0.72)
-             : accent, displayMode != .classic ? 0.8 : 1.1, 0),
+             : accent, displayMode == .modern ? 0.8 : 1.1, 0),
             (hudLines, muted, 1.0, 0)
         ] {
             node.strokeColor = color
             node.lineWidth = CGFloat(width)
             node.glowWidth = CGFloat(glow)
         }
-        if displayMode == .realistic {
-            if cockpitV5Renderer == nil {
-                cockpitV5Renderer = CockpitV5Renderer(scene: self)
-            }
-        } else {
-            cockpitV5Renderer?.hide()
-        }
-        let modern = displayMode != .classic
+        let modern = displayMode == .modern
         // v4.0 replaces the legacy bottom strip with a cohesive equipment
         // frame; its live figures remain available in the relocated modules.
         // Keep the player's proven top-mounted telemetry arrangement.
@@ -2619,7 +2603,7 @@ final class BattlefieldScene: SKScene {
         midHUD.fontColor = cc
         rightHUD.fontColor = cc
         warning.fontColor = accent
-        banner.fontColor = displayMode != .classic
+        banner.fontColor = displayMode == .modern
             ? NSColor(calibratedRed: 0.18, green: 0.95, blue: 0.98, alpha: 1)
             : cc
         subtitle.fontColor = cc.withAlphaComponent(0.85)
@@ -2759,7 +2743,7 @@ final class BattlefieldScene: SKScene {
         rearEnvironment.lineWidth = 1.15
         rearEnemies.strokeColor = enemyOrange
         rearEnemies.lineWidth = 1.45
-        rearEnemies.glowWidth = displayMode != .classic ? 0.8 : 0.2
+        rearEnemies.glowWidth = displayMode == .modern ? 0.8 : 0.2
         armoredLines.strokeColor = NSColor(calibratedRed: 1, green: 0.68, blue: 0.24, alpha: 1)
         armoredLines.lineWidth = 1.6
         armoredLines.glowWidth = 0.7
@@ -2774,7 +2758,7 @@ final class BattlefieldScene: SKScene {
         countermeasureLines.glowWidth = 1.1
         rearSaucers.strokeColor = green
         rearSaucers.lineWidth = 1.5
-        rearSaucers.glowWidth = displayMode != .classic ? 2.5 : 0.7
+        rearSaucers.glowWidth = displayMode == .modern ? 2.5 : 0.7
         rearShots.strokeColor = amber
         rearShots.glowWidth = 2.6
         rearBackground.strokeColor = .clear
@@ -2841,7 +2825,7 @@ final class BattlefieldScene: SKScene {
             ? (screenKickRemaining / 0.47) * screenKickStrength : 0
         worldCamera.pitchPoints = suspension.pitch * 138
                                   + driveAmount * 0.9 * sin(gameClock * 21)
-                                  + recoil * (displayMode != .classic ? 9 : 5)
+                                  + recoil * (displayMode == .modern ? 9 : 5)
                                   + kick * 3.0 * sin(gameClock * 77)
         worldCamera.cameraLateral += kick * 0.028 * sin(gameClock * 63)
         renderMountains(worldCamera)
@@ -2851,9 +2835,6 @@ final class BattlefieldScene: SKScene {
         renderWorldCombatEffects(worldCamera)
         renderHUD(camera)
         renderCombatEffects(camera)
-        if displayMode == .realistic {
-            cockpitV5Renderer?.layout(size: size, rearView: rearView)
-        }
     }
 
     private func renderCombatEffects(_ c: CameraProjection) {
@@ -2863,8 +2844,8 @@ final class BattlefieldScene: SKScene {
         if muzzleRemaining > 0 {
             let scale = muzzleRemaining / 0.23
             let cx = w * 0.5
-            let cy = c.horizon - (displayMode != .classic ? 72 : 42)
-            let radius = (displayMode != .classic ? 40.0 : 25.0) * scale
+            let cy = c.horizon - (displayMode == .modern ? 72 : 42)
+            let radius = (displayMode == .modern ? 40.0 : 25.0) * scale
             for index in 0..<8 {
                 let angle = Double(index) * .pi / 4
                 let extent = index.isMultiple(of: 2) ? 1.75 : 1.0
@@ -2998,7 +2979,7 @@ final class BattlefieldScene: SKScene {
 
         // Sky bands imitate atmospheric scattering with no textures or asset downloads.
         // The brighter lower bands shift very slightly with heading, not with frame time.
-        if displayMode != .classic {
+        if displayMode == .modern {
             let skyBottom = c.horizon - 8
             let bandHeight = (c.viewportHeight - skyBottom) / Double(skyBands.count)
             for i in skyBands.indices {
@@ -3040,7 +3021,7 @@ final class BattlefieldScene: SKScene {
         }
         farSkyline.path = farPath
         skyline.path = nearPath
-        if displayMode != .classic {
+        if displayMode == .modern {
             distantMountains.path = distantFill
             middleMountains.path = middleFill
             nearMountains.path = closeFill
@@ -3134,11 +3115,11 @@ final class BattlefieldScene: SKScene {
             case .pyramid: drawPyramid(o, on: structurePath, camera: c)
             case .block: drawBlock(o, on: structurePath, camera: c)
             case .tower, .building, .monolith:
-                if displayMode != .classic { drawArchitecture(o, on: structurePath, camera: c) }
+                if displayMode == .modern { drawArchitecture(o, on: structurePath, camera: c) }
                 else { drawBlock(o, on: structurePath, camera: c) }
             }
             let solid = solidBuildingIndices.contains(index)
-            if displayMode != .classic || solid {
+            if displayMode == .modern || solid {
                 // Extremely distant translucent faces add fill overdraw
                 // without helping architecture depth. Solid walls remain
                 // fully drawn for concealment at every visible range.
@@ -3501,7 +3482,7 @@ final class BattlefieldScene: SKScene {
 
         // Classic keeps the original simple arcade tank. Modern alone adds
         // hull armor, detailed treads, road wheels, turret optics and hardware.
-        guard displayMode != .classic else { return }
+        guard displayMode == .modern else { return }
 
         // Faceted glacis armor, sloped hull seams and rear engine deck.
         polygon([v(-1.82, 1.18, 2.15), v(1.82, 1.18, 2.15),
@@ -3708,10 +3689,10 @@ final class BattlefieldScene: SKScene {
     private func drawSaucer(_ e: Foe, on path: CGMutablePath, camera c: CameraProjection) {
         // Animated rotating wireframe disk: moving facets and radial spokes make
         // the spin obvious in both Classic and Modern display modes.
-        let n = displayMode != .classic ? 18 : 12
+        let n = displayMode == .modern ? 18 : 12
         let spin = gameClock * 2.9 + e.phase
         let hover = 7.5 + sin(gameClock * 2.4 + e.phase) * 0.55
-        let radius = displayMode != .classic ? 3.7 : 3.1
+        let radius = displayMode == .modern ? 3.7 : 3.1
         func ring(_ angle: Double, radius r: Double, elevation: Double) -> WorldPoint {
             WorldPoint(e.center.x + cos(angle) * r, elevation,
                        e.center.z + sin(angle) * r)
@@ -3734,13 +3715,13 @@ final class BattlefieldScene: SKScene {
                 line(path, rimA,
                      WorldPoint(e.center.x, hover + 0.33, e.center.z), c)
             }
-            if displayMode != .classic && i.isMultiple(of: 3) {
+            if displayMode == .modern && i.isMultiple(of: 3) {
                 // Rotating elevated light bar and undercarriage facet.
                 line(path, domeA, ring(a, radius: radius * 0.16, elevation: hover + 1.63), c)
                 line(path, lowerA, ring(a, radius: radius * 0.24, elevation: hover - 0.77), c)
             }
         }
-        if displayMode != .classic {
+        if displayMode == .modern {
             let crown = WorldPoint(e.center.x, hover + 1.70, e.center.z)
             for i in 0..<8 {
                 let a = spin + Double(i) * .pi / 4
@@ -3787,7 +3768,7 @@ final class BattlefieldScene: SKScene {
                 }
                 continue
             }
-            if shell.payload == "bomb" && displayMode != .classic {
+            if shell.payload == "bomb" && displayMode == .modern {
                 // Bombs visibly descend from an air-delivered trajectory.
                 // They remain low-speed, dodgeable area threats at impact.
                 let timeInFlight = 7.2 - shell.timeLeft
@@ -3928,7 +3909,7 @@ final class BattlefieldScene: SKScene {
             case .pyramid: drawPyramid(object, on: obstaclePath, camera: backCamera)
             case .block: drawBlock(object, on: obstaclePath, camera: backCamera)
             case .tower, .building, .monolith:
-                if displayMode != .classic {
+                if displayMode == .modern {
                     drawArchitecture(object, on: obstaclePath, camera: backCamera)
                 } else {
                     drawBlock(object, on: obstaclePath, camera: backCamera)
@@ -4761,7 +4742,7 @@ final class BattlefieldScene: SKScene {
         let hp = CGMutablePath()
         let rp = CGMutablePath()
         let sight = CGMutablePath()
-        let modernHUD = displayMode != .classic
+        let modernHUD = displayMode == .modern
         if !modernHUD {
             proximityLabel.isHidden = true
             proximityWings.isHidden = true
@@ -5215,7 +5196,7 @@ final class BattlefieldScene: SKScene {
                 cornerWidth: 18, cornerHeight: 18, transform: nil)
             shieldBorder.strokeColor = (finalSecond ? accent : green)
                 .withAlphaComponent(0.60 * opacity)
-            shieldBorder.glowWidth = displayMode != .classic ? 9.0 : 3.0
+            shieldBorder.glowWidth = displayMode == .modern ? 9.0 : 3.0
             shieldNotice.position = point(w / 2, 82)
             shieldNotice.fontColor = (finalSecond ? accent : green)
                 .withAlphaComponent(0.95 * opacity)
@@ -5299,7 +5280,7 @@ final class BattlefieldScene: SKScene {
             } ?? (pendingWave > 0 ? "AREA SECURE" : "")
         }
 
-        let modeName = displayMode == .classic ? "CLASSIC CRT" : (displayMode == .realistic ? "REALISTIC COCKPIT" : "ENHANCED VECTOR")
+        let modeName = displayMode == .classic ? "CLASSIC CRT" : "ENHANCED VECTOR"
         message.position = point(w / 2, modernHUD ? 16 : 47)
         message.fontSize = 11
         message.isHidden = modernHUD && !showDetailedTelemetry
