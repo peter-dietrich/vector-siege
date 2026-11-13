@@ -2392,7 +2392,7 @@ final class BattlefieldScene: SKScene {
 
     /// Manual, local-only snapshot for copying into bug reports. No automatic upload.
     func feedbackReport() -> String {
-        let mode = displayMode == .classic ? "Classic" : "Modern"
+        let mode = displayMode.rawValue
         let state: String
         switch round {
         case .title: state = "Title"
