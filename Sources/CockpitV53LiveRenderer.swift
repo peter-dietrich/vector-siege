@@ -402,16 +402,16 @@ final class CockpitV53LiveRenderer {
         powertrain.sample(clock: clock,
                           speed: snapshot.speedWorldUnitsPerSecond,
                           lives: snapshot.lives)
-        set("systemsScore", String(format("SCORE %06d", snapshot.score))
-        set("engineTemp", String(format("ENGINE  %3.0f°C", powertrain.engineC))
-        set("coolantTemp", String(format("COOLANT %3.0f°C", powertrain.coolantC))
-        set("oilPressure", String(format("OIL PSI %3.0f",
+        set("systemsScore", String(format: "SCORE %06d", snapshot.score))
+        set("engineTemp", String(format: "ENGINE  %3.0f°C", powertrain.engineC))
+        set("coolantTemp", String(format: "COOLANT %3.0f°C", powertrain.coolantC))
+        set("oilPressure", String(format: "OIL PSI %3.0f",
             powertrain.oilPressureKPa * 0.1450377))
-        set("oilLevel", String(format("OIL LVL %3.0f%%", powertrain.oilPercent))
-        set("fuelLevel", String(format("FUEL    %3.0f%%", powertrain.fuelPercent))
-        set("voltage", String(format("VOLT    %.1fV", powertrain.voltage))
-        set("engineLoad", String(format("ENG LOAD %2.0f%%", powertrain.loadPercent))
-        set("waveStatus", String(format("WAVE %02d / %02d",
+        set("oilLevel", String(format: "OIL LVL %3.0f%%", powertrain.oilPercent))
+        set("fuelLevel", String(format: "FUEL    %3.0f%%", powertrain.fuelPercent))
+        set("voltage", String(format: "VOLT    %.1fV", powertrain.voltage))
+        set("engineLoad", String(format: "ENG LOAD %2.0f%%", powertrain.loadPercent))
+        set("waveStatus", String(format: "WAVE %02d / %02d",
                                        snapshot.wave, snapshot.lives))
         set("engineWarning", powertrain.warning)
         labels["engineWarning"]?.fontColor =
