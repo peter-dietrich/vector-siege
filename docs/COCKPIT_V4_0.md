@@ -1,47 +1,38 @@
-# Vector Siege v4.0 — Tactical Command Cockpit
+# Vector Siege v4.0.1 — Top-Mounted Tactical Command Cockpit
 
-## Scope
+This revision replaces the rejected v4.0 bottom-deck layout, following the local screenshot review.
 
-This is the **Modern-mode visual-shell milestone** for the supplied command-cockpit concept. Classic remains independent.
+## Approved layout direction
 
-The v4.0 implementation deliberately preserves existing physics, combat balance, scoring, controls, saving, drone behavior, and all four live instrument modules.
+- **Keep the four telemetry panels at the top**, with radar and rear camera between the two status groups, as in the successful v3.7 screenshot.
+- **Keep the bottom tank status, hit ratio, heading tape, terrain profile and controls**. The large battlefield remains between these two instrument bands.
+- Do not shrink the forward battlefield in order to move the main displays to the lower edge.
+- Preserve Classic mode and the current gameplay, radar, aiming, save/resume, scoring and ammunition systems.
 
-## Visible changes
+## Visual revision
 
-- A much larger panoramic forward battlefield window (approximately 52–55% of normal window height; the remaining region forms a recessed lower equipment deck)
-- Unified dark gunmetal windshield side pillars and roof visor
-- Three structural monitor groups: **01 Weapons + Fire Control**, **02 Battlespace + Optics** (existing tactical radar and rear optical camera together), and **03 Vehicle Systems**
-- Machined angular screen frames, double-edge highlights, metallic fasteners, amber status hardware and continuous lower command sill
-- One responsive vertical translation for the actual radar, contacts, active sweep, rear camera, telemetry labels, and screen surfaces; no fabricated sensor values
-- Live sill readouts for cannon ammunition/reload, current city sector/ground contacts, shield/chaff, and heading
-- Compact contextual proximity warning above the panel in place of the previous large Modern hazard banner
+- Use a broad matte gunmetal upper console behind the live screens.
+- Give every monitor a layered, filled equipment housing with stepped bezel and dark inner shadow.
+- Use machined edge details, recessed fasteners, restrained vent slots, narrow steel dividers, and small non-dominant cyan/amber highlights.
+- Reduce neon glow around the instruments. Contrast should come from **solid materials, lighting hierarchy and high legibility**, not fuzzy wireframes.
+- Avoid duplicate large numbers or decorative fake diagnostics.
+- Keep the existing animated radar contacts, rear camera, target and systems telemetry functional.
 
-## Engineering design
+## Code
 
-`CommandCockpitLayout` in `Sources/BattlefieldMath.swift` provides stable deck dimensions and viewport ratios. `BattlefieldScene.swift` reparents the pre-existing instrument nodes into `commandDeck`, preserving their internal local coordinates. Modern translates the deck downward, while Classic uses a zero offset and its historical positions.
+The live telemetry nodes share `commandDeck` at zero vertical translation. `renderCommandCockpitShell` draws the hardware surrounding **top** panels. The existing `renderModernCockpit` draws the **bottom** dashboard again. `CommandCockpitLayout` now describes the top-panel extents and open battlefield gap; the abandoned bottom-deck offset was removed.
 
-The former Modern lower dashboard implementation remains in source for reference, but is no longer drawn or recalculated during normal Modern play. No legacy lower dashboard overlays should overlap the new shell.
+## Local visual review
 
-## Deliberately deferred
+Test Modern at regular desktop size and fullscreen. Verify:
 
-- v4.1: Fully integrated center tactical map, target diagnostics and fire-control graphics
-- v4.2: Live system diagram, instrument layout modernization and real terrain-profile telemetry
-- v4.3: Cinematic startup, reactive lighting, premium buttons, audio and glass material polish
-- v4.4: Visual QA across all window sizes, performance and release candidate checks
+- [ ] Main telemetry stays top-mounted, with radar and rear view inside individual panels
+- [ ] Bottom command strip shows tank status, hit ratio, compass, terrain, and controls
+- [ ] Buildings, reticle and battlefield appear in the center without overlapping cockpit panels
+- [ ] Matte dark mechanical frames feel dimensional rather than fuzzy; panel labels stay legible
+- [ ] No doubled lower command rail or stray cockpit legend from v4.0
+- [ ] Proximity alarm displays without covering its own text or the reticle
+- [ ] Classic mode matches prior releases
+- [ ] UI reflows at 900×640, 1240×790, 1600×900, and fullscreen
 
-This milestone is a **working shell**, not the finished photorealistic console of the mockup. Detailed panel and glass materials should be evaluated with real screenshots in the next phase.
-
-## Manual acceptance
-
-- [ ] Classic looks unchanged after pressing C to toggle modes
-- [ ] Modern panels live in the lower deck; battlefield fills the upper panorama
-- [ ] All radar markers, scanning sweep, compass headings and optical rear feed move with their frames
-- [ ] Two center displays share the battlespace bezel without overlapping adjacent modules
-- [ ] No duplicate or ghost copy of the former Modern lower dashboard is visible
-- [ ] Cannon, reload, shield and chaff readings continue responding to actions
-- [ ] Proximity alert stays just above the equipment deck, not over radar or reticle
-- [ ] Test at 900x640, 1240x790, 1600x900 and fullscreen
-- [ ] Verify cursor/reticle, level transition, pause screen and alert layers remain legible
-- [ ] Check sustained frame rate with dense buildings and 30 drones
-
-Passes in Geometry Smoke and Xcode CI verify compilation and layout math, **not** screenshot fidelity or gameplay interaction on a human Mac.
+CI verifies build and geometry, **not** the subjective visual result. The premium image-backed material and new display designs are future work after screenshot review.
