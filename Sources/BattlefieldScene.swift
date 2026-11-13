@@ -285,6 +285,18 @@ final class BattlefieldScene: SKScene {
     // Modern-mode cockpit treatment. Separate decoration and text nodes make
     // every value live and keep Classic independent of the premium layout.
     private let modernCockpit = SKNode()
+    // v4.0: all four existing live modules share one relocated instrument
+    // deck, framed as three larger hardware zones (weapons, battlespace,
+    // vehicle). Classic mode uses the original coordinates, unchanged.
+    private let commandDeck = SKNode()
+    private let commandShellBack = SKShapeNode()
+    private let commandShellEdges = SKShapeNode()
+    private let commandShellHighlights = SKShapeNode()
+    private let commandShellHardware = SKShapeNode()
+    private let commandShellAlert = SKShapeNode()
+    private let commandShellLabels = (0..<8).map {
+        _ in SKLabelNode(fontNamed: "Menlo-Bold")
+    }
     private let modernTrim = SKShapeNode()
     private let modernLowerDash = SKShapeNode()
     private let modernCompassPlate = SKShapeNode()
@@ -572,6 +584,53 @@ final class BattlefieldScene: SKScene {
         banner.horizontalAlignmentMode = .center
         subtitle.horizontalAlignmentMode = .center
         message.horizontalAlignmentMode = .center
+        // Reparent once after every label, shape and rear-camera mask has
+        // been installed. Radar, the moving sweep and rear optical camera
+        // now translate together, avoiding per-node coordinate rewriting.
+        commandDeck.zPosition = 0
+        addChild(commandDeck)
+        let moduleNodes: [SKNode] = [
+            telemetryLeftPanel, telemetryRightPanel,
+            radarPanel, rearPanel, rearView, rearLabel,
+            telemetryLeftAccent, telemetryRightAccent,
+            radar, radarStreetGrid, radarObstacleContacts,
+            radarSweepBeam, radarEnemyContacts, radarHunterContacts,
+            radarSaucerContacts, radarDroneContacts, radarActiveDrones,
+            radarTargetCue, radarFighterContacts,
+            radarProjectileGlow, radarProjectileCore,
+            modernUpperBands, modernUpperDividers,
+            modernUpperIcons, modernOrangeCorners,
+            leftHUD, midHUD, rightHUD,
+            telemetryLeftHeading, telemetryRightHeading,
+            telemetryLeftDetail, telemetryLeftFootnote,
+            telemetryCoordinates, telemetryRightDetail,
+            telemetryRightFootnote, telemetryAmmo
+        ]
+        for node in moduleNodes +
+            radarSweepGlow.map({ $0 as SKNode }) +
+            radarCompassLabels.map({ $0 as SKNode }) +
+            modernUpperText.map({ $0 as SKNode }) {
+            node.removeFromParent()
+            commandDeck.addChild(node)
+        }
+        commandShellBack.zPosition = 10.35
+        commandShellEdges.zPosition = 16.1
+        commandShellHighlights.zPosition = 16.2
+        commandShellHardware.zPosition = 16.3
+        commandShellAlert.zPosition = 16.4
+        for shape in [commandShellBack, commandShellEdges,
+                      commandShellHighlights, commandShellHardware,
+                      commandShellAlert] {
+            shape.lineCap = .round
+            shape.lineJoin = .round
+            addChild(shape)
+        }
+        for label in commandShellLabels {
+            label.zPosition = 16.6
+            label.verticalAlignmentMode = .center
+            label.horizontalAlignmentMode = .left
+            addChild(label)
+        }
         configurePalette()
         makeObstacles()
         spawnWave()
@@ -2277,7 +2336,15 @@ final class BattlefieldScene: SKScene {
             node.glowWidth = CGFloat(glow)
         }
         let modern = displayMode == .modern
-        modernCockpit.isHidden = !modern
+        // v4.0 replaces the legacy bottom strip with a cohesive equipment
+        // frame; its live figures remain available in the relocated modules.
+        modernCockpit.isHidden = true
+        commandDeck.position.y = modern
+            ? CommandCockpitLayout.deckOffset(height: Double(size.height)) : 0
+        for node in [commandShellBack, commandShellEdges,
+                     commandShellHighlights, commandShellHardware,
+                     commandShellAlert] { node.isHidden = !modern }
+        for label in commandShellLabels { label.isHidden = !modern }
         modernFriendlyShells.isHidden = !modern
         modernHostileShells.isHidden = !modern
         modernFriendlyShells.strokeColor = NSColor(calibratedRed: 1, green: 0.89, blue: 0.35, alpha: 0.98)
