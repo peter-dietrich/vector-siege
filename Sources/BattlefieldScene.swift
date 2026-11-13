@@ -918,7 +918,8 @@ final class BattlefieldScene: SKScene {
                                 x: $0.center.x, z: $0.center.z,
                                 size: $0.size,
                                 isSolid: $0.kind == .building || $0.kind == .block)
-                        })
+                        }, mgAmmo: mgAmmo, mgHeat: mgHeat,
+                        mgLocked: mgOverheatLock)
                 }
             }
         }
@@ -1742,6 +1743,7 @@ final class BattlefieldScene: SKScene {
         mgBarrel = 1 - mgBarrel
         mgAmmo -= 1
         mgFired += 1
+        if mgFired.isMultiple(of: 3) { sound("shot.wav") }
         mgShotCooldown = 0.095
         mgHeat = min(110, mgHeat + 3.8)
         if mgHeat >= 100 { mgOverheatLock = true }
