@@ -2445,8 +2445,8 @@ final class BattlefieldScene: SKScene {
             (reticle, accent, displayMode == .classic ? 1.05 : 1.5,
              displayMode == .classic ? 0.15 : 0.55),
             (radar, displayMode == .modern
-             ? NSColor(calibratedRed: 0.17, green: 0.96, blue: 0.74, alpha: 1)
-             : accent, 1.1, 0),
+             ? NSColor(calibratedRed: 0.38, green: 0.56, blue: 0.53, alpha: 0.72)
+             : accent, displayMode == .modern ? 0.8 : 1.1, 0),
             (hudLines, muted, 1.0, 0)
         ] {
             node.strokeColor = color
@@ -2541,15 +2541,15 @@ final class BattlefieldScene: SKScene {
         radarEnemyContacts.strokeColor = enemyOrange
         radarEnemyContacts.fillColor = enemyOrange.withAlphaComponent(0.85)
         radarEnemyContacts.lineWidth = 1.4
-        radarEnemyContacts.glowWidth = 3
+        radarEnemyContacts.glowWidth = modern ? 0.7 : 3
         radarHunterContacts.strokeColor = NSColor(calibratedRed: 1, green: 0.18, blue: 0.23, alpha: 1)
         radarHunterContacts.fillColor = NSColor(calibratedRed: 1, green: 0.24, blue: 0.20, alpha: 0.38)
         radarHunterContacts.lineWidth = 1.8
-        radarHunterContacts.glowWidth = 4
+        radarHunterContacts.glowWidth = modern ? 1.0 : 4
         radarSaucerContacts.strokeColor = NSColor(calibratedRed: 0.20, green: 0.75, blue: 1, alpha: 1)
         radarSaucerContacts.fillColor = NSColor(calibratedRed: 0.20, green: 0.75, blue: 1, alpha: 0.58)
         radarSaucerContacts.lineWidth = 1.2
-        radarSaucerContacts.glowWidth = 3
+        radarSaucerContacts.glowWidth = modern ? 0.8 : 3
         radarDroneContacts.strokeColor = NSColor(calibratedRed: 1, green: 0.85, blue: 0.24, alpha: 1)
         radarDroneContacts.fillColor = NSColor(calibratedRed: 1, green: 0.77, blue: 0.19, alpha: 0.68)
         radarDroneContacts.lineWidth = 1.4
@@ -2557,7 +2557,7 @@ final class BattlefieldScene: SKScene {
         radarActiveDrones.strokeColor = NSColor(
             calibratedRed: 1.0, green: 0.82, blue: 0.29, alpha: 1)
         radarActiveDrones.lineWidth = 1.55
-        radarActiveDrones.glowWidth = 3.0
+        radarActiveDrones.glowWidth = modern ? 1.0 : 3.0
         radarTargetCue.strokeColor = NSColor(
             calibratedRed: 0.45, green: 1.0, blue: 0.69, alpha: 1)
         radarTargetCue.lineWidth = 1.6
@@ -2565,7 +2565,7 @@ final class BattlefieldScene: SKScene {
         radarFighterContacts.strokeColor = NSColor(calibratedRed: 1, green: 0.35, blue: 0.19, alpha: 1)
         radarFighterContacts.fillColor = NSColor(calibratedRed: 1, green: 0.24, blue: 0.13, alpha: 0.35)
         radarFighterContacts.lineWidth = 1.7
-        radarFighterContacts.glowWidth = 2.6
+        radarFighterContacts.glowWidth = modern ? 0.7 : 2.6
         radarSweepBeam.strokeColor = NSColor(calibratedRed: 0.22, green: 1, blue: 0.48, alpha: 1)
         radarSweepBeam.glowWidth = 0
         radarGroundShading.fillColor = NSColor(
@@ -2582,10 +2582,10 @@ final class BattlefieldScene: SKScene {
         }
         radarProjectileGlow.strokeColor = .clear
         radarProjectileGlow.fillColor = NSColor(calibratedRed: 1, green: 0.81, blue: 0.11, alpha: 0.24)
-        radarProjectileGlow.glowWidth = 9
+        radarProjectileGlow.glowWidth = modern ? 2 : 9
         radarProjectileCore.strokeColor = NSColor(calibratedRed: 1, green: 0.96, blue: 0.41, alpha: 0.98)
         radarProjectileCore.fillColor = NSColor(calibratedRed: 1, green: 0.84, blue: 0.13, alpha: 1)
-        radarProjectileCore.glowWidth = 5
+        radarProjectileCore.glowWidth = modern ? 1 : 5
         radarProjectileCore.lineWidth = 1.1
 
         let amber = NSColor(calibratedRed: 1, green: 0.72, blue: 0.40, alpha: 1)
@@ -3893,10 +3893,10 @@ final class BattlefieldScene: SKScene {
         leftCenter: Double, rightCenter: Double,
         bankWidth: Double, panelHeight: Double
     ) {
-        let cyan = NSColor(calibratedRed: 0.25, green: 0.95, blue: 0.98, alpha: 1)
-        let greenBright = NSColor(calibratedRed: 0.43, green: 1.0, blue: 0.66, alpha: 1)
-        let pale = NSColor(calibratedRed: 0.76, green: 0.94, blue: 0.96, alpha: 1)
-        let mutedText = cyan.withAlphaComponent(0.67)
+        let cyan = NSColor(calibratedRed: 0.48, green: 0.80, blue: 0.81, alpha: 1)
+        let greenBright = NSColor(calibratedRed: 0.49, green: 0.93, blue: 0.65, alpha: 1)
+        let pale = NSColor(calibratedRed: 0.88, green: 0.92, blue: 0.89, alpha: 1)
+        let mutedText = pale.withAlphaComponent(0.67)
         let amber = NSColor(calibratedRed: 1, green: 0.54, blue: 0.18, alpha: 1)
         let left = leftCenter - bankWidth / 2
         let right = rightCenter - bankWidth / 2
@@ -4830,7 +4830,8 @@ final class BattlefieldScene: SKScene {
             triangle.closeSubpath()
             let wedge = radarSweepGlow[index]
             wedge.path = triangle
-            wedge.alpha = CGFloat(0.36 * TacticalRadarGeometry.intensity(
+            wedge.alpha = CGFloat((modernHUD ? 0.17 : 0.36) *
+                TacticalRadarGeometry.intensity(
                 trailingFraction: (age0 + age1) / 2))
         }
         let sweepReach = TacticalRadarGeometry.squareReach(
