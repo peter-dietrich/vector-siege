@@ -273,14 +273,14 @@ final class CockpitV53LiveRenderer {
         // prevents any road/building/shell symbol from leaving the glass.
         let streets = CGMutablePath()
         for road in -3...3 {
-            let axis = Double(road)*60
-            for offset in [-5.5, 5.5] {
-                let a = radarPoint(axis+offset, -180)
-                let b = radarPoint(axis+offset, 180)
+            let axis = Double(road) * CityLayout.streetSpacing
+            for offset in [-CityLayout.streetHalfWidth, CityLayout.streetHalfWidth] {
+                let a = radarPoint(axis+offset, -CityLayout.cityExtent)
+                let b = radarPoint(axis+offset, CityLayout.cityExtent)
                 streets.move(to: a)
                 streets.addLine(to: b)
-                let c = radarPoint(-180, axis+offset)
-                let d = radarPoint(180, axis+offset)
+                let c = radarPoint(-CityLayout.cityExtent, axis+offset)
+                let d = radarPoint(CityLayout.cityExtent, axis+offset)
                 streets.move(to: c)
                 streets.addLine(to: d)
             }
@@ -363,8 +363,9 @@ final class CockpitV53LiveRenderer {
         let systemsY: CGFloat = 900-78-263
         updateBar(ammoBar, x: systemsX+232, y: systemsY+91, full: 159,
                   fraction: snapshot.shieldRemainingSeconds > 0 ? 1 :
-                    snapshot.shieldCooldownSeconds > 0 ? 0.12 : 1)
-        let shieldFraction = Double(snapshot.chaffCharges)/2.0
+                    snapshot.shieldCooldownSeconds > 0 ? 0 : 1)
+        let shieldFraction = Double(snapshot.chaffCharges) /
+            Double(max(1, ChaffDefense.chargesPerWave))
         updateBar(shieldBar, x: systemsX+232, y: systemsY+61, full: 159, fraction: shieldFraction)
     }
 
