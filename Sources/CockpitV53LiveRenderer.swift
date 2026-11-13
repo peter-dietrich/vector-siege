@@ -32,6 +32,7 @@ final class CockpitV53LiveRenderer {
     private weak var scene: SKScene?
     private let root = SKNode()
     private let blanking = SKShapeNode()
+    private var lowerDeck: CockpitV53LowerDeck?
     struct MapBuilding {
         let x: Double
         let z: Double
@@ -141,6 +142,7 @@ final class CockpitV53LiveRenderer {
         root.zPosition = 36
         scene.addChild(root)
         assemble()
+        lowerDeck = CockpitV53LowerDeck(scene: scene)
     }
 
     private func sprite(_ file: String, frame: CGRect, z: CGFloat, parent: SKNode? = nil) {
@@ -493,6 +495,17 @@ final class CockpitV53LiveRenderer {
         labels["engineTemp"]?.fontColor = powertrain.engineC > 103 ? amber : mint
         labels["oilLevel"]?.fontColor = powertrain.oilPercent < 45 ? amber : mint
         labels["fuelLevel"]?.fontColor = powertrain.fuelPercent < 18 ? amber : mint
+        // Live heightmap rather than static mockup waveform: a forward
+        // ground slice sampled at the current heading and player position.
+        let dx = sin(snapshot.headingRadians)
+        let dz = cos(snapshot.headingRadians)
+        let forwardHeights = (0...48).map { index -> Double in
+            let distance = Double(index) * 3.0
+            return LandscapeTopology.height(GroundPoint(
+                snapshot.playerPosition.x + dx*distance,
+                snapshot.playerPosition.z + dz*distance))
+        }
+        lowerDeck?.update(snapshot, terrain: forwardHeights)
     }
 
     /// Final per-frame pass. Legacy HUD draws underneath; never draw opaque
@@ -513,6 +526,7 @@ final class CockpitV53LiveRenderer {
                                transform: nil)
         root.isHidden = false
         blanking.isHidden = false
+        lowerDeck?.layout(in: view)
 
         // The camera is already rendered with real world objects and shadows
         // by BattlefieldScene. Reparent to the v5.3 optics screen rectangle.
@@ -533,6 +547,7 @@ final class CockpitV53LiveRenderer {
     func deactivate(_ rearCamera: SKCropNode) {
         root.isHidden = true
         blanking.isHidden = true
+        lowerDeck?.hide()
         if let scene, rearCamera.parent === root {
             rearCamera.removeFromParent()
             rearCamera.setScale(1)
