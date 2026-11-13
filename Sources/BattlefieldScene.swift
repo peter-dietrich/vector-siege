@@ -4475,8 +4475,16 @@ final class BattlefieldScene: SKScene {
                         cannon.roundsRemaining, cannon.maxRounds,
                         cannon.reloadRemaining > 0 ? "CYCLING" : "READY"),
               leftMin + 14, footerY, font, green)
-        label(4, String(format: "WAVE %02d  /  CONTACTS %02d",
-                        wave, enemies.filter { $0.kind.isVehicle }.count),
+        let sectorX = min(5, max(0, Int(floor(
+            (tankPosition.x + CityLayout.cityExtent) /
+            CityLayout.streetSpacing))))
+        let sectorZ = min(5, max(0, Int(floor(
+            (tankPosition.z + CityLayout.cityExtent) /
+            CityLayout.streetSpacing))))
+        let sectorLetter = Character(UnicodeScalar(65 + sectorX)!)
+        label(4, String(format: "SECTOR %@-%02d  /  GROUND %02d",
+                        String(sectorLetter), sectorZ + 1,
+                        enemies.filter { $0.kind.isVehicle }.count),
               middleMin + 14, footerY, font, cyan)
         let shield = shieldDuration > 0 ? "ACTIVE" :
             shieldCooldown > 0 ? "CHARGING" : "READY"
@@ -5024,11 +5032,9 @@ final class BattlefieldScene: SKScene {
             shape.isHidden = !modernHUD
         }
         if modernHUD {
-            renderModernCockpit(
-                width: w, height: h, bankWidth: bankWidth,
-                leftX: leftX, rightX: rightX, radarX: radarX,
-                rearX: rearX, radarPanelWidth: radarPanelWidth,
-                rearPanelWidth: rearPanelWidth, topHeight: panelHeight)
+            // The legacy lower-dash construction is retained for comparison
+            // but no longer rebuilt every frame. All active readouts are
+            // now presented by the live deck and the hardware status sill.
             renderModernUpperHUD(width: w, height: h,
                                  leftCenter: leftCenterX, rightCenter: rightCenterX,
                                  bankWidth: bankWidth, panelHeight: panelHeight)
