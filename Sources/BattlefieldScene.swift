@@ -2443,7 +2443,9 @@ final class BattlefieldScene: SKScene {
             directorPressure: directorPressure,
             directorWaveStartLives: directorWaveStartLives,
             directorWaveStartFired: directorWaveStartFired,
-            directorWaveStartHits: directorWaveStartHits
+            directorWaveStartHits: directorWaveStartHits,
+            machineGunAmmo: mgAmmo, machineGunHeat: mgHeat,
+            machineGunFired: mgFired, machineGunHits: mgHits
         )
     }
 
@@ -2490,6 +2492,16 @@ final class BattlefieldScene: SKScene {
         destructionRemaining = 0
         cannon = saved.cannon
         shotTally = saved.shotTally
+        mgRounds.removeAll()
+        mgRicochets.removeAll()
+        mgAmmo = max(0, min(180, saved.machineGunAmmo ?? 180))
+        mgHeat = max(0, min(110, (saved.machineGunHeat ?? 0).isFinite
+                            ? (saved.machineGunHeat ?? 0) : 0))
+        mgFired = max(0, saved.machineGunFired ?? 0)
+        mgHits = max(0, saved.machineGunHits ?? 0)
+        mgOverheatLock = mgHeat >= 100
+        mgShotCooldown = 0
+        mgBarrel = mgFired % 2
         directorWaveStartLives = max(lives, saved.directorWaveStartLives ?? lives)
         directorWaveStartFired = min(shotTally.fired, max(0,
             saved.directorWaveStartFired ?? shotTally.fired))
