@@ -89,10 +89,10 @@ struct SiegeWindow: View {
                 Text("VECTOR SIEGE")
                     .font(.system(size: 15, weight: .bold, design: .monospaced))
                     .tracking(1.5)
-                Text("v2026.11.13d")
+                Text("v2026.11.13e")
                     .font(.system(size: 10, weight: .medium, design: .monospaced))
                     .foregroundStyle(.gray)
-                    .help("Source build identifier: v2026.11.13d")
+                    .help("Source build identifier: v2026.11.13e")
                 Spacer(minLength: 4)
                 Picker("Display", selection: $session.displayMode) {
                     ForEach(DisplayMode.allCases) { Text($0.rawValue).tag($0) }
@@ -148,7 +148,7 @@ struct SiegeWindow: View {
                 .background(.black)
                 .overlay(alignment: .bottom) {
                     HStack(spacing: 12) {
-                        Text("↑↓ DRIVE   ←→ TURN   SPACE FIRE   SHIFT SHIELD   E CHAFF")
+                        Text("↑↓ DRIVE   ←→ TURN   SPACE CANNON   F TWIN MG   SHIFT SHIELD   E CHAFF")
                         Spacer(minLength: 2)
                         Text("I/K + O/L TREADS   P PAUSE   RETURN START")
                     }
