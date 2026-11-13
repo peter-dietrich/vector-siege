@@ -6,8 +6,6 @@ import SpriteKit
 /// All numbers, graphs, compass ticks and control hints are live SpriteKit.
 final class CockpitV53LowerDeck {
     private let root = SKNode()
-    private let artworkDirectory: URL
-    private var bezelTextures: [String: SKTexture] = [:]
     private let curtain = SKShapeNode()
     private let metal = NSColor(calibratedRed: 0.105, green: 0.122, blue: 0.131, alpha: 1)
     private let bevel = NSColor(calibratedRed: 0.41, green: 0.43, blue: 0.42, alpha: 1)
@@ -27,14 +25,7 @@ final class CockpitV53LowerDeck {
     private let integrityBar = SKShapeNode()
     private let alertStripe = SKShapeNode()
 
-    init(scene: SKScene, artworkDirectory: URL) {
-        self.artworkDirectory = artworkDirectory
-        for name in ["cockpit_fire_bezel", "cockpit_map_bezel",
-                     "cockpit_optics_bezel", "cockpit_systems_bezel"] {
-            if let image = NSImage(contentsOf: artworkDirectory.appendingPathComponent(name + ".png")) {
-                bezelTextures[name] = SKTexture(image: image)
-            }
-        }
+    init(scene: SKScene) {
         curtain.zPosition = 37.8
         curtain.fillColor = NSColor(calibratedWhite: 0.025, alpha: 1)
         curtain.strokeColor = .clear
@@ -89,68 +80,107 @@ final class CockpitV53LowerDeck {
         root.addChild(node)
     }
 
+    // Dedicated lower-module hardware. No stretched upper cockpit textures.
+    // Every bezel shares the same Y bands and a 20pt instrument safe inset.
     private func frame(_ x: CGFloat, _ width: CGFloat, title: String, index: Int) {
         let y: CGFloat = 57, h: CGFloat = 158
         plate(CGRect(x: x, y: y, width: width, height: h),
-              color: NSColor(calibratedWhite: 0.038, alpha: 1),
-              stroke: NSColor(calibratedWhite: 0.15, alpha: 1),
-              radius: 13, lineWidth: 3, z: 2)
+              color: NSColor(calibratedWhite: 0.045, alpha: 1),
+              stroke: NSColor(calibratedWhite: 0.11, alpha: 1),
+              radius: 10, lineWidth: 3, z: 2)
         plate(CGRect(x: x+4, y: y+4, width: width-8, height: h-8),
               color: metal, stroke: bevel,
-              radius: 10, lineWidth: 1.4, z: 3)
-        plate(CGRect(x: x+10, y: y+12, width: width-20, height: h-25),
-              color: glass, stroke: amber.withAlphaComponent(0.44),
-              radius: 5, lineWidth: 0.9, z: 4)
-        // The same original alpha bezel used by the upper four instruments.
-        // Nine-slice scaling preserves armor corners, bolts and edge lighting
-        // despite the shorter lower instrument proportions.
-        let choices = ["cockpit_fire_bezel", "cockpit_map_bezel",
-                       "cockpit_optics_bezel", "cockpit_systems_bezel",
-                       "cockpit_fire_bezel"]
-        if let texture = bezelTextures[choices[index]] {
-            let bezel = SKSpriteNode(texture: texture,
-                                     size: CGSize(width: width+1, height: h+2))
-            bezel.centerRect = CGRect(x: 0.15, y: 0.19, width: 0.70, height: 0.62)
-            bezel.position = CGPoint(x: x + width/2, y: y+h/2)
-            // Keep all telemetry (including the chart, arc, and tank lines)
-            // above the imported bezel art; glass center remains readable.
-            bezel.zPosition = 5.5
-            root.addChild(bezel)
-        }
-        plate(CGRect(x: x+width*0.35, y: y+h-11,
-                     width: width*0.30, height: 3),
+              radius: 8, lineWidth: 1.6, z: 3)
+        plate(CGRect(x: x+10, y: y+10, width: width-20, height: h-20),
+              color: NSColor(calibratedRed: 0.024, green: 0.037,
+                             blue: 0.042, alpha: 1),
+              stroke: NSColor(calibratedWhite: 0.26, alpha: 1),
+              radius: 6, lineWidth: 1.1, z: 4)
+        plate(CGRect(x: x+15, y: y+15, width: width-30, height: h-31),
+              color: glass,
+              stroke: NSColor(calibratedRed: 0.10, green: 0.33,
+                              blue: 0.31, alpha: 0.8),
+              radius: 3, z: 5)
+        // Lower-specific flat bevel highlights, precision corner armor,
+        // flush fasteners, and narrow amber running lights.
+        line(CGPoint(x: x+17, y: y+h-6),
+             CGPoint(x: x+width-17, y: y+h-6),
+             color: NSColor(calibratedWhite: 0.62, alpha: 0.8),
+             width: 1.4, z: 9)
+        line(CGPoint(x: x+19, y: y+10),
+             CGPoint(x: x+width-19, y: y+10),
+             color: NSColor(calibratedWhite: 0.30, alpha: 0.85),
+             width: 1, z: 9)
+        plate(CGRect(x: x+width*0.35, y: y+h-8,
+                     width: width*0.30, height: 3.5),
               color: amber, stroke: .clear, radius: 1.2, z: 11)
-        plate(CGRect(x: x+14, y: y+17, width: 3, height: 24),
-              color: amber.withAlphaComponent(0.72),
-              stroke: .clear, radius: 1, z: 8)
-        plate(CGRect(x: x+width-17, y: y+17, width: 3, height: 24),
-              color: amber.withAlphaComponent(0.72),
-              stroke: .clear, radius: 1, z: 8)
-        for screwX in [x+9, x+width-9] {
-            for screwY in [y+10, y+h-9] {
-                let screw = SKShapeNode(circleOfRadius: 2.2)
-                screw.position = CGPoint(x: screwX, y: screwY)
-                screw.strokeColor = NSColor(calibratedWhite: 0.62, alpha: 1)
-                screw.fillColor = NSColor(calibratedWhite: 0.14, alpha: 1)
-                screw.zPosition = 9
-                root.addChild(screw)
+        for side in [false, true] {
+            let anchorX = side ? x+width-20 : x+6
+            let bracket = CGMutablePath()
+            if side {
+                bracket.move(to: CGPoint(x: anchorX-8, y: y+9))
+                bracket.addLine(to: CGPoint(x: anchorX+7, y: y+9))
+                bracket.addLine(to: CGPoint(x: anchorX+7, y: y+30))
+            } else {
+                bracket.move(to: CGPoint(x: anchorX, y: y+30))
+                bracket.addLine(to: CGPoint(x: anchorX, y: y+9))
+                bracket.addLine(to: CGPoint(x: anchorX+15, y: y+9))
+            }
+            let armor = SKShapeNode(path: bracket)
+            armor.strokeColor = bevel
+            armor.lineWidth = 2.3
+            armor.zPosition = 9
+            root.addChild(armor)
+            plate(CGRect(x: side ? x+width-18 : x+13, y: y+21,
+                         width: 3, height: 21),
+                  color: amber.withAlphaComponent(0.82),
+                  stroke: .clear, radius: 1, z: 9)
+        }
+        for px in [x+9, x+width-9] {
+            for py in [y+12, y+h-12] {
+                let bolt = SKShapeNode(circleOfRadius: 2.6)
+                bolt.position = CGPoint(x: px, y: py)
+                bolt.fillColor = NSColor(calibratedWhite: 0.15, alpha: 1)
+                bolt.strokeColor = NSColor(calibratedWhite: 0.65, alpha: 1)
+                bolt.lineWidth = 0.8
+                bolt.zPosition = 10
+                root.addChild(bolt)
             }
         }
         label("title\(index)", title, x: x+21, y: 185,
               size: 11, color: mint)
-        line(CGPoint(x: x+20, y: 171),
-             CGPoint(x: x+width-20, y: 171),
-             color: muted.withAlphaComponent(0.26), width: 0.8)
+        line(CGPoint(x: x+21, y: 172),
+             CGPoint(x: x+width-21, y: 172),
+             color: muted.withAlphaComponent(0.3), width: 0.8, z: 8)
     }
 
     private func build() {
-        // Armored crossbeam connects the five discrete instrument housings.
-        plate(CGRect(x: 11, y: 46, width: 1578, height: 184),
-              color: metal, stroke: bevel, radius: 13,
-              lineWidth: 2.4)
-        for x in stride(from: CGFloat(18), through: CGFloat(1575), by: 115) {
-            plate(CGRect(x: x, y: 218, width: 58, height: 4),
-                  color: NSColor(calibratedWhite: 0.26, alpha: 1),
+        // One armored lower chassis spanning the five original instrument
+        // positions. Connected vertical supports terminate at the viewport
+        // boundary and never cover combat, silhouettes, or targeting.
+        plate(CGRect(x: 11, y: 45, width: 1578, height: 187),
+              color: NSColor(calibratedWhite: 0.055, alpha: 1),
+              stroke: bevel, radius: 13, lineWidth: 2.5)
+        plate(CGRect(x: 18, y: 211, width: 1564, height: 14),
+              color: metal, stroke: NSColor(calibratedWhite: 0.28, alpha: 1),
+              radius: 4, lineWidth: 1.2, z: 2)
+        // Beam, armored seams and lighting keep a continuous silhouette.
+        plate(CGRect(x: 23, y: 228, width: 1554, height: 10),
+              color: NSColor(calibratedWhite: 0.17, alpha: 1),
+              stroke: .clear, radius: 3, z: 1)
+        for x in [31.0, 375.0, 626.0, 1039.0, 1332.0, 1568.0] {
+            let rib = CGMutablePath()
+            rib.move(to: CGPoint(x: x-7, y: 223))
+            rib.addLine(to: CGPoint(x: x, y: 246))
+            rib.addLine(to: CGPoint(x: x+8, y: 223))
+            let armor = SKShapeNode(path: rib)
+            armor.strokeColor = bevel
+            armor.lineWidth = 3
+            armor.fillColor = .clear
+            armor.zPosition = 2
+            root.addChild(armor)
+            plate(CGRect(x: x-9, y: 226, width: 18, height: 3),
+                  color: amber.withAlphaComponent(0.75),
                   stroke: .clear, radius: 1, z: 3)
         }
         frame(24, 351, title: "TANK STATUS", index: 0)
