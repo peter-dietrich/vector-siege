@@ -131,6 +131,9 @@ final class BattlefieldScene: SKScene {
                                      clearShot: Bool)
     private var targetingCache: TargetTrack? = nil
     private var targetingCacheValid = false
+    // v5 cockpit observer: read-only data, never gameplay authority.
+    var onCockpitV5Snapshot: ((CockpitV5Snapshot) -> Void)?
+    private var cockpitV5Clock = 0.0
     private var steerHoldSeconds: Double = 0
     private var previousSteerDirection: Double = 0
     private var score = 0
@@ -860,6 +863,13 @@ final class BattlefieldScene: SKScene {
             }
         }
         render()
+        cockpitV5Clock += dt
+        if cockpitV5Clock >= 0.1 {
+            cockpitV5Clock = 0
+            if let sink = onCockpitV5Snapshot {
+                sink(makeCockpitV5Snapshot())
+            }
+        }
     }
 
     private func tick(_ dt: Double) {
@@ -2065,6 +2075,69 @@ final class BattlefieldScene: SKScene {
     private func sound(_ name: String) {
         guard soundOn else { return }
         run(SKAction.playSoundFileNamed(name, waitForCompletion: false))
+    }
+
+
+    /// Snapshot data comes exclusively from existing gameplay state.
+    private func makeCockpitV5Snapshot() -> CockpitV5Snapshot {
+        func position(_ p: GroundPoint) -> CockpitV5Snapshot.Point {
+            CockpitV5Snapshot.Point(x: p.x, z: p.z)
+        }
+        func contactKind(_ kind: FoeType) -> CockpitV5Snapshot.ContactKind {
+            switch kind {
+            case .tank: return .tank
+            case .hunter: return .hunter
+            case .apc: return .apc
+            case .artillery: return .artillery
+            case .drone: return .drone
+            case .fighter: return .fighter
+            case .saucer: return .saucer
+            }
+        }
+        let track = targetTelemetry()
+        let selectedID = track.flatMap { t in
+            enemies.firstIndex { $0.center.distance(to: t.position) < 0.001 }
+        }
+        let contacts = enemies.enumerated().map { i, foe in
+            CockpitV5Snapshot.Contact(
+                id: i, kind: contactKind(foe.kind),
+                position: position(foe.center), headingRadians: foe.heading,
+                visible: true, hitPoints: foe.hitPoints,
+                isPrimaryTarget: selectedID == i)
+        }
+        let selectedTarget = track.map { t in
+            CockpitV5Snapshot.Target(
+                contactID: selectedID, rangeWorldUnits: t.range,
+                bearingOffsetDegrees: t.error * 180 / .pi,
+                clearFiringLine: t.clearShot, isGroundVehicle: t.ground)
+        }
+        let sectorX = min(5, max(0, Int(floor(
+            (tankPosition.x + CityLayout.cityExtent) / CityLayout.streetSpacing))))
+        let sectorZ = min(5, max(0, Int(floor(
+            (tankPosition.z + CityLayout.cityExtent) / CityLayout.streetSpacing))))
+        let sectorName = String(format: "%@-%02d",
+                                String(UnicodeScalar(65 + sectorX)!), sectorZ + 1)
+        return CockpitV5Snapshot(
+            headingRadians: heading,
+            speedWorldUnitsPerSecond: driveSpeed,
+            playerPosition: position(tankPosition),
+            terrainElevationWorldUnits: LandscapeTopology.height(tankPosition),
+            sector: sectorName, wave: wave, lives: lives, score: score,
+            bestScore: bestScore, difficultyLabel: threatLevel.rawValue,
+            shotsFired: shotTally.fired, shotsHit: shotTally.hits,
+            roundsRemaining: cannon.roundsRemaining,
+            magazineCapacity: cannon.maxRounds,
+            reloadRemainingSeconds: cannon.reloadRemaining,
+            reloadPeriodSeconds: cannon.lastReloadDuration,
+            shieldRemainingSeconds: shieldDuration,
+            shieldCooldownSeconds: shieldCooldown,
+            chaffCharges: chaffCharges, target: selectedTarget,
+            contacts: contacts,
+            projectiles: shells.map {
+                CockpitV5Snapshot.Projectile(
+                    position: position($0.center),
+                    hostile: $0.hostile, payload: $0.payload)
+            })
     }
 
     private func targetTelemetry() -> TargetTrack? {
