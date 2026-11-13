@@ -290,6 +290,8 @@ final class BattlefieldScene: SKScene {
     // vehicle). Classic mode uses the original coordinates, unchanged.
     private let commandDeck = SKNode()
     private let commandShellBack = SKShapeNode()
+    private let commandShellBezel = SKShapeNode()
+    private let commandShellShadow = SKShapeNode()
     private let commandShellEdges = SKShapeNode()
     private let commandShellHighlights = SKShapeNode()
     private let commandShellHardware = SKShapeNode()
@@ -614,11 +616,14 @@ final class BattlefieldScene: SKScene {
             commandDeck.addChild(node)
         }
         commandShellBack.zPosition = 10.35
+        commandShellShadow.zPosition = 10.42
+        commandShellBezel.zPosition = 10.50
         commandShellEdges.zPosition = 16.1
         commandShellHighlights.zPosition = 16.2
         commandShellHardware.zPosition = 16.3
         commandShellAlert.zPosition = 16.4
-        for shape in [commandShellBack, commandShellEdges,
+        for shape in [commandShellBack, commandShellShadow,
+                      commandShellBezel, commandShellEdges,
                       commandShellHighlights, commandShellHardware,
                       commandShellAlert] {
             shape.lineCap = .round
@@ -2342,7 +2347,8 @@ final class BattlefieldScene: SKScene {
         // New hardware frames surround it; Classic remains untouched.
         modernCockpit.isHidden = !modern
         commandDeck.position.y = 0
-        for node in [commandShellBack, commandShellEdges,
+        for node in [commandShellBack, commandShellShadow,
+                     commandShellBezel, commandShellEdges,
                      commandShellHighlights, commandShellHardware,
                      commandShellAlert] { node.isHidden = !modern }
         for label in commandShellLabels { label.isHidden = !modern }
@@ -2461,8 +2467,9 @@ final class BattlefieldScene: SKScene {
                 ? NSColor(calibratedRed: 0.008, green: 0.040, blue: 0.060, alpha: 0.96)
                 : panelFill
             panel.strokeColor = modern
-                ? NSColor(calibratedRed: 0.18, green: 0.86, blue: 0.91, alpha: 0.85)
+                ? NSColor(calibratedRed: 0.29, green: 0.61, blue: 0.65, alpha: 0.73)
                 : amber.withAlphaComponent(0.32)
+            panel.glowWidth = modern ? 0.6 : 0
         }
         let cyan = NSColor(calibratedRed: 0.18, green: 0.97, blue: 0.95, alpha: 1)
         let orange = NSColor(calibratedRed: 1, green: 0.45, blue: 0.14, alpha: 1)
@@ -4363,6 +4370,8 @@ final class BattlefieldScene: SKScene {
         let borders = CGMutablePath()
         let high = CGMutablePath()
         let fittings = CGMutablePath()
+        let raisedBezel = CGMutablePath()
+        let shadowBezel = CGMutablePath()
         let width = w - 20
         borders.addRoundedRect(
             in: CGRect(x: 10, y: foot - 31, width: max(1, width),
@@ -4376,6 +4385,16 @@ final class BattlefieldScene: SKScene {
             let x = unit.0
             let span = unit.1
             let innerY = foot - 6
+            // Two filled stepped casings add a real sense of depth.
+            // They sit under the live screen fill, not across the telemetry.
+            shadowBezel.addRoundedRect(
+                in: CGRect(x: x - 8, y: innerY - 7,
+                           width: span + 16, height: panelHeight + 22),
+                cornerWidth: 14, cornerHeight: 14)
+            raisedBezel.addRoundedRect(
+                in: CGRect(x: x - 5, y: innerY - 4,
+                           width: span + 10, height: panelHeight + 16),
+                cornerWidth: 11, cornerHeight: 11)
             borders.addRoundedRect(
                 in: CGRect(x: x - 4, y: innerY,
                            width: span + 8,
@@ -4421,6 +4440,16 @@ final class BattlefieldScene: SKScene {
             let x2 = w - x
             segment(high, point(x2 - 9, lipY - 5), point(x2, lipY - 5))
         }
+        commandShellShadow.path = shadowBezel
+        commandShellShadow.fillColor = NSColor(
+            calibratedRed: 0.004, green: 0.009, blue: 0.012, alpha: 1)
+        commandShellShadow.strokeColor = .clear
+        commandShellBezel.path = raisedBezel
+        commandShellBezel.fillColor = NSColor(
+            calibratedRed: 0.085, green: 0.104, blue: 0.115, alpha: 1)
+        commandShellBezel.strokeColor = NSColor(
+            calibratedRed: 0.14, green: 0.17, blue: 0.19, alpha: 1)
+        commandShellBezel.lineWidth = 1.4
         commandShellEdges.path = borders
         commandShellEdges.fillColor = .clear
         commandShellEdges.strokeColor = mutedMetal
