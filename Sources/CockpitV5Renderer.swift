@@ -7,6 +7,10 @@ import AppKit
 final class CockpitV5Renderer {
     private weak var scene: SKScene?
     private let root = SKNode()
+    // Cover old HUD only in the instrument/chassis bands, including
+    // letterbox gutters; the center battlefield remains unobstructed.
+    private let topCurtain = SKShapeNode()
+    private let bottomCurtain = SKShapeNode()
     private var readouts: [String: SKLabelNode] = [:]
     private let contactsLayer = SKNode()
     private let gaugeLayer = SKNode()
@@ -22,6 +26,12 @@ final class CockpitV5Renderer {
     init(scene: SKScene) {
         self.scene = scene
         root.zPosition = 40
+        for curtain in [topCurtain, bottomCurtain] {
+            curtain.zPosition = 39
+            curtain.fillColor = NSColor(calibratedWhite: 0.045, alpha: 1)
+            curtain.strokeColor = .clear
+            scene.addChild(curtain)
+        }
         scene.addChild(root)
         compose()
     }
@@ -262,6 +272,15 @@ final class CockpitV5Renderer {
         root.position = CGPoint(x: (size.width - 1600 * scale) / 2,
                                 y: (size.height - 900 * scale) / 2)
         root.isHidden = false
+        topCurtain.isHidden = false
+        bottomCurtain.isHidden = false
+        let topBase = root.position.y + 550 * scale
+        topCurtain.path = CGPath(rect: CGRect(x: 0, y: topBase,
+                                             width: size.width,
+                                             height: max(0, size.height - topBase)), transform: nil)
+        bottomCurtain.path = CGPath(rect: CGRect(x: 0, y: 0,
+                                                width: size.width,
+                                                height: max(0, root.position.y + 152 * scale)), transform: nil)
         // Preserve the real existing rear camera; never replace it with
         // a bitmap or pretend an unavailable camera texture is live.
         if rearView.parent !== root {
@@ -279,6 +298,8 @@ final class CockpitV5Renderer {
 
     func hide() {
         root.isHidden = true
+        topCurtain.isHidden = true
+        bottomCurtain.isHidden = true
         if let scene, let camera = root.children.first(where: { $0 is SKCropNode }) {
             camera.removeFromParent()
             camera.setScale(1)
