@@ -276,7 +276,6 @@ final class CockpitV5Renderer {
         rearView.position = CGPoint(x: rearWindow.minX, y: rearWindow.minY)
         rearView.zPosition = 9
     }
-    }
 
     func hide() {
         root.isHidden = true
