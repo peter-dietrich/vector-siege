@@ -112,7 +112,9 @@ final class CockpitV53LowerDeck {
                                      size: CGSize(width: width+1, height: h+2))
             bezel.centerRect = CGRect(x: 0.15, y: 0.19, width: 0.70, height: 0.62)
             bezel.position = CGPoint(x: x + width/2, y: y+h/2)
-            bezel.zPosition = 10.5
+            // Keep all telemetry (including the chart, arc, and tank lines)
+            // above the imported bezel art; glass center remains readable.
+            bezel.zPosition = 5.5
             root.addChild(bezel)
         }
         plate(CGRect(x: x+width*0.35, y: y+h-11,
