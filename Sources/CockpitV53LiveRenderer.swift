@@ -142,7 +142,7 @@ final class CockpitV53LiveRenderer {
         root.zPosition = 36
         scene.addChild(root)
         assemble()
-        lowerDeck = CockpitV53LowerDeck(scene: scene, artworkDirectory: images)
+        lowerDeck = CockpitV53LowerDeck(scene: scene)
     }
 
     private func sprite(_ file: String, frame: CGRect, z: CGFloat, parent: SKNode? = nil) {
