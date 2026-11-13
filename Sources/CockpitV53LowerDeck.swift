@@ -7,6 +7,7 @@ import SpriteKit
 final class CockpitV53LowerDeck {
     private let root = SKNode()
     private let curtain = SKShapeNode()
+    private var chassisSprite: SKSpriteNode?
     private let metal = NSColor(calibratedRed: 0.105, green: 0.122, blue: 0.131, alpha: 1)
     private let bevel = NSColor(calibratedRed: 0.41, green: 0.43, blue: 0.42, alpha: 1)
     private let glass = NSColor(calibratedRed: 0.012, green: 0.042, blue: 0.050, alpha: 1)
@@ -83,105 +84,21 @@ final class CockpitV53LowerDeck {
     // Dedicated lower-module hardware. No stretched upper cockpit textures.
     // Every bezel shares the same Y bands and a 20pt instrument safe inset.
     private func frame(_ x: CGFloat, _ width: CGFloat, title: String, index: Int) {
-        let y: CGFloat = 57, h: CGFloat = 158
-        plate(CGRect(x: x, y: y, width: width, height: h),
-              color: NSColor(calibratedWhite: 0.045, alpha: 1),
-              stroke: NSColor(calibratedWhite: 0.11, alpha: 1),
-              radius: 10, lineWidth: 3, z: 2)
-        plate(CGRect(x: x+4, y: y+4, width: width-8, height: h-8),
-              color: metal, stroke: bevel,
-              radius: 8, lineWidth: 1.6, z: 3)
-        plate(CGRect(x: x+10, y: y+10, width: width-20, height: h-20),
-              color: NSColor(calibratedRed: 0.024, green: 0.037,
-                             blue: 0.042, alpha: 1),
-              stroke: NSColor(calibratedWhite: 0.26, alpha: 1),
-              radius: 6, lineWidth: 1.1, z: 4)
-        plate(CGRect(x: x+15, y: y+15, width: width-30, height: h-31),
-              color: glass,
-              stroke: NSColor(calibratedRed: 0.10, green: 0.33,
-                              blue: 0.31, alpha: 0.8),
-              radius: 3, z: 5)
-        // Lower-specific flat bevel highlights, precision corner armor,
-        // flush fasteners, and narrow amber running lights.
-        line(CGPoint(x: x+17, y: y+h-6),
-             CGPoint(x: x+width-17, y: y+h-6),
-             color: NSColor(calibratedWhite: 0.62, alpha: 0.8),
-             width: 1.4, z: 9)
-        line(CGPoint(x: x+19, y: y+10),
-             CGPoint(x: x+width-19, y: y+10),
-             color: NSColor(calibratedWhite: 0.30, alpha: 0.85),
-             width: 1, z: 9)
-        plate(CGRect(x: x+width*0.35, y: y+h-8,
-                     width: width*0.30, height: 3.5),
-              color: amber, stroke: .clear, radius: 1.2, z: 11)
-        for side in [false, true] {
-            let anchorX = side ? x+width-20 : x+6
-            let bracket = CGMutablePath()
-            if side {
-                bracket.move(to: CGPoint(x: anchorX-8, y: y+9))
-                bracket.addLine(to: CGPoint(x: anchorX+7, y: y+9))
-                bracket.addLine(to: CGPoint(x: anchorX+7, y: y+30))
-            } else {
-                bracket.move(to: CGPoint(x: anchorX, y: y+30))
-                bracket.addLine(to: CGPoint(x: anchorX, y: y+9))
-                bracket.addLine(to: CGPoint(x: anchorX+15, y: y+9))
-            }
-            let armor = SKShapeNode(path: bracket)
-            armor.strokeColor = bevel
-            armor.lineWidth = 2.3
-            armor.zPosition = 9
-            root.addChild(armor)
-            plate(CGRect(x: side ? x+width-18 : x+13, y: y+21,
-                         width: 3, height: 21),
-                  color: amber.withAlphaComponent(0.82),
-                  stroke: .clear, radius: 1, z: 9)
-        }
-        for px in [x+9, x+width-9] {
-            for py in [y+12, y+h-12] {
-                let bolt = SKShapeNode(circleOfRadius: 2.6)
-                bolt.position = CGPoint(x: px, y: py)
-                bolt.fillColor = NSColor(calibratedWhite: 0.15, alpha: 1)
-                bolt.strokeColor = NSColor(calibratedWhite: 0.65, alpha: 1)
-                bolt.lineWidth = 0.8
-                bolt.zPosition = 10
-                root.addChild(bolt)
-            }
-        }
-        label("title\(index)", title, x: x+21, y: 185,
+        // The structural skin defines five exact cutouts. Text stays live.
+        label("title\(index)", title, x: x+22, y: 184,
               size: 11, color: mint)
-        line(CGPoint(x: x+21, y: 172),
-             CGPoint(x: x+width-21, y: 172),
-             color: muted.withAlphaComponent(0.3), width: 0.8, z: 8)
     }
 
     private func build() {
-        // One armored lower chassis spanning the five original instrument
-        // positions. Connected vertical supports terminate at the viewport
-        // boundary and never cover combat, silhouettes, or targeting.
-        plate(CGRect(x: 11, y: 45, width: 1578, height: 187),
-              color: NSColor(calibratedWhite: 0.055, alpha: 1),
-              stroke: bevel, radius: 13, lineWidth: 2.5)
-        plate(CGRect(x: 18, y: 211, width: 1564, height: 14),
-              color: metal, stroke: NSColor(calibratedWhite: 0.28, alpha: 1),
-              radius: 4, lineWidth: 1.2, z: 2)
-        // Beam, armored seams and lighting keep a continuous silhouette.
-        plate(CGRect(x: 23, y: 228, width: 1554, height: 10),
-              color: NSColor(calibratedWhite: 0.17, alpha: 1),
-              stroke: .clear, radius: 3, z: 1)
-        for x in [31.0, 375.0, 626.0, 1039.0, 1332.0, 1568.0] {
-            let rib = CGMutablePath()
-            rib.move(to: CGPoint(x: x-7, y: 223))
-            rib.addLine(to: CGPoint(x: x, y: 246))
-            rib.addLine(to: CGPoint(x: x+8, y: 223))
-            let armor = SKShapeNode(path: rib)
-            armor.strokeColor = bevel
-            armor.lineWidth = 3
-            armor.fillColor = .clear
-            armor.zPosition = 2
-            root.addChild(armor)
-            plate(CGRect(x: x-9, y: 226, width: 18, height: 3),
-                  color: amber.withAlphaComponent(0.75),
-                  stroke: .clear, radius: 1, z: 3)
+        // One specially rendered connected armored chassis; the cutouts,
+        // glass, hardware and control strip are ONE coherent visual layer.
+        if let texture = CockpitV53LowerChassis.texture() {
+            let chassis = SKSpriteNode(texture: texture,
+                                       size: CGSize(width: 1600, height: 256))
+            chassis.position = CGPoint(x: 800, y: 128)
+            chassis.zPosition = 1
+            root.addChild(chassis)
+            chassisSprite = chassis
         }
         frame(24, 351, title: "TANK STATUS", index: 0)
         frame(383, 243, title: "HIT RATIO", index: 1)
@@ -313,9 +230,7 @@ final class CockpitV53LowerDeck {
         label("coords", "X +0  Z +0", x: 1550, y: 80,
               size: 10, color: muted, align: .right)
 
-        // Mechanical control bar below, inspired by the approved mockup.
-        plate(CGRect(x: 11, y: 5, width: 1578, height: 47),
-              color: metal, stroke: bevel, radius: 9, lineWidth: 1.5)
+        // Physical buttons are already integrated in the unified chassis.
         let actions: [(String, String, CGFloat, CGFloat)] = [
             ("DRIVE", "↑↓", 50, 208),
             ("TURN", "←→", 269, 206),
@@ -326,11 +241,6 @@ final class CockpitV53LowerDeck {
             ("PAUSE", "P", 1357, 181)
         ]
         for (title, key, x, w) in actions {
-            plate(CGRect(x: x, y: 12, width: w, height: 32),
-                  color: glass, stroke: NSColor(calibratedWhite: 0.35, alpha: 1),
-                  radius: 5, z: 4)
-            plate(CGRect(x: x+8, y: 19, width: 3, height: 18),
-                  color: amber, stroke: .clear, radius: 1, z: 5)
             label("control_\(title)", title, x: x+17, y: 27, size: 11)
             label("key_\(title)", key, x: x+w-11, y: 27,
                   size: 9, color: amber, align: .right)
