@@ -189,12 +189,7 @@ final class CockpitV5Renderer {
     }
 
     func render(_ snapshot: CockpitV5Snapshot, size: CGSize, rearView: SKCropNode) {
-        guard size.width > 0 && size.height > 0 else { return }
-        let scale = min(size.width / 1600, size.height / 900)
-        root.setScale(scale)
-        root.position = CGPoint(x: (size.width - 1600 * scale) / 2,
-                                y: (size.height - 900 * scale) / 2)
-        root.isHidden = false
+        layout(size: size, rearView: rearView)
 
         let v = snapshot.screenReadouts
         set("fireHeading", "HDG " + (v.fireControl["heading_deg"] ?? "—") + "°")
@@ -258,6 +253,15 @@ final class CockpitV5Renderer {
             gaugeLayer.addChild(fill)
         }
 
+    }
+
+    func layout(size: CGSize, rearView: SKCropNode) {
+        guard size.width > 0 && size.height > 0 else { return }
+        let scale = min(size.width / 1600, size.height / 900)
+        root.setScale(scale)
+        root.position = CGPoint(x: (size.width - 1600 * scale) / 2,
+                                y: (size.height - 900 * scale) / 2)
+        root.isHidden = false
         // Preserve the real existing rear camera; never replace it with
         // a bitmap or pretend an unavailable camera texture is live.
         if rearView.parent !== root {
@@ -272,8 +276,14 @@ final class CockpitV5Renderer {
         rearView.position = CGPoint(x: rearWindow.minX, y: rearWindow.minY)
         rearView.zPosition = 9
     }
+    }
 
     func hide() {
         root.isHidden = true
+        if let scene, let camera = root.children.first(where: { $0 is SKCropNode }) {
+            camera.removeFromParent()
+            camera.setScale(1)
+            scene.addChild(camera)
+        }
     }
 }
