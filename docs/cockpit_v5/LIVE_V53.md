@@ -34,3 +34,15 @@ Do not commit fabricated placeholders or screenshots as live art. Sprite layers 
 
 The v5.3 prototype source contains illustrative sample readouts, a simulated rear sensor and deterministic sample map geometry. None of those are carried into live game authority. In live mode target IDs come from the current enemy list; they are display-only.
 The separate approved lower console artwork does not exist in the supplied 13 PNGs. Lower chassis polishing is a separate milestone and should not be improvised without approval.
+
+## v2026.11.13e: Mechanical systems and anti-drone machine gun
+
+- Upper metal bezels are top-aligned to the gameplay viewport instead of vertically centering in a 16:9 letterbox.
+- Vehicle Systems uses three primary readouts with bar meters (engine temperature, oil level, fuel), supporting diagnostics (coolant, oil pressure, electrical bus, engine load), and a high-contrast warning strip.
+- These are a **gameplay-derived simulation**, not measured tank sensors.
+- Hold **F** to fire twin alternating anti-drone machine guns. The main cannon remains **Space**.
+- Machine guns fire 180 rounds per wave, 0.095 seconds between shots, heat on fire, cool while playing, and lock on overheat until sufficiently cooled. Both barrels share ammunition.
+- Drone aim assist is limited to targets within 0.22 radians (~12.6°) of the tank's heading and within 125 world units.
+- Machine-gun hits can kill drones, but never damage armored vehicles, aircraft other than drones, or structures. Non-drone contacts trigger cosmetic ricochet sparks; a ricochet cannot inflict secondary damage.
+- Their ammo, heat, and shot statistics are stored in optional save fields, preserving compatibility with earlier saved games.
+- Suggested playtest: hold F near an approaching drone, confirm tracer paths and drone destruction; fire toward a ground tank and building, confirm harmless impacts; deplete magazine/overheat; save-resume and switch display modes.
