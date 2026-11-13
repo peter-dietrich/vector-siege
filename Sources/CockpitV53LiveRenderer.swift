@@ -393,10 +393,6 @@ final class CockpitV53LiveRenderer {
             dot.strokeColor = .clear
             mapShots.addChild(dot)
         }
-        set("systemsGround", String(format: "GROUND %02d", ground))
-        set("systemsAir", String(format: "AIR %02d", air))
-        set("systemsIncoming", String(format: "INBOUND %02d",
-                                      snapshot.projectiles.filter { $0.hostile }.count))
         set("mapContacts", String(format: "HOSTILE %02d / AIR %02d", ground, air))
         set("mapTarget", t.map { String(format: "TRACK / %.0f", $0.rangeWorldUnits) } ?? "NO TRACK")
         mapSweep.zRotation = CGFloat(clock * 0.48)
@@ -433,7 +429,7 @@ final class CockpitV53LiveRenderer {
         root.position = CGPoint(x: left, y: bottom + 68*scale)
         blanking.path = CGPath(rect: CGRect(x: 0, y: bottom+620*scale,
                                            width: view.width,
-                                           height: max(0, view.height-bottom-550*scale)),
+                                           height: max(0, view.height-bottom-620*scale)),
                                transform: nil)
         root.isHidden = false
         blanking.isHidden = false
