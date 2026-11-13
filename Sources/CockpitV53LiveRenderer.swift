@@ -333,7 +333,7 @@ final class CockpitV53LiveRenderer {
         text("voltage", "BUS —", x: groupX[2], y: systemsY+111, size: 9.5)
         text("engineLoad", "LOAD —", x: groupX[0], y: systemsY+89,
              size: 9.5, color: cyan)
-        text("mgSystem", "TWIN MG 180", x: groupX[1], y: systemsY+89,
+        text("oilTemperature", "OIL TEMP —", x: groupX[1], y: systemsY+89,
              size: 9.5, color: cyan)
         text("fuelEconomy", "EST — MPG", x: groupX[2], y: systemsY+89,
              size: 9.5, color: cyan)
@@ -666,7 +666,8 @@ final class CockpitV53LiveRenderer {
             powertrain.oilPressureKPa * 0.1450377))
         set("voltage", String(format: "BUS %.1f V", powertrain.voltage))
         set("engineLoad", String(format: "LOAD %.0f%%", powertrain.loadPercent))
-        set("mgSystem", String(format: "MG %03d  H%02.0f", mgAmmo, mgHeat))
+        set("oilTemperature", String(format: "OIL %.0f°F",
+            ((powertrain.engineC * 0.87 + 7) * 9/5 + 32)))
         set("fuelEconomy", powertrain.estimatedMPG.map {
             String(format: "EST %.2f MPG", $0)
         } ?? "EST — MPG")
