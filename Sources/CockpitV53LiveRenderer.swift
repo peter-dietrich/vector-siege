@@ -49,6 +49,9 @@ final class CockpitV53LiveRenderer {
     private let reloadBar = SKShapeNode()
     private let ammoBar = SKShapeNode()
     private let shieldBar = SKShapeNode()
+    private let fuelBar = SKShapeNode()
+    private let systemsStatus = SKShapeNode()
+    private let gaugeBacks = SKNode()
     private var powertrain = PowertrainModel()
     private struct PowertrainModel {
         private(set) var engineC = 41.0
@@ -258,32 +261,58 @@ final class CockpitV53LiveRenderer {
         let systemsX: CGFloat = 1137
         let systemsY: CGFloat = 900-78-263
         text("systemsTitle", "VEHICLE SYSTEMS", x: systemsX+31, y: systemsY+223, size: 12)
-        text("systemsSubtitle", "BATTLE STATUS / LIVE", x: systemsX+250, y: systemsY+223, size: 7.5, color: muted)
-        text("systemsRun", "SIMULATED TANK SENSORS", x: systemsX+31, y: systemsY+193,
-             size: 9, color: amber)
-        text("systemsScore", "SCORE 000000", x: systemsX+256, y: systemsY+193,
-             size: 9, color: pale)
-        text("engineTemp", "ENGINE   41°C", x: systemsX+31, y: systemsY+167,
-             size: 12, color: mint)
-        text("coolantTemp", "COOLANT  38°C", x: systemsX+31, y: systemsY+141,
-             size: 12)
-        text("oilPressure", "OIL PSI  41", x: systemsX+31, y: systemsY+115,
-             size: 12)
-        text("oilLevel", "OIL LVL  99%", x: systemsX+31, y: systemsY+89,
-             size: 12, color: cyan)
-        text("fuelLevel", "FUEL     96%", x: systemsX+238, y: systemsY+167,
-             size: 12, color: mint)
-        text("voltage", "VOLT    27.6V", x: systemsX+238, y: systemsY+141,
-             size: 12)
-        text("engineLoad", "ENG LOAD 18%", x: systemsX+238, y: systemsY+115,
-             size: 12)
-        text("waveStatus", "WAVE 01  /  03", x: systemsX+238, y: systemsY+89,
-             size: 12, color: cyan)
-        text("engineWarning", "POWERTRAIN NORMAL", x: systemsX+31,
-             y: systemsY+48, size: 11, color: mint)
-        text("systemsDisclaimer", "MODELLED / LIVE GAME STATE", x: systemsX+238,
-             y: systemsY+48, size: 8, color: muted)
-
+        text("systemsSubtitle", "MECHANICAL / SIMULATION", x: systemsX+234,
+             y: systemsY+223, size: 8, color: muted)
+        // Three primary instruments: large typography, separate horizontal
+        // meters and status colors. Red/amber states are reserved for faults.
+        let groupX: [CGFloat] = [systemsX+31, systemsX+168, systemsX+305]
+        let titles = ["ENGINE TEMP", "OIL LEVEL", "FUEL"]
+        let keys = ["engineTemp", "oilLevel", "fuelLevel"]
+        for index in 0..<3 {
+            let x = groupX[index]
+            text("primaryTitle_\(index)", titles[index],
+                 x: x, y: systemsY+187, size: 8, color: muted)
+            text(keys[index], "—", x: x, y: systemsY+163,
+                 size: 19, color: mint)
+            let track = SKShapeNode(rectOf: CGSize(width: 110, height: 5),
+                                    cornerRadius: 2)
+            track.position = CGPoint(x: x+55, y: systemsY+141)
+            track.fillColor = NSColor(calibratedRed: 0.15, green: 0.23,
+                                     blue: 0.25, alpha: 1)
+            track.strokeColor = .clear
+            track.zPosition = 12
+            root.addChild(track)
+        }
+        bar(ammoBar, frame: CGRect(x: groupX[0], y: systemsY+138,
+                                   width: 110, height: 5), color: mint)
+        bar(shieldBar, frame: CGRect(x: groupX[1], y: systemsY+138,
+                                     width: 110, height: 5), color: mint)
+        bar(fuelBar, frame: CGRect(x: groupX[2], y: systemsY+138,
+                                   width: 110, height: 5), color: mint)
+        // Smaller supporting diagnostics are grouped below the three gauges.
+        text("coolantTemp", "COOLANT —", x: groupX[0], y: systemsY+111, size: 9.5)
+        text("oilPressure", "OIL PSI —", x: groupX[1], y: systemsY+111, size: 9.5)
+        text("voltage", "BUS —", x: groupX[2], y: systemsY+111, size: 9.5)
+        text("engineLoad", "LOAD —", x: groupX[0], y: systemsY+89,
+             size: 9.5, color: cyan)
+        text("mgSystem", "TWIN MG 180", x: groupX[1], y: systemsY+89,
+             size: 9.5, color: cyan)
+        text("waveStatus", "WAVE 01", x: groupX[2], y: systemsY+89,
+             size: 9.5, color: cyan)
+        systemsStatus.path = CGPath(roundedRect: CGRect(x: systemsX+22,
+                                y: systemsY+25, width: 396, height: 44),
+                                cornerWidth: 5, cornerHeight: 5,
+                                transform: nil)
+        systemsStatus.fillColor = NSColor(calibratedRed: 0.032, green: 0.11,
+                                         blue: 0.095, alpha: 0.92)
+        systemsStatus.strokeColor = mint.withAlphaComponent(0.6)
+        systemsStatus.lineWidth = 1
+        systemsStatus.zPosition = 8
+        root.addChild(systemsStatus)
+        text("engineWarning", "POWERTRAIN NORMAL", x: systemsX+35,
+             y: systemsY+47, size: 12, color: mint)
+        text("systemsDisclaimer", "SIMULATED SENSORS", x: systemsX+395,
+             y: systemsY+47, size: 7, color: muted, align: .right)
     }
 
     private func updateBar(_ shape: SKShapeNode, x: CGFloat, y: CGFloat,
@@ -294,7 +323,8 @@ final class CockpitV53LiveRenderer {
     }
 
     func update(_ snapshot: CockpitV5Snapshot, clock: Double,
-                buildings: [MapBuilding]) {
+                buildings: [MapBuilding], mgAmmo: Int, mgHeat: Double,
+                mgLocked: Bool) {
         guard snapshot.validate() else { return }
         set("fireHeading", String(format: "%03.0f°", snapshot.headingDegrees))
         set("fireSpeed", String(format: "%04.1f", snapshot.speedWorldUnitsPerSecond))
@@ -402,20 +432,38 @@ final class CockpitV53LiveRenderer {
         powertrain.sample(clock: clock,
                           speed: snapshot.speedWorldUnitsPerSecond,
                           lives: snapshot.lives)
-        set("systemsScore", String(format: "SCORE %06d", snapshot.score))
-        set("engineTemp", String(format: "ENGINE  %3.0f°C", powertrain.engineC))
-        set("coolantTemp", String(format: "COOLANT %3.0f°C", powertrain.coolantC))
-        set("oilPressure", String(format: "OIL PSI %3.0f",
+        set("engineTemp", String(format: "%.0f°C", powertrain.engineC))
+        set("oilLevel", String(format: "%.0f%%", powertrain.oilPercent))
+        set("fuelLevel", String(format: "%.0f%%", powertrain.fuelPercent))
+        set("coolantTemp", String(format: "COOLANT %.0f°C", powertrain.coolantC))
+        set("oilPressure", String(format: "OIL %.0f PSI",
             powertrain.oilPressureKPa * 0.1450377))
-        set("oilLevel", String(format: "OIL LVL %3.0f%%", powertrain.oilPercent))
-        set("fuelLevel", String(format: "FUEL    %3.0f%%", powertrain.fuelPercent))
-        set("voltage", String(format: "VOLT    %.1fV", powertrain.voltage))
-        set("engineLoad", String(format: "ENG LOAD %2.0f%%", powertrain.loadPercent))
-        set("waveStatus", String(format: "WAVE %02d / %02d",
-                                       snapshot.wave, snapshot.lives))
-        set("engineWarning", powertrain.warning)
-        labels["engineWarning"]?.fontColor =
-            powertrain.warning == "POWERTRAIN NORMAL" ? mint : amber
+        set("voltage", String(format: "BUS %.1f V", powertrain.voltage))
+        set("engineLoad", String(format: "LOAD %.0f%%", powertrain.loadPercent))
+        set("mgSystem", String(format: "MG %03d  H%02.0f", mgAmmo, mgHeat))
+        set("waveStatus", String(format: "WAVE %02d", snapshot.wave))
+        let warning = powertrain.warning == "POWERTRAIN NORMAL" && mgLocked
+            ? "MG OVERHEAT / COOLING" : powertrain.warning
+        set("engineWarning", warning)
+        let alert = warning != "POWERTRAIN NORMAL"
+        labels["engineWarning"]?.fontColor = alert ? amber : mint
+        systemsStatus.strokeColor = alert ? amber : mint.withAlphaComponent(0.6)
+        systemsStatus.fillColor = alert
+            ? NSColor(calibratedRed: 0.18, green: 0.082, blue: 0.025, alpha: 0.95)
+            : NSColor(calibratedRed: 0.032, green: 0.11, blue: 0.095, alpha: 0.92)
+        let sysX: CGFloat = 1137, sysY: CGFloat = 900-78-263
+        updateBar(ammoBar, x: sysX+31, y: sysY+138, full: 110,
+                  fraction: max(0, min(1, (115-powertrain.engineC)/75)))
+        updateBar(shieldBar, x: sysX+168, y: sysY+138, full: 110,
+                  fraction: powertrain.oilPercent/100)
+        updateBar(fuelBar, x: sysX+305, y: sysY+138, full: 110,
+                  fraction: powertrain.fuelPercent/100)
+        ammoBar.fillColor = powertrain.engineC > 103 ? amber : mint
+        shieldBar.fillColor = powertrain.oilPercent < 45 ? amber : mint
+        fuelBar.fillColor = powertrain.fuelPercent < 18 ? amber : mint
+        labels["engineTemp"]?.fontColor = powertrain.engineC > 103 ? amber : mint
+        labels["oilLevel"]?.fontColor = powertrain.oilPercent < 45 ? amber : mint
+        labels["fuelLevel"]?.fontColor = powertrain.fuelPercent < 18 ? amber : mint
     }
 
     /// Final per-frame pass. Legacy HUD draws underneath; never draw opaque
@@ -426,10 +474,13 @@ final class CockpitV53LiveRenderer {
         let left = (view.width - 1600*scale)/2
         let bottom = (view.height - 900*scale)/2
         root.setScale(scale)
-        root.position = CGPoint(x: left, y: bottom + 68*scale)
-        blanking.path = CGPath(rect: CGRect(x: 0, y: bottom+620*scale,
+        // Top-align the approved metal bezels regardless of viewport aspect
+        // ratio. Centering previously created a conspicuous 30px dead band.
+        root.position = CGPoint(x: left, y: view.height - 830*scale)
+        let curtainBottom = root.position.y + 548*scale
+        blanking.path = CGPath(rect: CGRect(x: 0, y: curtainBottom,
                                            width: view.width,
-                                           height: max(0, view.height-bottom-620*scale)),
+                                           height: max(0, view.height-curtainBottom)),
                                transform: nil)
         root.isHidden = false
         blanking.isHidden = false
