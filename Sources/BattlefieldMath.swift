@@ -890,7 +890,10 @@ struct SaucerPatrolClock: Codable {
 /// Classic remains at offset zero and never uses these shell dimensions.
 enum CommandCockpitLayout {
     static func deckTop(height: Double) -> Double {
-        max(235, height * 0.41)
+        // Enough room for 248-point instrument modules plus a status
+        // sill, while reserving at least 55% of a normal-sized window
+        // for the panoramic forward battlefield.
+        max(305, height * 0.45)
     }
     static func deckOffset(height: Double) -> Double {
         deckTop(height: height) - (height - 16)
