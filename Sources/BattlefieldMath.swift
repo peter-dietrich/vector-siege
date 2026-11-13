@@ -794,6 +794,11 @@ struct SiegeSnapshot: Codable {
     var directorWaveStartLives: Int? = nil
     var directorWaveStartFired: Int? = nil
     var directorWaveStartHits: Int? = nil
+    // Anti-drone machine gun fields are optional for old save compatibility.
+    var machineGunAmmo: Int? = nil
+    var machineGunHeat: Double? = nil
+    var machineGunFired: Int? = nil
+    var machineGunHits: Int? = nil
 }
 
 struct SiegeSaveSlot: Codable, Identifiable {
