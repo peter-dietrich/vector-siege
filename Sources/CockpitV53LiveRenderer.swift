@@ -223,14 +223,14 @@ final class CockpitV53LiveRenderer {
         text("systemsGround", "GROUND 00", x: systemsX+31, y: systemsY+99, size: 11, color: pale)
         text("systemsAir", "AIR 00", x: systemsX+31, y: systemsY+82, size: 11, color: cyan)
         text("systemsIncoming", "INBOUND 00", x: systemsX+31, y: systemsY+65, size: 11, color: amber)
-        text("mainGun", "MAIN GUN", x: systemsX+232, y: systemsY+121, size: 8, color: muted)
-        text("ammo", "40 / 40", x: systemsX+232, y: systemsY+103, size: 13)
+        text("mainGun", "DEFENSIVE SYSTEMS", x: systemsX+232, y: systemsY+121, size: 8, color: muted)
+        text("ammo", "SHIELD READY", x: systemsX+232, y: systemsY+103, size: 12, color: mint)
         bar(ammoBar, frame: CGRect(x: systemsX+232, y: systemsY+91, width: 159, height: 5), color: mint)
-        text("shieldCaption", "SHIELD", x: systemsX+232, y: systemsY+75, size: 8, color: muted)
-        text("shield", "READY", x: systemsX+306, y: systemsY+75, size: 8, color: mint)
+        text("shieldCaption", "COUNTERMEASURES", x: systemsX+232, y: systemsY+75, size: 8, color: muted)
+        text("shield", "2 CHARGES", x: systemsX+347, y: systemsY+75, size: 8, color: mint)
         bar(shieldBar, frame: CGRect(x: systemsX+232, y: systemsY+61, width: 159, height: 5), color: amber)
-        text("chaff", "CHAFF 02", x: systemsX+31, y: systemsY+38, size: 9, color: mint)
-        text("reload", "RELOAD READY", x: systemsX+162, y: systemsY+38, size: 9)
+        text("chaff", "ACCURACY 0%", x: systemsX+31, y: systemsY+38, size: 9, color: mint)
+        text("reload", "FIRED 000", x: systemsX+162, y: systemsY+38, size: 9)
     }
 
     private func updateBar(_ shape: SKShapeNode, x: CGFloat, y: CGFloat,
@@ -355,17 +355,16 @@ final class CockpitV53LiveRenderer {
         set("wave", String(format: "WAVE %02d", snapshot.wave))
         set("lives", String(format: "LIVES %02d", snapshot.lives))
         set("difficulty", snapshot.difficultyLabel.uppercased())
-        set("ammo", "\(snapshot.roundsRemaining) / \(snapshot.magazineCapacity)")
-        set("shield", snapshot.shieldRemainingSeconds > 0 ? "ACTIVE"
-            : snapshot.shieldCooldownSeconds > 0 ? "CHARGING" : "READY")
-        set("chaff", String(format: "CHAFF %02d", snapshot.chaffCharges))
-        set("reload", reloading ? "RELOAD CYCLING" : "RELOAD READY")
+        set("ammo", snapshot.shieldRemainingSeconds > 0 ? "SHIELD ACTIVE" : snapshot.shieldCooldownSeconds > 0 ? "RECHARGING" : "SHIELD READY")
+        set("shield", String(format: "%d CHARGES", snapshot.chaffCharges))
+        set("chaff", String(format: "ACCURACY %.0f%%", snapshot.accuracyPercent))
+        set("reload", String(format: "FIRED %03d", snapshot.shotsFired))
         let systemsX: CGFloat = 1137
         let systemsY: CGFloat = 900-78-263
         updateBar(ammoBar, x: systemsX+232, y: systemsY+91, full: 159,
-                  fraction: snapshot.ammunitionFraction)
-        let shieldFraction = snapshot.shieldRemainingSeconds > 0 ? 1.0
-            : snapshot.shieldCooldownSeconds > 0 ? 0.15 : 1.0
+                  fraction: snapshot.shieldRemainingSeconds > 0 ? 1 :
+                    snapshot.shieldCooldownSeconds > 0 ? 0.12 : 1)
+        let shieldFraction = Double(snapshot.chaffCharges)/2.0
         updateBar(shieldBar, x: systemsX+232, y: systemsY+61, full: 159, fraction: shieldFraction)
     }
 
