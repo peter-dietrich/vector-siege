@@ -2,6 +2,7 @@
 // Not imported by BattlefieldScene until the design proof is approved.
 // Source of truth: docs/cockpit_v5/asset_manifest.json.
 import Foundation
+import CoreGraphics
 
 enum CockpitV5Contract {
     struct Frame: Decodable {
