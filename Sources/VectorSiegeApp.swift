@@ -20,6 +20,7 @@ struct VectorSiegeApp: App {
 enum DisplayMode: String, CaseIterable, Identifiable {
     case classic = "Classic"
     case modern = "Modern"
+    case realistic = "Realistic"
     var id: String { rawValue }
 }
 
@@ -93,7 +94,7 @@ struct SiegeWindow: View {
                     ForEach(DisplayMode.allCases) { Text($0.rawValue).tag($0) }
                 }
                 .pickerStyle(.segmented)
-                .frame(width: 190)
+                .frame(width: 252)
                 Picker("Level", selection: $session.threatLevel) {
                     ForEach(ThreatLevel.allCases) { Text($0.rawValue).tag($0) }
                 }
