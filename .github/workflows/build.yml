@@ -9,6 +9,10 @@ jobs:
       - uses: actions/checkout@v4
       - name: Geometry smoke test
         run: bash Tests/check-geometry.sh
+      - name: Validate v5 cockpit artwork translation contract (draft)
+        run: |
+          python3 Tests/check-cockpit-v5.py --svg "$RUNNER_TEMP/cockpit-v5-registration.svg"
+          swiftc -typecheck prototypes/CockpitV5/CockpitContract.swift
       - name: Build Vector Siege
         run: xcodebuild -project VectorSiege.xcodeproj -scheme VectorSiege -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO build
       - name: Build release candidate
