@@ -231,6 +231,21 @@ final class BattlefieldScene: SKScene {
     private let radarCompassLabels = (0..<4).map { _ in SKLabelNode(fontNamed: "Menlo-Bold") }
     private let radarPanel = SKShapeNode()
     private let rearPanel = SKShapeNode()
+    // Prebaked material textures: rendered once, never each simulation frame.
+    // These are physical screen surfaces; live labels/contacts stay SpriteKit.
+    private lazy var consoleTexture = Self.makeConsoleTexture()
+    private lazy var opticsTexture = Self.makeOpticsTexture()
+    private lazy var monitorMaterials = (0..<4).map { _ in
+        SKSpriteNode(texture: consoleTexture)
+    }
+    private lazy var bottomMaterial = SKSpriteNode(texture: consoleTexture)
+    private lazy var rearOpticsMaterial = SKSpriteNode(texture: opticsTexture)
+    private let opticsGlass = SKShapeNode()
+    private let opticsCaption = SKLabelNode(fontNamed: "Menlo-Bold")
+    private let radarGroundShading = SKShapeNode()
+    private let radarTargetLine = SKShapeNode()
+    private let lowerTerrainFill = SKShapeNode()
+    private let lowerTankFill = SKShapeNode()
     private let rearView = SKCropNode()
     private let rearMask = SKShapeNode()
     private let rearGround = SKShapeNode()
@@ -407,6 +422,17 @@ final class BattlefieldScene: SKScene {
         rearPanel.lineWidth = 0.8
         addChild(rearPanel)
         rearView.zPosition = 12.5
+        rearOpticsMaterial.zPosition = -1.0
+        rearView.addChild(rearOpticsMaterial)
+        opticsGlass.zPosition = 5.0
+        opticsGlass.fillColor = .clear
+        opticsGlass.lineCap = .round
+        rearView.addChild(opticsGlass)
+        opticsCaption.zPosition = 5.1
+        opticsCaption.fontSize = 9
+        opticsCaption.horizontalAlignmentMode = .left
+        opticsCaption.verticalAlignmentMode = .center
+        rearView.addChild(opticsCaption)
         rearMask.path = CGPath(roundedRect: CGRect(x: -86, y: -54, width: 172, height: 108),
                                cornerWidth: 6, cornerHeight: 6, transform: nil)
         rearMask.fillColor = .white
@@ -439,8 +465,14 @@ final class BattlefieldScene: SKScene {
         proximityWings.fillColor = .clear
         radarStreetGrid.zPosition = 12.8
         addChild(radarStreetGrid)
+        radarGroundShading.zPosition = 12.65
+        radarGroundShading.strokeColor = .clear
+        addChild(radarGroundShading)
         radarObstacleContacts.zPosition = 13.1
         addChild(radarObstacleContacts)
+        radarTargetLine.zPosition = 13.52
+        radarTargetLine.fillColor = .clear
+        addChild(radarTargetLine)
         for panel in [telemetryLeftPanel, telemetryRightPanel] {
             panel.zPosition = 11
             panel.lineWidth = 0.8
@@ -474,6 +506,14 @@ final class BattlefieldScene: SKScene {
         addChild(levelFrame)
         modernCockpit.zPosition = 11.5
         addChild(modernCockpit)
+        bottomMaterial.zPosition = 0.15
+        modernCockpit.addChild(bottomMaterial)
+        lowerTerrainFill.zPosition = 1.2
+        lowerTerrainFill.strokeColor = .clear
+        modernCockpit.addChild(lowerTerrainFill)
+        lowerTankFill.zPosition = 1.2
+        lowerTankFill.strokeColor = .clear
+        modernCockpit.addChild(lowerTankFill)
         for (node, z) in [(modernTrim, 0.6), (modernLowerDash, 0.0),
                           (modernCompassPlate, 0.5), (modernLowerLines, 0.7), (modernTankIcon, 1.4),
                           (modernTerrainProfile, 1.4), (modernHeadingPointer, 1.5),
@@ -595,7 +635,8 @@ final class BattlefieldScene: SKScene {
             telemetryLeftPanel, telemetryRightPanel,
             radarPanel, rearPanel, rearView, rearLabel,
             telemetryLeftAccent, telemetryRightAccent,
-            radar, radarStreetGrid, radarObstacleContacts,
+            radar, radarStreetGrid, radarGroundShading,
+            radarObstacleContacts, radarTargetLine,
             radarSweepBeam, radarEnemyContacts, radarHunterContacts,
             radarSaucerContacts, radarDroneContacts, radarActiveDrones,
             radarTargetCue, radarFighterContacts,
@@ -608,6 +649,10 @@ final class BattlefieldScene: SKScene {
             telemetryCoordinates, telemetryRightDetail,
             telemetryRightFootnote, telemetryAmmo
         ]
+        for surface in monitorMaterials {
+            surface.zPosition = 11.18
+            commandDeck.addChild(surface)
+        }
         for node in moduleNodes +
             radarSweepGlow.map({ $0 as SKNode }) +
             radarCompassLabels.map({ $0 as SKNode }) +
@@ -2300,6 +2345,74 @@ final class BattlefieldScene: SKScene {
         Runtime: \(String(format: "%.1f", gameClock)) seconds
         Note: Manually copied from the game. No data sent automatically.
         """
+    }
+
+    /// Baked graphite/anti-reflective display glass. Fills and material
+    /// shading provide apparent depth without drawing fuzzy wireframe trim.
+    /// CoreGraphics runs only during initialization, not the render loop.
+    private static func materialTexture(optics: Bool) -> SKTexture {
+        let size = 256
+        let colorSpace = CGColorSpaceCreateDeviceRGB()
+        guard let ctx = CGContext(data: nil, width: size, height: size,
+                                  bitsPerComponent: 8, bytesPerRow: 0,
+                                  space: colorSpace,
+                                  bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
+        else { return SKTexture(image: NSImage(size: NSSize(width: 2, height: 2))) }
+        let stops: [CGFloat] = [0, 0.20, 0.52, 0.85, 1]
+        let shades: [CGColor] = optics ? [
+            NSColor(calibratedRed: 0.012, green: 0.020, blue: 0.025, alpha: 1).cgColor,
+            NSColor(calibratedRed: 0.030, green: 0.048, blue: 0.052, alpha: 1).cgColor,
+            NSColor(calibratedRed: 0.058, green: 0.081, blue: 0.086, alpha: 1).cgColor,
+            NSColor(calibratedRed: 0.027, green: 0.048, blue: 0.052, alpha: 1).cgColor,
+            NSColor(calibratedRed: 0.010, green: 0.018, blue: 0.022, alpha: 1).cgColor
+        ] : [
+            NSColor(calibratedRed: 0.012, green: 0.019, blue: 0.025, alpha: 1).cgColor,
+            NSColor(calibratedRed: 0.025, green: 0.041, blue: 0.048, alpha: 1).cgColor,
+            NSColor(calibratedRed: 0.045, green: 0.066, blue: 0.075, alpha: 1).cgColor,
+            NSColor(calibratedRed: 0.024, green: 0.035, blue: 0.042, alpha: 1).cgColor,
+            NSColor(calibratedRed: 0.010, green: 0.017, blue: 0.023, alpha: 1).cgColor
+        ]
+        if let gradient = CGGradient(colorsSpace: colorSpace,
+                                     colors: shades as CFArray,
+                                     locations: stops) {
+            ctx.drawLinearGradient(gradient,
+                start: CGPoint(x: 0, y: 0), end: CGPoint(x: 256, y: 256),
+                options: [])
+        }
+        // A soft anti-reflective diagonal streak and one narrow specular
+        // shoulder suggest actual laminated display glass.
+        ctx.setFillColor(NSColor(calibratedWhite: 1, alpha: optics ? 0.022 : 0.016).cgColor)
+        ctx.move(to: CGPoint(x: 0, y: 216))
+        ctx.addLine(to: CGPoint(x: 175, y: 256))
+        ctx.addLine(to: CGPoint(x: 238, y: 256))
+        ctx.addLine(to: CGPoint(x: 0, y: 185))
+        ctx.closePath()
+        ctx.fillPath()
+        ctx.setStrokeColor(NSColor(calibratedWhite: 1, alpha: 0.045).cgColor)
+        ctx.setLineWidth(1)
+        ctx.stroke(CGRect(x: 3, y: 3, width: 250, height: 250))
+        // Sparse pixel-level luminance variation avoids flat CG color slabs.
+        // Never a scanline effect and never animated noisy/fizzy textures.
+        for i in 0..<500 {
+            let x = CGFloat((i * 73 + 19) % 253)
+            let y = CGFloat((i * 109 + 37) % 253)
+            ctx.setFillColor(NSColor(calibratedWhite: 1, alpha: 0.009).cgColor)
+            ctx.fill(CGRect(x: x, y: y, width: 1, height: 1))
+        }
+        guard let cgImage = ctx.makeImage() else {
+            return SKTexture(image: NSImage(size: NSSize(width: 2, height: 2)))
+        }
+        let texture = SKTexture(cgImage: cgImage)
+        texture.filteringMode = .linear
+        return texture
+    }
+
+    private static func makeConsoleTexture() -> SKTexture {
+        materialTexture(optics: false)
+    }
+
+    private static func makeOpticsTexture() -> SKTexture {
+        materialTexture(optics: true)
     }
 
     private func configurePalette() {
