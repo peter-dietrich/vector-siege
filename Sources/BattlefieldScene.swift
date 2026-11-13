@@ -4111,7 +4111,11 @@ final class BattlefieldScene: SKScene {
         border.addLine(to: point(x0, bottomY + cut))
         border.closeSubpath()
         modernLowerDash.path = border
-        modernLowerDash.strokeColor = cyan
+        bottomMaterial.position = point(w * 0.5, (topY + bottomY) * 0.5)
+        bottomMaterial.size = CGSize(width: w - 28,
+                                     height: max(1, bottomHeight - 8))
+        modernLowerDash.strokeColor = NSColor(
+            calibratedRed: 0.26, green: 0.39, blue: 0.42, alpha: 0.85)
         modernLowerDash.fillColor = NSColor(
             calibratedRed: 0.008, green: 0.041, blue: 0.055, alpha: 0.97)
 
@@ -4174,6 +4178,20 @@ final class BattlefieldScene: SKScene {
         segment(tankPath, point(leftEdge + 77, wheelY + 31),
                 point(rightEdge + 12, wheelY + 31))
         modernTankIcon.path = tankPath
+        let hull = CGMutablePath()
+        hull.move(to: point(leftEdge + 7, wheelY + 18))
+        hull.addLine(to: point(rightEdge - 7, wheelY + 18))
+        hull.addLine(to: point(rightEdge - 10, wheelY + 2))
+        hull.addLine(to: point(leftEdge + 11, wheelY + 2))
+        hull.closeSubpath()
+        hull.move(to: point(leftEdge + 31, wheelY + 21))
+        hull.addLine(to: point(leftEdge + 36, wheelY + 35))
+        hull.addLine(to: point(leftEdge + 69, wheelY + 35))
+        hull.addLine(to: point(leftEdge + 77, wheelY + 21))
+        hull.closeSubpath()
+        lowerTankFill.path = hull
+        lowerTankFill.fillColor = NSColor(
+            calibratedRed: 0.18, green: 0.39, blue: 0.37, alpha: 0.85)
 
         // Tank integrity is a readiness proxy based on remaining lives; the
         // game doesn't yet simulate component-by-component armor damage.
@@ -4315,6 +4333,20 @@ final class BattlefieldScene: SKScene {
                     point(x, plotBottom + 10))
         }
         modernTerrainProfile.path = terrain
+        let terrainFill = CGMutablePath()
+        terrainFill.move(to: point(plotStart, plotBottom))
+        for i in 0...48 {
+            let t = Double(i) / 48
+            let bearing = heading + (t - 0.5) * 1.05
+            let elevation = plotBottom + 16 +
+                min(25.0, ridge(bearing, multiplier: 0.48))
+            terrainFill.addLine(to: point(plotStart + plotWidth*t, elevation))
+        }
+        terrainFill.addLine(to: point(plotEnd, plotBottom))
+        terrainFill.closeSubpath()
+        lowerTerrainFill.path = terrainFill
+        lowerTerrainFill.fillColor = NSColor(
+            calibratedRed: 0.12, green: 0.30, blue: 0.32, alpha: 0.79)
         modernTerrainLabel.position = point(x3 + 18, topY - 28)
         modernTerrainLabel.horizontalAlignmentMode = .left
         modernTerrainLabel.text = "TERRAIN / PROFILE"
@@ -4336,7 +4368,9 @@ final class BattlefieldScene: SKScene {
         modernSectorValue.fontColor = cyan
         setExtra(3, "SECTOR", x: x4 + 18, y: topY - 28,
                  size: 11, color: cyan)
-        setExtra(4, "ELEV  +0.0 m", x: x5 - 18, y: topY - 94,
+        setExtra(4, String(format: "ELEV  %+.1f m",
+                           LandscapeTopology.height(tankPosition)),
+                 x: x5 - 18, y: topY - 94,
                  size: 11, color: cyan, alignedRight: true)
         setExtra(5, String(format: "X%+.0f  Z%+.0f",
                            tankPosition.x, tankPosition.z),
@@ -4690,6 +4724,18 @@ final class BattlefieldScene: SKScene {
         telemetryRightPanel.position = point(rightCenterX, topCenterY)
         radarPanel.position = point(radarX, topCenterY)
         rearPanel.position = point(rearX, topCenterY)
+        if modernHUD {
+            let positions = [leftCenterX, radarX, rearX, rightCenterX]
+            let widths = [bankWidth, radarPanelWidth,
+                          rearPanelWidth, bankWidth]
+            for index in 0..<monitorMaterials.count {
+                let screen = monitorMaterials[index]
+                screen.position = point(positions[index], topCenterY)
+                screen.size = CGSize(width: max(1, widths[index] - 10),
+                                     height: max(1, panelHeight - 10))
+                screen.alpha = 0.98
+            }
+        }
         telemetryLeftAccent.position = point(leftCenterX - bankWidth / 2 + 6, topCenterY)
         telemetryRightAccent.position = point(rightCenterX + bankWidth / 2 - 6, topCenterY)
         telemetryLeftHeading.position = point(leftX, h - (modernHUD ? 41 : 33))
@@ -4707,6 +4753,24 @@ final class BattlefieldScene: SKScene {
         // Classic retains the original narrow rear monitor.
         let rearWidth = modernHUD ? max(120.0, rearPanelWidth - 20) : 172.0
         let rearHeight = modernHUD ? panelHeight - 53 : 108.0
+        rearOpticsMaterial.position = point(rearWidth / 2, rearHeight / 2)
+        rearOpticsMaterial.size = CGSize(width: rearWidth, height: rearHeight)
+        opticsCaption.position = point(11, 15)
+        opticsCaption.text = "EO/IR  //  REAR  180°  //  1.0X"
+        let opticPath = CGMutablePath()
+        let corner = 13.0
+        let tick = 8.0
+        for (x, dx) in [(corner, 1.0), (rearWidth - corner, -1.0)] {
+            for (y, dy) in [(corner, 1.0), (rearHeight - corner, -1.0)] {
+                segment(opticPath, point(x, y), point(x + dx*tick, y))
+                segment(opticPath, point(x, y), point(x, y + dy*tick))
+            }
+        }
+        segment(opticPath, point(rearWidth/2 - 15, rearHeight/2),
+                point(rearWidth/2 - 4, rearHeight/2))
+        segment(opticPath, point(rearWidth/2 + 4, rearHeight/2),
+                point(rearWidth/2 + 15, rearHeight/2))
+        opticsGlass.path = opticPath
         rearMask.path = CGPath(
             roundedRect: CGRect(x: 0, y: 0, width: rearWidth, height: rearHeight),
             cornerWidth: 8, cornerHeight: 8, transform: nil)
@@ -4834,6 +4898,29 @@ final class BattlefieldScene: SKScene {
             }
         }
         radarStreetGrid.path = cityMap
+        if modernHUD {
+            // Faint filled tactical blocks: this map conveys the road grid
+            // as area and mass, rather than another copy of the vector world.
+            let shaded = CGMutablePath()
+            let limit = CGRect(x: radarX - radarRadius + 2,
+                               y: radarY - radarRadius + 2,
+                               width: radarRadius * 2 - 4,
+                               height: radarRadius * 2 - 4)
+            for object in obstacles where
+                object.center.distance(to: tankPosition) < radarRange {
+                let center = projectedRadar(object.center)
+                guard limit.contains(center) else { continue }
+                let extent = max(2.4, min(10.0, object.size *
+                    radarRadius / radarRange * 0.7))
+                let square = CGRect(x: center.x - extent, y: center.y - extent,
+                                    width: extent * 2, height: extent * 2)
+                shaded.addRoundedRect(in: square,
+                                      cornerWidth: 1.5, cornerHeight: 1.5)
+            }
+            radarGroundShading.path = shaded
+        } else {
+            radarGroundShading.path = nil
+        }
 
         let obstaclesOnRadar = CGMutablePath()
         let enemyContacts = CGMutablePath()
@@ -4955,6 +5042,15 @@ final class BattlefieldScene: SKScene {
         radarDroneContacts.path = droneContacts
         radarActiveDrones.path = activeDroneContacts
         radarTargetCue.path = focusedTarget
+        if modernHUD, let selected = tacticalTarget,
+            let location = radarPoint(selected.position) {
+            let targeting = CGMutablePath()
+            let origin = point(radarX, radarY)
+            segment(targeting, origin, location)
+            radarTargetLine.path = targeting
+        } else {
+            radarTargetLine.path = nil
+        }
         radarTargetCue.strokeColor = tacticalTarget?.clearShot == false
             ? NSColor(calibratedRed: 1, green: 0.64, blue: 0.22, alpha: 1)
             : NSColor(calibratedRed: 0.45, green: 1, blue: 0.69, alpha: 1)
