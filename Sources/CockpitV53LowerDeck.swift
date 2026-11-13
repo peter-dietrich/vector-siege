@@ -6,6 +6,8 @@ import SpriteKit
 /// All numbers, graphs, compass ticks and control hints are live SpriteKit.
 final class CockpitV53LowerDeck {
     private let root = SKNode()
+    private let artworkDirectory: URL
+    private var bezelTextures: [String: SKTexture] = [:]
     private let curtain = SKShapeNode()
     private let metal = NSColor(calibratedRed: 0.105, green: 0.122, blue: 0.131, alpha: 1)
     private let bevel = NSColor(calibratedRed: 0.41, green: 0.43, blue: 0.42, alpha: 1)
@@ -25,7 +27,14 @@ final class CockpitV53LowerDeck {
     private let integrityBar = SKShapeNode()
     private let alertStripe = SKShapeNode()
 
-    init(scene: SKScene) {
+    init(scene: SKScene, artworkDirectory: URL) {
+        self.artworkDirectory = artworkDirectory
+        for name in ["cockpit_fire_bezel", "cockpit_map_bezel",
+                     "cockpit_optics_bezel", "cockpit_systems_bezel"] {
+            if let image = NSImage(contentsOf: artworkDirectory.appendingPathComponent(name + ".png")) {
+                bezelTextures[name] = SKTexture(image: image)
+            }
+        }
         curtain.zPosition = 37.8
         curtain.fillColor = NSColor(calibratedWhite: 0.025, alpha: 1)
         curtain.strokeColor = .clear
@@ -92,9 +101,23 @@ final class CockpitV53LowerDeck {
         plate(CGRect(x: x+10, y: y+12, width: width-20, height: h-25),
               color: glass, stroke: amber.withAlphaComponent(0.44),
               radius: 5, lineWidth: 0.9, z: 4)
+        // The same original alpha bezel used by the upper four instruments.
+        // Nine-slice scaling preserves armor corners, bolts and edge lighting
+        // despite the shorter lower instrument proportions.
+        let choices = ["cockpit_fire_bezel", "cockpit_map_bezel",
+                       "cockpit_optics_bezel", "cockpit_systems_bezel",
+                       "cockpit_fire_bezel"]
+        if let texture = bezelTextures[choices[index]] {
+            let bezel = SKSpriteNode(texture: texture,
+                                     size: CGSize(width: width+1, height: h+2))
+            bezel.centerRect = CGRect(x: 0.15, y: 0.19, width: 0.70, height: 0.62)
+            bezel.position = CGPoint(x: x + width/2, y: y+h/2)
+            bezel.zPosition = 10.5
+            root.addChild(bezel)
+        }
         plate(CGRect(x: x+width*0.35, y: y+h-11,
                      width: width*0.30, height: 3),
-              color: amber, stroke: .clear, radius: 1.2, z: 8)
+              color: amber, stroke: .clear, radius: 1.2, z: 11)
         plate(CGRect(x: x+14, y: y+17, width: 3, height: 24),
               color: amber.withAlphaComponent(0.72),
               stroke: .clear, radius: 1, z: 8)
@@ -156,13 +179,28 @@ final class CockpitV53LowerDeck {
                                        width: 14, height: 14))
         }
         tankLines.path = tank
+        // Fit the side elevation to the left half; leave the right side for
+        // integrity and system state, as in the approved mockup.
+        tankLines.xScale = 0.57
+        tankLines.position = CGPoint(x: 32, y: 0)
         tankLines.strokeColor = cyan
         tankLines.fillColor = .clear
         tankLines.lineWidth = 1.5
         tankLines.zPosition = 10
         root.addChild(tankLines)
-        label("hull", "INTEGRITY 100%", x: 47, y: 91, size: 12, color: mint)
-        label("tankState", "SYSTEMS ONLINE", x: 47, y: 75, size: 10)
+        label("hullLabel", "INTEGRITY", x: 223, y: 143, size: 9, color: muted)
+        label("hull", "100%", x: 350, y: 143, size: 17, color: mint, align: .right)
+        label("tankState", "SYSTEMS ONLINE", x: 223, y: 110, size: 10)
+        label("tankMode", "MODE / COMBAT", x: 223, y: 88, size: 10, color: cyan)
+        plate(CGRect(x: 223, y: 130, width: 127, height: 4),
+              color: NSColor(calibratedRed: 0.12, green: 0.30, blue: 0.27, alpha: 1),
+              stroke: .clear, radius: 1, z: 9)
+        integrityBar.path = CGPath(roundedRect: CGRect(x: 223, y: 130, width: 127, height: 4),
+                                   cornerWidth: 1, cornerHeight: 1, transform: nil)
+        integrityBar.fillColor = mint
+        integrityBar.strokeColor = .clear
+        integrityBar.zPosition = 12
+        root.addChild(integrityBar)
 
         // 02 / Numeric firing efficiency and the original circular instrument.
         label("hitPercent", "0%", x: 403, y: 113, size: 34, color: cyan)
@@ -232,6 +270,8 @@ final class CockpitV53LowerDeck {
         root.addChild(terrainTrace)
         label("terrainMinMax", "PROFILE / LIVE", x: 1067, y: 71,
               size: 9, color: muted)
+        label("terrainTag", "FORWARD TERRAIN  /  480 FT", x: 1067, y: 162,
+              size: 8, color: cyan)
 
         // 05 / Separate grid position and elevation; no duplication of nav.
         label("sector", "D-04", x: 1457, y: 143, size: 29,
@@ -245,13 +285,13 @@ final class CockpitV53LowerDeck {
         plate(CGRect(x: 11, y: 5, width: 1578, height: 47),
               color: metal, stroke: bevel, radius: 9, lineWidth: 1.5)
         let actions: [(String, String, CGFloat, CGFloat)] = [
-            ("DRIVE", "W/S", 50, 215),
-            ("TURN", "A/D", 276, 210),
-            ("SPACE / CANNON", "SPACE", 497, 259),
-            ("TWIN MG", "F", 768, 214),
-            ("SHIELD", "SHIFT", 994, 195),
-            ("CHAFF", "E", 1200, 170),
-            ("PAUSE", "P", 1380, 158)
+            ("DRIVE", "↑↓", 50, 208),
+            ("TURN", "←→", 269, 206),
+            ("CANNON", "SPACE", 486, 255),
+            ("TWIN MG", "F", 752, 208),
+            ("SHIELD", "SHIFT", 971, 194),
+            ("CHAFF", "E", 1176, 169),
+            ("PAUSE", "P", 1357, 181)
         ]
         for (title, key, x, w) in actions {
             plate(CGRect(x: x, y: 12, width: w, height: 32),
@@ -267,8 +307,12 @@ final class CockpitV53LowerDeck {
 
     func update(_ snap: CockpitV5Snapshot, terrain: [Double]) {
         let integrity = min(100, max(0, 100.0 * Double(snap.lives) / 3))
-        set("hull", String(format: "INTEGRITY %.0f%%", integrity))
-        set("tankState", snap.lives <= 1 ? "SYSTEMS / CRITICAL" : "SYSTEMS / ONLINE")
+        set("hull", String(format: "%.0f%%", integrity))
+        set("tankState", snap.lives <= 1 ? "SYSTEMS CRITICAL" : "SYSTEMS ONLINE")
+        integrityBar.path = CGPath(roundedRect: CGRect(x: 223, y: 130,
+                               width: max(0.1, 127*CGFloat(integrity/100)), height: 4),
+                               cornerWidth: 1, cornerHeight: 1, transform: nil)
+        integrityBar.fillColor = snap.lives <= 1 ? amber : mint
         labels["hull"]?.fontColor = snap.lives <= 1 ? amber : mint
         set("hitPercent", String(format: "%.0f%%", snap.accuracyPercent))
         set("hitCount", String(format: "HITS %03d", snap.shotsHit))
@@ -337,9 +381,11 @@ final class CockpitV53LowerDeck {
         guard size.width > 0 && size.height > 0 else { return }
         let scale = min(size.width/1600, size.height/900)
         root.setScale(scale)
-        root.position = CGPoint(x: (size.width-1600*scale)/2, y: 0)
+        // Raise the deck so the physical keycaps do not disappear behind the
+        // app's bottom help strip. Preserve full width responsive scaling.
+        root.position = CGPoint(x: (size.width-1600*scale)/2, y: 32*scale)
         curtain.path = CGPath(rect: CGRect(x: 0, y: 0, width: size.width,
-                                           height: 232*scale), transform: nil)
+                                           height: 264*scale), transform: nil)
         root.isHidden = false
         curtain.isHidden = false
     }
