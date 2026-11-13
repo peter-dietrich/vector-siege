@@ -2459,6 +2459,15 @@ final class BattlefieldScene: SKScene {
         // Keep the player's proven top-mounted telemetry arrangement.
         // New hardware frames surround it; Classic remains untouched.
         modernCockpit.isHidden = !modern
+        for surface in monitorMaterials { surface.isHidden = !modern }
+        bottomMaterial.isHidden = !modern
+        rearOpticsMaterial.isHidden = !modern
+        opticsGlass.isHidden = !modern
+        opticsCaption.isHidden = !modern
+        radarGroundShading.isHidden = !modern
+        radarTargetLine.isHidden = !modern
+        lowerTerrainFill.isHidden = !modern
+        lowerTankFill.isHidden = !modern
         commandDeck.position.y = 0
         for node in [commandShellBack, commandShellShadow,
                      commandShellBezel, commandShellEdges,
@@ -2559,6 +2568,12 @@ final class BattlefieldScene: SKScene {
         radarFighterContacts.glowWidth = 2.6
         radarSweepBeam.strokeColor = NSColor(calibratedRed: 0.22, green: 1, blue: 0.48, alpha: 1)
         radarSweepBeam.glowWidth = 0
+        radarGroundShading.fillColor = NSColor(
+            calibratedRed: 0.06, green: 0.14, blue: 0.15, alpha: 0.92)
+        radarTargetLine.strokeColor = NSColor(
+            calibratedRed: 0.92, green: 0.72, blue: 0.39, alpha: 0.85)
+        radarTargetLine.lineWidth = 1.3
+        radarTargetLine.glowWidth = 0
         for wedge in radarSweepGlow {
             wedge.fillColor = NSColor(calibratedRed: 0.05, green: 1, blue: 0.36, alpha: 1)
         }
@@ -2576,9 +2591,8 @@ final class BattlefieldScene: SKScene {
         let amber = NSColor(calibratedRed: 1, green: 0.72, blue: 0.40, alpha: 1)
         let panelFill = NSColor(calibratedRed: 0.018, green: 0.045, blue: 0.044, alpha: 0.90)
         for panel in [telemetryLeftPanel, telemetryRightPanel, radarPanel, rearPanel] {
-            panel.fillColor = modern
-                ? NSColor(calibratedRed: 0.008, green: 0.040, blue: 0.060, alpha: 0.96)
-                : panelFill
+            // Layered texture replaces the flat neon screen interior.
+            panel.fillColor = modern ? .clear : panelFill
             panel.strokeColor = modern
                 ? NSColor(calibratedRed: 0.29, green: 0.61, blue: 0.65, alpha: 0.73)
                 : amber.withAlphaComponent(0.32)
@@ -2589,10 +2603,10 @@ final class BattlefieldScene: SKScene {
         modernTrim.strokeColor = cyan
         modernTrim.lineWidth = 1.3
         modernTrim.glowWidth = 0.7
-        modernLowerDash.fillColor = NSColor(calibratedRed: 0.012, green: 0.052, blue: 0.070, alpha: 0.93)
+        modernLowerDash.fillColor = NSColor(calibratedRed: 0.018, green: 0.026, blue: 0.032, alpha: 0.95)
         modernLowerDash.strokeColor = cyan
         modernUpperBands.fillColor = NSColor(
-            calibratedRed: 0.08, green: 0.28, blue: 0.31, alpha: 0.19)
+            calibratedRed: 0.075, green: 0.12, blue: 0.14, alpha: 0.54)
         modernUpperBands.strokeColor = .clear
         modernCompassPlate.fillColor = NSColor(
             calibratedRed: 0.014, green: 0.065, blue: 0.077, alpha: 0.95)
@@ -2646,9 +2660,13 @@ final class BattlefieldScene: SKScene {
             : green.withAlphaComponent(0.31)
         streetMarks.lineWidth = modern ? 0.9 : 0.65
         streetMarks.glowWidth = 0
-        rearGround.strokeColor = green.withAlphaComponent(0.55)
+        rearGround.strokeColor = modern
+            ? NSColor(calibratedRed: 0.43, green: 0.58, blue: 0.58, alpha: 0.56)
+            : green.withAlphaComponent(0.55)
         rearGround.lineWidth = 0.6
-        rearEnvironment.strokeColor = green.withAlphaComponent(0.82)
+        rearEnvironment.strokeColor = modern
+            ? NSColor(calibratedRed: 0.66, green: 0.78, blue: 0.76, alpha: 0.75)
+            : green.withAlphaComponent(0.82)
         rearEnvironment.lineWidth = 1.15
         rearEnemies.strokeColor = enemyOrange
         rearEnemies.lineWidth = 1.45
@@ -2671,17 +2689,28 @@ final class BattlefieldScene: SKScene {
         rearShots.strokeColor = amber
         rearShots.glowWidth = 2.6
         rearBackground.strokeColor = .clear
-        rearBackground.fillColor = NSColor(calibratedRed: 0.012, green: 0.04, blue: 0.055, alpha: 0.98)
+        rearBackground.fillColor = modern
+            ? NSColor(calibratedRed: 0.02, green: 0.03, blue: 0.04, alpha: 0.45)
+            : NSColor(calibratedRed: 0.012, green: 0.04, blue: 0.055, alpha: 0.98)
+        opticsGlass.strokeColor = NSColor(
+            calibratedRed: 0.67, green: 0.83, blue: 0.76, alpha: 0.62)
+        opticsGlass.lineWidth = 1.0
+        opticsCaption.fontColor = NSColor(
+            calibratedRed: 0.85, green: 0.88, blue: 0.81, alpha: 0.85)
         radarStreetGrid.strokeColor = modern
-            ? NSColor(calibratedRed: 0.18, green: 0.79, blue: 0.65, alpha: 0.47)
+            ? NSColor(calibratedRed: 0.30, green: 0.48, blue: 0.45, alpha: 0.42)
             : muted.withAlphaComponent(0.62)
         radarStreetGrid.fillColor = .clear
         radarStreetGrid.lineWidth = 0.65
         radarStreetGrid.glowWidth = 0
-        radarObstacleContacts.strokeColor = NSColor(calibratedRed: 0.22, green: 0.95, blue: 0.68, alpha: 0.93)
-        radarObstacleContacts.fillColor = NSColor(calibratedRed: 0.25, green: 0.98, blue: 0.67, alpha: 0.50)
+        radarObstacleContacts.strokeColor = modern
+            ? NSColor(calibratedRed: 0.24, green: 0.49, blue: 0.45, alpha: 0.76)
+            : NSColor(calibratedRed: 0.22, green: 0.95, blue: 0.68, alpha: 0.93)
+        radarObstacleContacts.fillColor = modern
+            ? NSColor(calibratedRed: 0.12, green: 0.24, blue: 0.25, alpha: 0.95)
+            : NSColor(calibratedRed: 0.25, green: 0.98, blue: 0.67, alpha: 0.50)
         radarObstacleContacts.lineWidth = 0.9
-        radarObstacleContacts.glowWidth = 1.7
+        radarObstacleContacts.glowWidth = modern ? 0 : 1.7
         for rail in [telemetryLeftAccent, telemetryRightAccent] { rail.fillColor = amber }
         for label in [telemetryLeftHeading, telemetryRightHeading] {
             label.fontColor = modern ? cyan : amber
