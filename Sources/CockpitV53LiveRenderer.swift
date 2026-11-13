@@ -54,6 +54,23 @@ final class CockpitV53LiveRenderer {
     private let gaugeBacks = SKNode()
     private var powertrain = PowertrainModel()
     private struct PowertrainModel {
+        // Display-only calibration: one game-world unit is treated as one
+        // meter, and tank fuel capacity is modeled as 130 US gallons.
+        // These assumptions are intentionally not physical tank specifications.
+        static let gallonsCapacity = 130.0
+        static let worldUnitsToMiles = 1.0 / 1609.344
+        static let secondsPerHour = 3600.0
+        var speedMPH: Double { abs(lastSpeedWorldUnits) *
+            Self.worldUnitsToMiles * Self.secondsPerHour }
+        var gallonsRemaining: Double {
+            fuelPercent / 100 * Self.gallonsCapacity
+        }
+        var estimatedMPG: Double? {
+            guard speedMPH > 1.0, gallonsPerHour > 0 else { return nil }
+            return speedMPH / gallonsPerHour
+        }
+        private var lastSpeedWorldUnits = 0.0
+        private var gallonsPerHour = 0.0
         private(set) var engineC = 41.0
         private(set) var coolantC = 38.0
         private(set) var oilPercent = 99.0
@@ -77,6 +94,7 @@ final class CockpitV53LiveRenderer {
             }
             lastClock = clock
             lastLives = lives
+            lastSpeedWorldUnits = speed
             let moving = min(1, abs(speed)/17)
             loadPercent = 16 + 73*moving
             // Gameplay-relative model, not a real vehicle's physical sensors.
@@ -84,7 +102,10 @@ final class CockpitV53LiveRenderer {
             let targetTemp = 70 + 31*moving
             engineC += (targetTemp - engineC) * min(1, dt * 0.035)
             coolantC += (engineC - 5 - coolantC) * min(1, dt * 0.06)
-            fuelPercent = max(0, fuelPercent - dt * (0.002 + 0.014*moving))
+            let fuelPercentPerSecond = 0.002 + 0.014*moving
+            gallonsPerHour = fuelPercentPerSecond / 100 *
+                Self.gallonsCapacity * Self.secondsPerHour
+            fuelPercent = max(0, fuelPercent - dt * fuelPercentPerSecond)
             oilPercent = max(0, oilPercent - dt * leakRate)
             oilPressureKPa = max(75, min(400,
                 (270 + 78*moving) * (0.60 + 0.40*oilPercent/100)
@@ -189,7 +210,7 @@ final class CockpitV53LiveRenderer {
         text("fireTrack", "SENSOR / NO CONTACT", x: 55, y: 900-78-263+188, size: 8, color: mint)
         text("fireHeadingLabel", "HEADING", x: 248, y: 900-78-263+194, size: 8, color: muted)
         text("fireHeading", "000°", x: 248, y: 900-78-263+172, size: 18, color: cyan)
-        text("fireSpeedLabel", "SPEED", x: 248, y: 900-78-263+153, size: 8, color: muted)
+        text("fireSpeedLabel", "SPEED MPH", x: 248, y: 900-78-263+153, size: 8, color: muted)
         text("fireSpeed", "0.0", x: 248, y: 900-78-263+134, size: 14)
         text("fireRange", "RNG ----", x: 248, y: 900-78-263+110, size: 9, color: amber)
         text("fireBearing", "BRG ----", x: 248, y: 900-78-263+95, size: 8.5)
@@ -297,7 +318,7 @@ final class CockpitV53LiveRenderer {
              size: 9.5, color: cyan)
         text("mgSystem", "TWIN MG 180", x: groupX[1], y: systemsY+89,
              size: 9.5, color: cyan)
-        text("waveStatus", "WAVE 01", x: groupX[2], y: systemsY+89,
+        text("fuelEconomy", "EST — MPG", x: groupX[2], y: systemsY+89,
              size: 9.5, color: cyan)
         systemsStatus.path = CGPath(roundedRect: CGRect(x: systemsX+22,
                                 y: systemsY+25, width: 396, height: 44),
@@ -327,7 +348,9 @@ final class CockpitV53LiveRenderer {
                 mgLocked: Bool) {
         guard snapshot.validate() else { return }
         set("fireHeading", String(format: "%03.0f°", snapshot.headingDegrees))
-        set("fireSpeed", String(format: "%04.1f", snapshot.speedWorldUnitsPerSecond))
+        set("fireSpeed", String(format: "%.1f",
+            abs(snapshot.speedWorldUnitsPerSecond) *
+            PowertrainModel.worldUnitsToMiles * PowertrainModel.secondsPerHour))
         let t = snapshot.target
         set("fireTrack", t == nil ? "SENSOR / NO CONTACT" : "TRACK / ACQUIRED")
         set("fireRange", t.map { String(format: "RNG %4.0f", $0.rangeWorldUnits) } ?? "RNG ----")
@@ -432,16 +455,21 @@ final class CockpitV53LiveRenderer {
         powertrain.sample(clock: clock,
                           speed: snapshot.speedWorldUnitsPerSecond,
                           lives: snapshot.lives)
-        set("engineTemp", String(format: "%.0f°C", powertrain.engineC))
+        set("engineTemp", String(format: "%.0f°F", powertrain.engineC*9/5+32))
         set("oilLevel", String(format: "%.0f%%", powertrain.oilPercent))
         set("fuelLevel", String(format: "%.0f%%", powertrain.fuelPercent))
-        set("coolantTemp", String(format: "COOLANT %.0f°C", powertrain.coolantC))
+        set("primaryTitle_2", String(format: "FUEL / %.0f GAL",
+                                     powertrain.gallonsRemaining))
+        set("coolantTemp", String(format: "COOLANT %.0f°F",
+            powertrain.coolantC*9/5+32))
         set("oilPressure", String(format: "OIL %.0f PSI",
             powertrain.oilPressureKPa * 0.1450377))
         set("voltage", String(format: "BUS %.1f V", powertrain.voltage))
         set("engineLoad", String(format: "LOAD %.0f%%", powertrain.loadPercent))
         set("mgSystem", String(format: "MG %03d  H%02.0f", mgAmmo, mgHeat))
-        set("waveStatus", String(format: "WAVE %02d", snapshot.wave))
+        set("fuelEconomy", powertrain.estimatedMPG.map {
+            String(format: "EST %.2f MPG", $0)
+        } ?? "EST — MPG")
         let warning = powertrain.warning == "POWERTRAIN NORMAL" && mgLocked
             ? "MG OVERHEAT / COOLING" : powertrain.warning
         set("engineWarning", warning)
