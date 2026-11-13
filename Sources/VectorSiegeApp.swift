@@ -20,6 +20,7 @@ struct VectorSiegeApp: App {
 enum DisplayMode: String, CaseIterable, Identifiable {
     case classic = "Classic"
     case modern = "Modern"
+    case cockpitV53 = "Cockpit v5.3"
     var id: String { rawValue }
 }
 
@@ -88,16 +89,16 @@ struct SiegeWindow: View {
                 Text("VECTOR SIEGE")
                     .font(.system(size: 15, weight: .bold, design: .monospaced))
                     .tracking(1.5)
-                Text("v2026.11.13a")
+                Text("v2026.11.13b")
                     .font(.system(size: 10, weight: .medium, design: .monospaced))
                     .foregroundStyle(.gray)
-                    .help("Source build identifier: v2026.11.13a")
+                    .help("Source build identifier: v2026.11.13b")
                 Spacer(minLength: 4)
                 Picker("Display", selection: $session.displayMode) {
                     ForEach(DisplayMode.allCases) { Text($0.rawValue).tag($0) }
                 }
                 .pickerStyle(.segmented)
-                .frame(width: 190)
+                .frame(width: 278)
                 Picker("Level", selection: $session.threatLevel) {
                     ForEach(ThreatLevel.allCases) { Text($0.rawValue).tag($0) }
                 }
