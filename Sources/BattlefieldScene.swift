@@ -55,6 +55,18 @@ private struct Shell {
     var launchElevation: Double? = nil
 }
 
+private struct MachineGunRound {
+    var center: GroundPoint
+    var direction: GroundPoint
+    var timeLeft: Double
+    var barrel: Int
+}
+private struct MachineGunRicochet {
+    var center: GroundPoint
+    var direction: GroundPoint
+    var timeLeft: Double
+}
+
 private struct Spark {
     var position: WorldPoint
     var velocity: WorldPoint
@@ -143,6 +155,19 @@ final class BattlefieldScene: SKScene {
     private var lives = 3
     private var bestScore = UserDefaults.standard.integer(forKey: "VectorSiegeHighScore")
     private var shotTally = ShotTally()
+    // Two lightweight anti-drone guns, alternating barrels. Cannon remains
+    // the only weapon that can penetrate armor or structures.
+    private var mgRounds: [MachineGunRound] = []
+    private var mgRicochets: [MachineGunRicochet] = []
+    private var mgAmmo = 180
+    private var mgHeat = 0.0
+    private var mgShotCooldown = 0.0
+    private var mgOverheatLock = false
+    private var mgBarrel = 0
+    private var mgHits = 0
+    private var mgFired = 0
+    private let machineGunLines = SKShapeNode()
+    private let machineGunRicochetLines = SKShapeNode()
     private lazy var combatAudio = TankCombatAudio()
     private var muzzleRemaining = 0.0
     private var recoilRemaining = 0.0
@@ -404,6 +429,7 @@ final class BattlefieldScene: SKScene {
             (opponentLines, 5.0), (opponentSaucerLines, 5.1), (shotLines, 6.0),
             (modernFriendlyShells, 6.2), (modernHostileShells, 6.3),
             (modernBombShells, 6.4), (saucerPulseLines, 6.5),
+            (machineGunLines, 6.7), (machineGunRicochetLines, 6.8),
             (flashLines, 7.0), (armoredLines, 5.3),
             (droneLines, 5.4), (fighterLines, 5.5),
             (chaffCloudLines, 7.8), (countermeasureLines, 8.6),
@@ -768,6 +794,15 @@ final class BattlefieldScene: SKScene {
         wave = 1
         lives = rules.startingLives
         shotTally = ShotTally()
+        mgRounds.removeAll()
+        mgRicochets.removeAll()
+        mgAmmo = 180
+        mgHeat = 0
+        mgShotCooldown = 0
+        mgOverheatLock = false
+        mgBarrel = 0
+        mgHits = 0
+        mgFired = 0
         combatImpacts.removeAll()
         tankWrecks.removeAll()
         muzzleRemaining = 0
@@ -970,6 +1005,11 @@ final class BattlefieldScene: SKScene {
         if key(49) && cannon.canFire {
             firePlayer()
         }
+        mgShotCooldown = max(0, mgShotCooldown - dt)
+        mgHeat = max(0, mgHeat - dt * 14)
+        if mgOverheatLock && mgHeat < 32 { mgOverheatLock = false }
+        if key(3) { fireMachineGun() } // F: twin coaxial anti-drone guns
+        advanceMachineGun(dt)
 
         // Every ground vehicle uses the same immutable collision map this
         // frame. Do not rebuild an 80+ building navigation array per tank.
@@ -1444,6 +1484,12 @@ final class BattlefieldScene: SKScene {
                 // Every level starts with a completely full magazine and
                 // no leftover per-shot reload timer, even in custom presets.
                 cannon.rearmForNextLevel()
+                mgAmmo = 180
+                mgHeat = 0
+                mgOverheatLock = false
+                mgShotCooldown = 0
+                mgRounds.removeAll()
+                mgRicochets.removeAll()
                 wave += 1
                 spawnWave()
                 for shell in shells where !shell.hostile { shotTally.miss() }
@@ -1664,6 +1710,114 @@ final class BattlefieldScene: SKScene {
                                 timeLeft: life, maxLife: life))
         }
         combatAudio.play(.cannon, enabled: soundOn)
+    }
+
+    private func fireMachineGun() {
+        guard round == .playing, pendingWave <= 0,
+              mgAmmo > 0, !mgOverheatLock,
+              mgShotCooldown <= 0 else { return }
+        let forward = facing(heading)
+        // Limited aim correction toward an airborne drone in the forward
+        // sight cone: this is not all-direction auto-aim.
+        let track = enemies.filter { $0.kind == .drone }.compactMap { drone
+            -> (position: GroundPoint, range: Double, error: Double)? in
+            let delta = drone.center - tankPosition
+            let range = delta.length
+            guard range > 3, range < 125 else { return nil }
+            let error = wrapAngle(atan2(delta.x, delta.z) - heading)
+            guard abs(error) < 0.22 else { return nil }
+            return (drone.center, range, abs(error))
+        }.min {
+            $0.error + $0.range * 0.0004 < $1.error + $1.range * 0.0004
+        }
+        let direction: GroundPoint = track.map {
+            ($0.position - tankPosition).normalized
+        } ?? forward
+        let side = GroundPoint(forward.z, -forward.x) *
+                   (mgBarrel == 0 ? -1.05 : 1.05)
+        let muzzle = tankPosition + forward * 2.8 + side
+        mgRounds.append(MachineGunRound(center: muzzle,
+                                         direction: direction,
+                                         timeLeft: 1.15, barrel: mgBarrel))
+        mgBarrel = 1 - mgBarrel
+        mgAmmo -= 1
+        mgFired += 1
+        mgShotCooldown = 0.095
+        mgHeat = min(110, mgHeat + 3.8)
+        if mgHeat >= 100 { mgOverheatLock = true }
+        if mgRounds.count > 55 { mgRounds.removeFirst() }
+    }
+
+    private func machineGunBounce(at position: GroundPoint,
+                                  direction: GroundPoint) {
+        // Cosmetic ricochet only: the projectile is consumed; it cannot
+        // reflect into another target or damage architecture/armor.
+        mgRicochets.append(MachineGunRicochet(center: position,
+                                              direction: direction,
+                                              timeLeft: 0.23))
+        if mgRicochets.count > 26 { mgRicochets.removeFirst() }
+        burst(at: WorldPoint(position, height: 2.4), count: 5)
+    }
+
+    private func advanceMachineGun(_ dt: Double) {
+        var survivors: [MachineGunRound] = []
+        var eliminated = Set<Int>()
+        for var round in mgRounds {
+            let previous = round.center
+            round.center = round.center + round.direction * (dt * 150)
+            round.timeLeft -= dt
+            if round.timeLeft <= 0 { continue }
+            let wall = firstObstacleImpact(
+                from: previous, to: round.center, height: 3.2,
+                shellRadius: 0.08,
+                worldAltitude: LandscapeTopology.height(tankPosition) + 3.2)
+            var contact: (index: Int, time: Double)?
+            for index in enemies.indices where !eliminated.contains(index) {
+                let foe = enemies[index]
+                let radius = foe.kind == .drone ? 2.3 :
+                             foe.kind == .fighter ? 4.7 : 2.8
+                if let time = ObstacleCollision.firstCircleImpact(
+                    from: previous, to: round.center, center: foe.center,
+                    radius: radius),
+                   time < (contact?.time ?? .infinity) {
+                    contact = (index, time)
+                }
+            }
+            if let wall, wall <= (contact?.time ?? .infinity) {
+                let at = previous + (round.center - previous) * wall
+                machineGunBounce(at: at, direction: round.direction)
+                continue
+            }
+            if let contact {
+                let at = previous + (round.center - previous) * contact.time
+                if enemies[contact.index].kind == .drone {
+                    enemies[contact.index].hitPoints -= 1
+                    mgHits += 1
+                    burst(at: WorldPoint(at, height: 3.1), count: 9)
+                    registerImpact(at: at, kind: .aircraft)
+                    if enemies[contact.index].hitPoints <= 0 {
+                        eliminated.insert(contact.index)
+                        addPoints(225)
+                        sound("impact.wav")
+                    }
+                } else {
+                    // Includes enemy tanks, APCs, artillery and fighters:
+                    // machine gun rounds never decrease their hit points.
+                    machineGunBounce(at: at, direction: round.direction)
+                }
+                continue
+            }
+            survivors.append(round)
+        }
+        mgRounds = survivors
+        for index in eliminated.sorted(by: >) {
+            fallingDrones.append(FallingDrone(foe: enemies[index], speed: 0.5))
+            enemies.remove(at: index)
+        }
+        for index in mgRicochets.indices {
+            mgRicochets[index].timeLeft -= dt
+        }
+        mgRicochets.removeAll { $0.timeLeft <= 0 }
     }
 
     private func launchChaff() {
@@ -3884,6 +4038,29 @@ final class BattlefieldScene: SKScene {
                             spark.position.z - v.z*0.045*delta), c)
         }
         flashLines.path = flarePath
+        let mgPath = CGMutablePath()
+        for round in mgRounds {
+            let back = round.center - round.direction * 3.5
+            line(mgPath, WorldPoint(round.center, height: 3.2),
+                 WorldPoint(back, height: 3.2), c)
+        }
+        machineGunLines.path = mgPath
+        machineGunLines.strokeColor = NSColor(calibratedRed: 1,
+            green: 0.83, blue: 0.37, alpha: 0.95)
+        machineGunLines.lineWidth = 1.3
+        let bouncePath = CGMutablePath()
+        for spark in mgRicochets {
+            let fraction = spark.timeLeft / 0.23
+            let displacement = spark.direction * (5*(1-fraction))
+            line(bouncePath,
+                 WorldPoint(spark.center + displacement, height: 2.6+2*(1-fraction)),
+                 WorldPoint(spark.center + displacement -
+                            spark.direction * (2.0*fraction), height: 2.6), c)
+        }
+        machineGunRicochetLines.path = bouncePath
+        machineGunRicochetLines.strokeColor = NSColor(calibratedRed: 1,
+            green: 0.57, blue: 0.23, alpha: 0.9)
+        machineGunRicochetLines.lineWidth = 1.3
     }
 
     /// A live, tank-relative rear camera rendered from a true 180-degree
