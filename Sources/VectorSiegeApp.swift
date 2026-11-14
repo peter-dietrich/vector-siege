@@ -89,10 +89,10 @@ struct SiegeWindow: View {
                 Text("VECTOR SIEGE")
                     .font(.system(size: 15, weight: .bold, design: .monospaced))
                     .tracking(1.5)
-                Text("v2026.11.13k2")
+                Text("v2026.11.13r1")
                     .font(.system(size: 10, weight: .medium, design: .monospaced))
                     .foregroundStyle(.gray)
-                    .help("Source build identifier: v2026.11.13k2")
+                    .help("Source build identifier: v2026.11.13r1")
                 Spacer(minLength: 4)
                 Picker("Display", selection: $session.displayMode) {
                     ForEach(DisplayMode.allCases) { Text($0.rawValue).tag($0) }
@@ -147,16 +147,18 @@ struct SiegeWindow: View {
             BattlefieldView(scene: session.scene)
                 .background(.black)
                 .overlay(alignment: .bottom) {
-                    HStack(spacing: 12) {
-                        Text("↑↓ DRIVE   ←→ TURN   SPACE CANNON   F TWIN MG   SHIFT SHIELD   E CHAFF")
-                        Spacer(minLength: 2)
-                        Text("I/K + O/L TREADS   P PAUSE   RETURN START")
+                    if session.displayMode != .cockpitV53 {
+                        HStack(spacing: 12) {
+                            Text("↑↓ DRIVE   ←→ TURN   SPACE CANNON   F TWIN MG   SHIFT SHIELD   E CHAFF")
+                            Spacer(minLength: 2)
+                            Text("I/K + O/L TREADS   P PAUSE   RETURN START")
+                        }
+                        .font(.system(size: 10, weight: .medium, design: .monospaced))
+                        .foregroundStyle(.white.opacity(0.51))
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 9)
+                        .background(Color.black.opacity(0.8))
                     }
-                    .font(.system(size: 10, weight: .medium, design: .monospaced))
-                    .foregroundStyle(.white.opacity(0.51))
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 9)
-                    .background(Color.black.opacity(0.8))
                 }
         }
         .onAppear { session.apply() }
