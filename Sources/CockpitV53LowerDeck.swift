@@ -7,6 +7,9 @@ import SpriteKit
 final class CockpitV53LowerDeck {
     private let root = SKNode()
     private let curtain = SKShapeNode()
+    private let approvedArtRoot = SKNode()
+    private var approvedArtLoaded = false
+    private var artLabels: [String: SKLabelNode] = [:]
     private var chassisSprite: SKSpriteNode?
     private let metal = NSColor(calibratedRed: 0.105, green: 0.122, blue: 0.131, alpha: 1)
     private let bevel = NSColor(calibratedRed: 0.41, green: 0.43, blue: 0.42, alpha: 1)
@@ -34,6 +37,129 @@ final class CockpitV53LowerDeck {
         root.zPosition = 38
         scene.addChild(root)
         build()
+        installApprovedArtwork()
+    }
+
+    private func artLabel(_ key: String, _ value: String,
+                          x: CGFloat, y: CGFloat, size: CGFloat,
+                          color: NSColor? = nil,
+                          align: SKLabelHorizontalAlignmentMode = .left) {
+        let node = SKLabelNode(fontNamed: "Menlo-Bold")
+        node.text = value
+        node.fontSize = size
+        node.fontColor = color ?? white
+        node.position = CGPoint(x: x, y: y)
+        node.verticalAlignmentMode = .center
+        node.horizontalAlignmentMode = align
+        node.zPosition = 26
+        approvedArtRoot.addChild(node)
+        artLabels[key] = node
+    }
+
+    private func installApprovedArtwork() {
+        // This is derived from the user-approved cockpit mockup. The five
+        // glass areas have been cleared of example telemetry; all values
+        // below are live and updated from game state.
+        let filename = "VectorSiege_Lower_Cockpit_Phase1_Approved.png"
+        let candidates = [
+            Bundle.main.resourceURL?.appendingPathComponent("CockpitV5").appendingPathComponent(filename),
+            Bundle.main.resourceURL?.appendingPathComponent("Resources/CockpitV5").appendingPathComponent(filename),
+            URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+                .deletingLastPathComponent()
+                .appendingPathComponent("Resources/CockpitV5").appendingPathComponent(filename)
+        ].compactMap { $0 }
+        guard let artworkURL = candidates.first(where: {
+            FileManager.default.fileExists(atPath: $0.path)
+        }), let artwork = NSImage(contentsOf: artworkURL) else {
+            // Preserve the working game if the optional artwork is missing.
+            return
+        }
+        let sprite = SKSpriteNode(texture: SKTexture(image: artwork))
+        sprite.size = CGSize(width: 1600, height: 256)
+        sprite.position = CGPoint(x: 800, y: 128)
+        sprite.zPosition = 1
+        approvedArtRoot.zPosition = 39
+        approvedArtRoot.addChild(sprite)
+        root.parent?.addChild(approvedArtRoot)
+        approvedArtLoaded = true
+
+        // Reuse the existing live instrument geometry but move it above
+        // the photographic glass rather than redrawing substitute frames.
+        for dynamic in [tankLines, hitArc, compassTicks, compassLabels,
+                        terrainFill, terrainTrace] {
+            dynamic.removeFromParent()
+            approvedArtRoot.addChild(dynamic)
+        }
+        tankLines.position = CGPoint(x: 39, y: 9)
+        hitArc.position = CGPoint(x: 567, y: 129)
+        hitArc.strokeColor = mint
+        hitArc.lineWidth = 10
+        compassTicks.zPosition = 10
+        compassLabels.zPosition = 12
+        terrainTrace.zPosition = 12
+        terrainFill.zPosition = 10
+
+        artLabel("artHull", "100%", x: 342, y: 167, size: 14,
+                 color: mint, align: .right)
+        artLabel("artSystems", "NORMAL", x: 342, y: 128, size: 11,
+                 color: mint, align: .right)
+        artLabel("artMode", "DRIVE", x: 342, y: 94, size: 11,
+                 color: cyan, align: .right)
+        artLabel("artPercent", "0%", x: 409, y: 158, size: 30, color: mint)
+        artLabel("artHits", "HITS 000", x: 414, y: 122, size: 11)
+        artLabel("artShots", "SHOTS 000", x: 414, y: 100, size: 11)
+        artLabel("artEfficiency", "HIT / 0%", x: 414, y: 80, size: 9, color: muted)
+        let ring = SKShapeNode(circleOfRadius: 39)
+        ring.position = CGPoint(x: 567, y: 129)
+        ring.fillColor = .clear
+        ring.strokeColor = NSColor(calibratedRed: 0.12, green: 0.36, blue: 0.35, alpha: 1)
+        ring.lineWidth = 10
+        ring.zPosition = 9
+        approvedArtRoot.addChild(ring)
+        artLabel("artHeading", "000°", x: 833, y: 158, size: 34,
+                 color: amber, align: .center)
+        artLabel("artNavLeft", "‹‹", x: 744, y: 160, size: 21, color: amber)
+        artLabel("artNavRight", "››", x: 904, y: 160, size: 21,
+                 color: amber, align: .right)
+        artLabel("artProfile", "LIVE / 480 FT", x: 1023, y: 171, size: 8,
+                 color: cyan)
+        artLabel("artProfileMin", "PROFILE / FORWARD", x: 1023, y: 76, size: 9,
+                 color: muted)
+        artLabel("artSector", "D-04", x: 1456, y: 163, size: 23,
+                 color: mint, align: .center)
+        artLabel("artElev", "ELEV +0 FT", x: 1535, y: 129, size: 10,
+                 align: .right)
+        artLabel("artX", "X +0", x: 1535, y: 104, size: 10,
+                 align: .right)
+        artLabel("artZ", "Z +0", x: 1535, y: 81, size: 10,
+                 align: .right)
+    }
+
+    private func updateApprovedArt(_ snap: CockpitV5Snapshot,
+                                   terrain: [Double]) {
+        guard approvedArtLoaded else { return }
+        func setArt(_ key: String, _ text: String) {
+            artLabels[key]?.text = text
+        }
+        let integrity = min(100, max(0, 100.0 * Double(snap.lives)/3))
+        setArt("artHull", String(format: "%.0f%%", integrity))
+        setArt("artSystems", snap.lives <= 1 ? "CRITICAL" : "NORMAL")
+        artLabels["artSystems"]?.fontColor = snap.lives <= 1 ? amber : mint
+        setArt("artMode", snap.lives <= 0 ? "OFFLINE" : "DRIVE")
+        setArt("artPercent", String(format: "%.0f%%", snap.accuracyPercent))
+        setArt("artHits", String(format: "HITS %03d", snap.shotsHit))
+        setArt("artShots", String(format: "SHOTS %03d", snap.shotsFired))
+        setArt("artEfficiency", String(format: "EFFICIENCY %.0f%%", snap.accuracyPercent))
+        setArt("artHeading", String(format: "%03.0f°", snap.headingDegrees))
+        setArt("artSector", snap.sector)
+        setArt("artElev", String(format: "ELEV %+.0f FT",
+                                 snap.terrainElevationWorldUnits*3.28084))
+        setArt("artX", String(format: "X %+.0f", snap.playerPosition.x))
+        setArt("artZ", String(format: "Z %+.0f", snap.playerPosition.z))
+        if let lo = terrain.min(), let hi = terrain.max() {
+            setArt("artProfileMin", String(format: "LOW %+.0f / HIGH %+.0f FT",
+                                          lo*3.28084, hi*3.28084))
+        }
     }
 
     private func plate(_ frame: CGRect, color: NSColor, stroke: NSColor,
@@ -296,6 +422,7 @@ final class CockpitV53LowerDeck {
                            snap.terrainElevationWorldUnits*3.28084))
         set("coords", String(format: "X %+.0f  Z %+.0f",
                              snap.playerPosition.x, snap.playerPosition.z))
+        updateApprovedArt(snap, terrain: terrain)
         if terrain.count > 1 {
             let minimum = (terrain.min() ?? 0) - 1
             let maximum = (terrain.max() ?? 1) + 1
@@ -328,12 +455,16 @@ final class CockpitV53LowerDeck {
         root.position = CGPoint(x: (size.width-1600*scale)/2, y: 32*scale)
         curtain.path = CGPath(rect: CGRect(x: 0, y: 0, width: size.width,
                                            height: 264*scale), transform: nil)
-        root.isHidden = false
+        root.isHidden = approvedArtLoaded
+        approvedArtRoot.isHidden = !approvedArtLoaded
+        approvedArtRoot.setScale(scale)
+        approvedArtRoot.position = CGPoint(x: (size.width-1600*scale)/2, y: 20*scale)
         curtain.isHidden = false
     }
 
     func hide() {
         root.isHidden = true
+        approvedArtRoot.isHidden = true
         curtain.isHidden = true
     }
 }
