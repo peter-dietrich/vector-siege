@@ -2724,8 +2724,10 @@ final class BattlefieldScene: SKScene {
         // frame; its live figures remain available in the relocated modules.
         // Keep the player's proven top-mounted telemetry arrangement.
         // New hardware frames surround it; Classic remains untouched.
-        modernCockpit.isHidden = !modern
-        for surface in monitorMaterials { surface.isHidden = !modern }
+        // Clean cockpit renders from a separate owned root. Never draw the
+        // legacy Modern lower deck when approved Cockpit v5.3 is selected.
+        modernCockpit.isHidden = displayMode != .modern
+        for surface in monitorMaterials { surface.isHidden = displayMode != .modern }
         bottomMaterial.isHidden = !modern
         rearOpticsMaterial.isHidden = !modern
         opticsGlass.isHidden = !modern
