@@ -231,7 +231,7 @@ final class CockpitV53LowerDeck {
         if ratio > 0 {
             arc.addArc(center: .zero, radius: 36,
                        startAngle: -.pi/2,
-                       endAngle: -.pi/2 + CGFloat(ratio)*2*.pi,
+                       endAngle: -.pi/2 + CGFloat(ratio) * 2 * CGFloat.pi,
                        clockwise: false)
         }
         hitArc.path = arc
