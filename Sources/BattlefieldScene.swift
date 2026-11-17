@@ -123,7 +123,10 @@ final class BattlefieldScene: SKScene {
     var threatLevel: ThreatLevel = .veteran
     var soundOn = true
     var battlefieldEnvironment: BattlefieldEnvironment = .alpine {
-        didSet { TronzoneBiome.active = battlefieldEnvironment }
+        didSet {
+            TronzoneBiome.active = battlefieldEnvironment
+            if oldValue != battlefieldEnvironment { configurePalette() }
+        }
     }
     var customRules: SiegeRules?
     var activePresetID = ""
