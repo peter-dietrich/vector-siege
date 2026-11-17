@@ -44,6 +44,7 @@ enum ThreatLevel: String, CaseIterable, Identifiable {
 final class SiegeSession: ObservableObject {
     @Published var displayMode: DisplayMode = .classic
     @Published var threatLevel: ThreatLevel = .veteran
+    @Published var battlefieldEnvironment: BattlefieldEnvironment = .alpine
     @Published var soundOn = true
     let scene = BattlefieldScene(size: CGSize(width: 1180, height: 690))
 
@@ -55,6 +56,7 @@ final class SiegeSession: ObservableObject {
 
     func apply() {
         scene.displayMode = displayMode
+        scene.battlefieldEnvironment = battlefieldEnvironment
         scene.threatLevel = threatLevel
         scene.soundOn = soundOn
     }
@@ -70,6 +72,7 @@ final class SiegeSession: ObservableObject {
     func resume(_ snapshot: SiegeSnapshot) -> Bool {
         guard scene.restore(snapshot) else { return false }
         displayMode = scene.displayMode
+        battlefieldEnvironment = scene.battlefieldEnvironment
         threatLevel = scene.threatLevel
         soundOn = scene.soundOn
         return true
@@ -89,7 +92,7 @@ struct SiegeWindow: View {
                 Text("VECTOR SIEGE")
                     .font(.system(size: 15, weight: .bold, design: .monospaced))
                     .tracking(1.5)
-                Text("v2026.11.13r2")
+                Text("v2026.11.17a")
                     .font(.system(size: 10, weight: .medium, design: .monospaced))
                     .foregroundStyle(.gray)
                     .help("Source build identifier: v2026.11.13r2")
@@ -144,6 +147,28 @@ struct SiegeWindow: View {
             .frame(height: 58)
             .background(Color(red: 0.055, green: 0.085, blue: 0.07))
 
+            HStack(spacing: 12) {
+                Text("BATTLEFIELD")
+                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                    .foregroundStyle(.green.opacity(0.85))
+                Picker("Environment", selection: $session.battlefieldEnvironment) {
+                    ForEach(BattlefieldEnvironment.allCases) { environment in
+                        Text(environment.rawValue).tag(environment)
+                    }
+                }
+                .labelsHidden()
+                .frame(width: 203)
+                Text(session.battlefieldEnvironment == .alpine
+                     ? "ALPINE VECTOR FRONTIER  /  ACTIVE WORLD GEOMETRY"
+                     : "NEON CITADEL  /  ORIGINAL CITY GEOMETRY")
+                    .font(.system(size: 10, weight: .medium, design: .monospaced))
+                    .foregroundStyle(.white.opacity(0.53))
+                Spacer()
+            }
+            .padding(.horizontal, 16)
+            .frame(height: 34)
+            .background(Color(red: 0.025, green: 0.055, blue: 0.041))
+
             BattlefieldView(scene: session.scene)
                 .background(.black)
                 .overlay(alignment: .bottom) {
@@ -164,6 +189,12 @@ struct SiegeWindow: View {
         .onAppear { session.apply() }
         .onChange(of: session.displayMode) { _ in session.apply() }
         .onChange(of: session.threatLevel) { _ in session.apply() }
+        .onChange(of: session.battlefieldEnvironment) { environment in
+            if session.scene.battlefieldEnvironment != environment {
+                session.scene.battlefieldEnvironment = environment
+                session.scene.restart()
+            }
+        }
         .onChange(of: session.soundOn) { _ in session.apply() }
         .sheet(isPresented: $showCustomGame) {
             SiegePresetEditor(
