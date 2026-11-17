@@ -45,6 +45,9 @@ final class SiegeSession: ObservableObject {
     @Published var displayMode: DisplayMode = .classic
     @Published var threatLevel: ThreatLevel = .veteran
     @Published var battlefieldEnvironment: BattlefieldEnvironment = .alpine
+    @Published var startTime: SiegeStartTime = .day
+    @Published var hoursPerWave: Double = 2.75
+    @Published var timeDisplay = "12:00 / DAY"
     @Published var soundOn = true
     let scene = BattlefieldScene(size: CGSize(width: 1180, height: 690))
 
@@ -52,11 +55,15 @@ final class SiegeSession: ObservableObject {
         scene.onDisplayModeChange = { [weak self] mode in
             self?.displayMode = mode
         }
+        scene.onTimeOfDayChange = { [weak self] hour in
+            self?.timeDisplay = "\(SiegeDaylight.clock(at:hour)) / \(SiegeDaylight.period(at:hour))"
+        }
     }
 
     func apply() {
         scene.displayMode = displayMode
         scene.battlefieldEnvironment = battlefieldEnvironment
+        scene.setTimeOfDay(startTime, hoursPerWave:hoursPerWave, preview:false)
         scene.threatLevel = threatLevel
         scene.soundOn = soundOn
     }
@@ -73,6 +80,9 @@ final class SiegeSession: ObservableObject {
         guard scene.restore(snapshot) else { return false }
         displayMode = scene.displayMode
         battlefieldEnvironment = scene.battlefieldEnvironment
+        startTime = scene.startTime
+        hoursPerWave = scene.hoursPerWave
+        timeDisplay = "\(SiegeDaylight.clock(at:scene.timeOfDayHour)) / \(SiegeDaylight.period(at:scene.timeOfDayHour))"
         threatLevel = scene.threatLevel
         soundOn = scene.soundOn
         return true
@@ -92,10 +102,10 @@ struct SiegeWindow: View {
                 Text("VECTOR SIEGE")
                     .font(.system(size: 15, weight: .bold, design: .monospaced))
                     .tracking(1.5)
-                Text("v2026.11.17e")
+                Text("v2026.11.17f")
                     .font(.system(size: 10, weight: .medium, design: .monospaced))
                     .foregroundStyle(.gray)
-                    .help("Source build identifier: v2026.11.17e — true 3D Tronzone battlefield preview")
+                    .help("Source build identifier: v2026.11.17f — true 3D Tronzone battlefield preview")
                 Spacer(minLength: 4)
                 Picker("Display", selection: $session.displayMode) {
                     ForEach(DisplayMode.allCases) { Text($0.rawValue).tag($0) }
@@ -163,7 +173,32 @@ struct SiegeWindow: View {
                      : "NEON CITADEL  /  ORIGINAL CITY GEOMETRY")
                     .font(.system(size: 10, weight: .medium, design: .monospaced))
                     .foregroundStyle(.white.opacity(0.53))
-                Spacer()
+                Spacer(minLength: 4)
+                Text("TIME")
+                    .font(.system(size:10,weight:.bold,design:.monospaced))
+                    .foregroundStyle(.orange.opacity(0.9))
+                Picker("Starting time",selection:$session.startTime) {
+                    ForEach(SiegeStartTime.allCases) { value in
+                        Text(value.rawValue).tag(value)
+                    }
+                }
+                .labelsHidden()
+                .frame(width:105)
+                Text(session.timeDisplay)
+                    .font(.system(size:10,weight:.bold,design:.monospaced))
+                    .monospacedDigit()
+                    .foregroundStyle(.orange.opacity(0.92))
+                    .frame(width:112,alignment:.leading)
+                Text("WAVE +")
+                    .font(.system(size:9,weight:.medium,design:.monospaced))
+                    .foregroundStyle(.white.opacity(0.60))
+                Picker("Hours per wave",selection:$session.hoursPerWave) {
+                    ForEach([0.0,0.5,1.0,1.5,2.0,2.75,3.0,4.0,6.0,12.0],id:\.self) { hours in
+                        Text(String(format:"%g h",hours)).tag(hours)
+                    }
+                }
+                .labelsHidden()
+                .frame(width:88)
             }
             .padding(.horizontal, 16)
             .frame(height: 34)
@@ -189,6 +224,15 @@ struct SiegeWindow: View {
         .onAppear { session.apply() }
         .onChange(of: session.displayMode) { _ in session.apply() }
         .onChange(of: session.threatLevel) { _ in session.apply() }
+        .onChange(of: session.startTime) { preset in
+            // Changing the preset previews the lighting immediately and
+            // establishes the starting hour for the next New Game.
+            session.scene.setTimeOfDay(preset, hoursPerWave:session.hoursPerWave)
+        }
+        .onChange(of: session.hoursPerWave) { amount in
+            session.scene.setTimeOfDay(session.startTime,
+                                      hoursPerWave:amount,preview:false)
+        }
         .onChange(of: session.battlefieldEnvironment) { environment in
             if session.scene.battlefieldEnvironment != environment {
                 session.scene.battlefieldEnvironment = environment
