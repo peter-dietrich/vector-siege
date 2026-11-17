@@ -2724,22 +2724,28 @@ final class BattlefieldScene: SKScene {
         // frame; its live figures remain available in the relocated modules.
         // Keep the player's proven top-mounted telemetry arrangement.
         // New hardware frames surround it; Classic remains untouched.
-        modernCockpit.isHidden = !modern
-        for surface in monitorMaterials { surface.isHidden = !modern }
-        bottomMaterial.isHidden = !modern
-        rearOpticsMaterial.isHidden = !modern
-        opticsGlass.isHidden = !modern
-        opticsCaption.isHidden = !modern
-        radarGroundShading.isHidden = !modern
-        radarTargetLine.isHidden = !modern
-        lowerTerrainFill.isHidden = !modern
-        lowerTankFill.isHidden = !modern
+        // Clean cockpit renders from a separate owned root. Never draw the
+        // legacy Modern lower deck when approved Cockpit v5.3 is selected.
+        modernCockpit.isHidden = displayMode != .modern
+        for surface in monitorMaterials { surface.isHidden = displayMode != .modern }
+        bottomMaterial.isHidden = displayMode != .modern
+        rearOpticsMaterial.isHidden = displayMode != .modern
+        opticsGlass.isHidden = displayMode != .modern
+        opticsCaption.isHidden = displayMode != .modern
+        radarGroundShading.isHidden = displayMode != .modern
+        radarTargetLine.isHidden = displayMode != .modern
+        lowerTerrainFill.isHidden = displayMode != .modern
+        lowerTankFill.isHidden = displayMode != .modern
+        // The clean shell owns the entire Cockpit v5.3 presentation.
+        // Hide all old module labels/radar meshes and hardware rather than
+        // allowing them to appear as a second strip beneath the new upper art.
+        commandDeck.isHidden = displayMode == .cockpitV53
         commandDeck.position.y = 0
         for node in [commandShellBack, commandShellShadow,
                      commandShellBezel, commandShellEdges,
                      commandShellHighlights, commandShellHardware,
-                     commandShellAlert] { node.isHidden = !modern }
-        for label in commandShellLabels { label.isHidden = !modern }
+                     commandShellAlert] { node.isHidden = displayMode != .modern }
+        for label in commandShellLabels { label.isHidden = displayMode != .modern }
         modernFriendlyShells.isHidden = !modern
         modernHostileShells.isHidden = !modern
         modernFriendlyShells.strokeColor = NSColor(calibratedRed: 1, green: 0.89, blue: 0.35, alpha: 0.98)
