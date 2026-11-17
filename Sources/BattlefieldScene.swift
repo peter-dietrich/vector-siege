@@ -722,6 +722,8 @@ final class BattlefieldScene: SKScene {
         configurePalette()
         TronzoneBiome.active = battlefieldEnvironment
         makeObstacles()
+        makeVegetation()
+        selectSolidBuildings()
         spawnWave()
     }
 
@@ -2845,10 +2847,28 @@ final class BattlefieldScene: SKScene {
         for layer in [distantMountains, middleMountains, nearMountains, horizonMist] {
             layer.isHidden = !modern
         }
-        distantMountains.fillColor = NSColor(calibratedRed: 0.10, green: 0.16, blue: 0.22, alpha: 0.92)
-        middleMountains.fillColor = NSColor(calibratedRed: 0.085, green: 0.18, blue: 0.21, alpha: 0.94)
-        nearMountains.fillColor = NSColor(calibratedRed: 0.035, green: 0.115, blue: 0.125, alpha: 0.98)
-        horizonMist.fillColor = NSColor(calibratedRed: 0.25, green: 0.65, blue: 0.67, alpha: 0.06)
+        if battlefieldEnvironment == .alpine {
+            distantMountains.fillColor = NSColor(calibratedRed: 0.04, green: 0.17, blue: 0.085, alpha: 0.92)
+            middleMountains.fillColor = NSColor(calibratedRed: 0.027, green: 0.12, blue: 0.064, alpha: 0.97)
+            nearMountains.fillColor = NSColor(calibratedRed: 0.013, green: 0.072, blue: 0.038, alpha: 1)
+            horizonMist.fillColor = NSColor(calibratedRed: 0.17, green: 0.97, blue: 0.38, alpha: 0.075)
+            mountainFacetLines.strokeColor = NSColor(calibratedRed: 0.18, green: 0.87, blue: 0.36, alpha: 0.48)
+            mountainFacetLines.lineWidth = 0.8
+            mountainFacetLines.glowWidth = 1.6
+            groundMesh.strokeColor = NSColor(calibratedRed: 0.10, green: 0.93, blue: 0.30, alpha: 0.48)
+            groundMesh.glowWidth = 0.8
+            structures.strokeColor = NSColor(calibratedRed: 0.28, green: 1.0, blue: 0.40, alpha: 0.96)
+            structures.lineWidth = 1.7
+            structures.glowWidth = 2.4
+            foliageLines.strokeColor = NSColor(calibratedRed: 0.11, green: 0.67, blue: 0.26, alpha: 0.75)
+        } else {
+            distantMountains.fillColor = NSColor(calibratedRed: 0.10, green: 0.16, blue: 0.22, alpha: 0.92)
+            middleMountains.fillColor = NSColor(calibratedRed: 0.085, green: 0.18, blue: 0.21, alpha: 0.94)
+            nearMountains.fillColor = NSColor(calibratedRed: 0.035, green: 0.115, blue: 0.125, alpha: 0.98)
+            horizonMist.fillColor = NSColor(calibratedRed: 0.25, green: 0.65, blue: 0.67, alpha: 0.06)
+            mountainFacetLines.path = nil
+            mountainFacetLines.glowWidth = 0
+        }
         let cc = green
         leftHUD.fontColor = cc
         midHUD.fontColor = cc
@@ -3215,6 +3235,14 @@ final class BattlefieldScene: SKScene {
     }
 
     private func ridge(_ azimuth: Double, multiplier: Double) -> Double {
+        if battlefieldEnvironment == .alpine {
+            // Broad continental ridgelines plus pronounced angular alpine
+            // summits. Three depth layers share the camera's actual heading.
+            let shoulders = 18 + 28*abs(sin(azimuth*3.1+0.7))
+            let summit = 91*pow(abs(sin(azimuth*5.7-0.35)), 10)
+            let subsidiary = 44*pow(abs(sin(azimuth*8.9+0.65)), 12)
+            return multiplier*(shoulders + summit + subsidiary)
+        }
         let a = abs(sin(azimuth * 8.2 + 1.7))
         let b = abs(sin(azimuth * 15.4 - 0.8))
         let c = abs(sin(azimuth * 25.0 + 2.3))
@@ -3230,6 +3258,7 @@ final class BattlefieldScene: SKScene {
         let width = c.viewportWidth
         let step = 10.0
         let samples = Int(ceil(width / step)) + 2
+        let alpineFacets = CGMutablePath()
 
         // Sky bands imitate atmospheric scattering with no textures or asset downloads.
         // The brighter lower bands shift very slightly with heading, not with frame time.
@@ -3241,10 +3270,13 @@ final class BattlefieldScene: SKScene {
                 skyBands[i].path = CGPath(rect: CGRect(x: 0, y: y, width: width + 1,
                                                         height: bandHeight + 1), transform: nil)
                 let t = Double(i) / Double(max(1, skyBands.count - 1))
-                skyBands[i].fillColor = NSColor(
-                    calibratedRed: CGFloat(0.045 - t * 0.027),
-                    green: CGFloat(0.105 - t * 0.072),
-                    blue: CGFloat(0.16 - t * 0.083), alpha: 1)
+                skyBands[i].fillColor = battlefieldEnvironment == .alpine
+                    ? NSColor(calibratedRed: CGFloat(0.018 - t*0.012),
+                              green: CGFloat(0.102 - t*0.078),
+                              blue: CGFloat(0.046 - t*0.033), alpha: 1)
+                    : NSColor(calibratedRed: CGFloat(0.045 - t * 0.027),
+                              green: CGFloat(0.105 - t * 0.072),
+                              blue: CGFloat(0.16 - t * 0.083), alpha: 1)
             }
         }
         for i in 0...samples {
@@ -3252,6 +3284,17 @@ final class BattlefieldScene: SKScene {
             let azimuth = heading + atan2((x - width / 2) / c.focal, 1)
             let back = point(x, c.horizon + ridge(azimuth + 0.6, multiplier: 0.47))
             let front = point(x, c.horizon + ridge(azimuth, multiplier: 1.0))
+            if battlefieldEnvironment == .alpine && i > 0 &&
+               i.isMultiple(of: 9) {
+                let low = point(x, c.horizon + 7)
+                let summit = point(x, c.horizon + ridge(azimuth, multiplier: 1.0))
+                segment(alpineFacets, low, summit)
+                let shift = min(width+10, x + 53)
+                segment(alpineFacets, summit,
+                        point(shift, c.horizon + ridge(
+                            heading + atan2((shift-width/2)/c.focal, 1),
+                            multiplier: 0.72)))
+            }
             if i == 0 {
                 farPath.move(to: back)
                 nearPath.move(to: front)
@@ -3275,6 +3318,8 @@ final class BattlefieldScene: SKScene {
         }
         farSkyline.path = farPath
         skyline.path = nearPath
+        mountainFacetLines.path = battlefieldEnvironment == .alpine
+            ? alpineFacets : nil
         if displayMode != .classic {
             distantMountains.path = distantFill
             middleMountains.path = middleFill
