@@ -3433,6 +3433,7 @@ final class BattlefieldScene: SKScene {
             if battlefieldEnvironment == .alpine {
                 drawAlpineObstacle(o, outline: alpineOutline,
                                    surfaces: alpineFill, camera: c)
+                facets.append(contentsOf: tronzoneObstacleFaces(o, camera: c))
                 continue
             }
             switch o.kind {
@@ -3442,7 +3443,9 @@ final class BattlefieldScene: SKScene {
                 if displayMode != .classic { drawArchitecture(o, on: structurePath, camera: c) }
                 else { drawBlock(o, on: structurePath, camera: c) }
             }
-            let solid = solidBuildingIndices.contains(index)
+            // All modern city surfaces are opaque. The previous 30% solid
+            // designation still controls tactical cover in Classic mode.
+            let solid = displayMode != .classic || solidBuildingIndices.contains(index)
             if displayMode != .classic || solid {
                 // Extremely distant translucent faces add fill overdraw
                 // without helping architecture depth. Solid walls remain
@@ -3455,11 +3458,13 @@ final class BattlefieldScene: SKScene {
         }
         structures.path = battlefieldEnvironment == .alpine ? alpineOutline : structurePath
         alpineSurfaces.path = battlefieldEnvironment == .alpine ? alpineFill : nil
-        alpineSurfaces.fillColor = NSColor(calibratedRed: 0.015, green: 0.075,
-                                           blue: 0.038, alpha: 0.88)
+        alpineSurfaces.fillColor = .clear
+        // Solid polygons are owned by the same sorted face pool as tank armor,
+        // not a translucent overlay painted over the entire forest.
         alpineSurfaces.strokeColor = .clear
         renderVegetation(c)
-        updateGlassFaces(facets, camera: c)
+        // The face pool is updated after ground vehicles are appended so
+        // solid armor and architectural faces share one depth ordering.
 
         // Only nearby solid geometry can hide visible armor. Reuse the
         // same broad-phase for the whole frame instead of all city facades.
@@ -3498,6 +3503,9 @@ final class BattlefieldScene: SKScene {
                     camera: c.position, target: enemy.center,
                     opaqueBodies: opaqueBodies)
                 : []
+            if displayMode != .classic {
+                facets.append(contentsOf: tronzoneEnemyFaces(enemy, camera: c))
+            }
             switch enemy.kind {
             case .saucer: drawSaucer(enemy, on: saucerPath, camera: c)
             case .drone: drawDrone(enemy, on: dronePath, camera: c)
@@ -3510,11 +3518,145 @@ final class BattlefieldScene: SKScene {
                 drawTank(enemy, on: tankPath, camera: c, blockers: blockers)
             }
         }
+        updateGlassFaces(facets, camera: c)
         opponentLines.path = tankPath
         armoredLines.path = armoredPath
         opponentSaucerLines.path = saucerPath
         droneLines.path = dronePath
         fighterLines.path = fighterPath
+    }
+
+
+    // Solid world-space mesh for Tronzone. Unlike the former wireframe or
+    // alpha-tinted polygons, every visible surface is fully opaque. A single
+    // sorted face pool shades buildings, vegetation, and enemy armor together.
+    private func tronzoneFace(_ vertices: [WorldPoint], tint: Int,
+                              camera c: CameraProjection) -> GlassFace {
+        let depth = vertices.reduce(0.0) { $0 + c.local($1).forward } /
+            Double(max(1, vertices.count))
+        return GlassFace(vertices: vertices, depth: depth,
+                         tint: tint, solid: true)
+    }
+
+    private func tronzoneObstacleFaces(_ o: Obstacle,
+                                       camera c: CameraProjection) -> [GlassFace] {
+        let p = o.center
+        let size = o.size
+        func v(_ x: Double, _ y: Double, _ z: Double) -> WorldPoint {
+            WorldPoint(p.x+x, y, p.z+z)
+        }
+        var faces: [GlassFace] = []
+        func add(_ vertices: [WorldPoint], _ tint: Int) {
+            faces.append(tronzoneFace(vertices, tint: tint, camera: c))
+        }
+        switch o.kind {
+        case .tower:
+            // Four-sided, overlapping opaque pine canopies; each height band
+            // is deep enough to read as a tree, not a floating triangle.
+            for level in 0..<3 {
+                let rise = Double(level)*size*0.87
+                let spread = size*(1.42-Double(level)*0.22)
+                let base = rise+size*0.45
+                let apex = rise+size*2.35
+                let n = v(0,base,spread)
+                let e = v(spread,base,0)
+                let south = v(0,base,-spread)
+                let west = v(-spread,base,0)
+                let top = v(0,apex,0)
+                add([n,e,top],20+level%3)
+                add([e,south,top],21+level%3)
+                add([south,west,top],22+level%3)
+                add([west,n,top],20+level%3)
+                add([n,west,south,e],20)
+            }
+            add([v(-size*0.14,0,-size*0.14),
+                 v(size*0.14,0,-size*0.14),
+                 v(size*0.14,size*1.3,-size*0.14),
+                 v(-size*0.14,size*1.3,-size*0.14)],24)
+        case .pyramid:
+            let a = v(-size,0,-size*0.8), b = v(size,0,-size*0.8)
+            let d = v(-size,0,size*0.8), e = v(size,0,size*0.8)
+            let apex = v(-size*0.12,size*1.2,0)
+            add([a,b,apex],26);add([b,e,apex],24)
+            add([e,d,apex],25);add([d,a,apex],27)
+        case .block, .monolith, .building:
+            let sx = o.kind == .monolith ? size*0.55 : size
+            let sz = o.kind == .monolith ? size*0.55 : size
+            let height = o.kind == .monolith ? size*5 : size*1.35
+            let lo = [v(-sx,0,-sz),v(sx,0,-sz),v(sx,0,sz),v(-sx,0,sz)]
+            let hi = [v(-sx,height,-sz),v(sx,height,-sz),
+                      v(sx,height,sz),v(-sx,height,sz)]
+            for i in 0..<4 {
+                add([lo[i],lo[(i+1)%4],hi[(i+1)%4],hi[i]],
+                    i.isMultiple(of: 2) ? 23 : 24)
+            }
+            add(hi,25)
+        }
+        return faces
+    }
+
+    private func tronzoneEnemyFaces(_ enemy: Foe,
+                                    camera c: CameraProjection) -> [GlassFace] {
+        // Draw solid low-poly armored hulls and turrets in the world, not
+        // billboard sprites. Enemy combat/projectile state remains unchanged.
+        var faces: [GlassFace] = []
+        func v(_ x: Double, _ y: Double, _ z: Double) -> WorldPoint {
+            let cs = cos(enemy.heading), sn = sin(enemy.heading)
+            return WorldPoint(enemy.center.x+x*cs+z*sn, y,
+                              enemy.center.z-x*sn+z*cs)
+        }
+        func quadBox(_ halfX: Double, _ halfZ: Double,
+                     _ bottom: Double, _ top: Double,
+                     _ front: Double, _ back: Double, _ tint: Int) {
+            let low = [v(-halfX,bottom,back),v(halfX,bottom,back),
+                       v(halfX,bottom,front),v(-halfX,bottom,front)]
+            let high = [v(-halfX,top,back),v(halfX,top,back),
+                        v(halfX,top,front),v(-halfX,top,front)]
+            for i in 0..<4 {
+                faces.append(tronzoneFace(
+                    [low[i],low[(i+1)%4],high[(i+1)%4],high[i]],
+                    tint: _tintForFace(_tint, index: i),camera: c))
+            }
+            faces.append(tronzoneFace(high,tint: _tint, camera: c))
+        }
+        func _tintForFace(_ value: Int, index: Int) -> Int {
+            value + (index % 3)
+        }
+        if enemy.kind.isVehicle {
+            quadBox(2.5, 3.2, 0.22, 0.94, 3.2, -3.2, 26)
+            quadBox(1.8, 2.4, 0.94, 1.42, 2.3, -2.4, 24)
+            quadBox(1.12, 1.25, 1.42, 2.1, 1.25, -1.15, 27)
+            quadBox(0.30, 1.9, 1.72, 2.0, 4.8, 1.05, 28)
+            for side in [-1.0,1.0] {
+                faces.append(tronzoneFace([
+                    v(side*2.52,0.05,-3.0),
+                    v(side*2.52,0.05,3.0),
+                    v(side*2.52,0.76,3.0),
+                    v(side*2.52,0.76,-3.0)],tint:26,camera:c))
+            }
+        } else if enemy.kind == .saucer {
+            let hover = 7.5+sin(gameClock*2.4+enemy.phase)*0.55
+            let n = 12
+            let center = WorldPoint(enemy.center.x,hover,enemy.center.z)
+            for i in 0..<n {
+                let a=Double(i)*2*Double.pi/Double(n)
+                let b=Double(i+1)*2*Double.pi/Double(n)
+                let va = WorldPoint(enemy.center.x+cos(a)*3.7,hover,enemy.center.z+sin(a)*3.7)
+                let vb = WorldPoint(enemy.center.x+cos(b)*3.7,hover,enemy.center.z+sin(b)*3.7)
+                faces.append(tronzoneFace([center,va,vb],tint:i.isMultiple(of:2) ? 27 : 29,camera:c))
+            }
+        } else if enemy.kind == .fighter {
+            let high=3.9+0.4*sin(enemy.phase*0.9)
+            let w=[v(0,high,6.6),v(6.0,high,-1.0),v(1.0,high,-5),
+                   v(-1.0,high,-5),v(-6.0,high,-1.0)]
+            faces.append(tronzoneFace(w,tint:27,camera:c))
+        } else if enemy.kind == .drone {
+            let h = enemy.droneAltitude
+            let body=[v(-0.65,h,-0.85),v(0.65,h,-0.85),
+                      v(0.65,h,0.85),v(-0.65,h,0.85)]
+            faces.append(tronzoneFace(body,tint:27,camera:c))
+        }
+        return faces
     }
 
     // Physical Tronzone environment geometry. All four forms use an
@@ -3696,17 +3838,35 @@ final class BattlefieldScene: SKScene {
             let face = glassFacePool[visible]
             face.isHidden = false
             face.path = path
-            face.fillColor = facet.solid
-                ? NSColor(calibratedRed: 0.025, green: 0.095, blue: 0.105, alpha: 1)
-                : palette[facet.tint % palette.count]
+            if facet.solid && facet.tint >= 20 {
+                let base: [NSColor] = [
+                    NSColor(calibratedRed: 0.016, green: 0.065, blue: 0.046, alpha: 1),
+                    NSColor(calibratedRed: 0.035, green: 0.13, blue: 0.075, alpha: 1),
+                    NSColor(calibratedRed: 0.075, green: 0.21, blue: 0.12, alpha: 1),
+                    NSColor(calibratedRed: 0.028, green: 0.11, blue: 0.085, alpha: 1),
+                    NSColor(calibratedRed: 0.072, green: 0.12, blue: 0.095, alpha: 1),
+                    NSColor(calibratedRed: 0.13, green: 0.24, blue: 0.16, alpha: 1),
+                    NSColor(calibratedRed: 0.08, green: 0.10, blue: 0.13, alpha: 1),
+                    NSColor(calibratedRed: 0.20, green: 0.14, blue: 0.12, alpha: 1),
+                    NSColor(calibratedRed: 0.25, green: 0.13, blue: 0.095, alpha: 1),
+                    NSColor(calibratedRed: 0.08, green: 0.20, blue: 0.17, alpha: 1)
+                ]
+                face.fillColor = base[(facet.tint - 20) % base.count]
+            } else {
+                face.fillColor = facet.solid
+                    ? NSColor(calibratedRed: 0.025, green: 0.095, blue: 0.105, alpha: 1)
+                    : palette[facet.tint % palette.count]
+            }
             face.zPosition = CGFloat(visible) * 0.001
             // Render solid facades without the translucent glass edge
             // treatment, so they read as genuine non-transparent walls.
             face.strokeColor = facet.solid
-                ? NSColor(calibratedRed: 0.11, green: 0.29,
-                          blue: 0.30, alpha: 0.80)
+                ? (facet.tint >= 20
+                    ? NSColor(calibratedRed: 0.28, green: 0.92, blue: 0.40, alpha: 0.75)
+                    : NSColor(calibratedRed: 0.13, green: 0.42, blue: 0.34, alpha: 0.8))
                 : NSColor(calibratedRed: 0.71, green: 0.98,
                           blue: 0.97, alpha: 0.25)
+            face.lineWidth = facet.solid ? 1.0 : 0.5
             visible += 1
         }
         for i in visible..<glassFacePool.count { glassFacePool[i].isHidden = true }
