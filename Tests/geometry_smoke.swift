@@ -749,6 +749,23 @@ struct GeometrySmoke {
                          a.kind == b.kind && a.size == b.size)
             precondition(a.location.distance(to: GroundPoint(0,0)) > 20,
                          "Mountain start zone must be unobstructed")
+            let collisionKind: ObstacleCollision.Kind
+            switch a.kind {
+            case 0: collisionKind = .tower
+            case 1: collisionKind = .pyramid
+            case 2: collisionKind = .block
+            default: collisionKind = .monolith
+            }
+            let body = ObstacleCollision.body(center: a.location,
+                                               size: a.size,
+                                               kind: collisionKind)
+            precondition(ObstacleCollision.contains(a.location, body: body),
+                         "All alpine geometry must be tangible")
+            precondition(ObstacleCollision.firstImpact(
+                from: GroundPoint(a.location.x-15,a.location.z),
+                to: GroundPoint(a.location.x+15,a.location.z),
+                body: body, height: 0.5) != nil,
+                "Mountain features must intercept swept projectiles")
         }
         precondition(alpineA.contains(where: { $0.kind == 0 }))
         precondition(alpineA.contains(where: { $0.kind == 1 }))
