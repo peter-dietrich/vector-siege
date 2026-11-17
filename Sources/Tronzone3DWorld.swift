@@ -87,9 +87,14 @@ final class Tronzone3DWorld {
         camera.zNear = 0.4
         camera.zFar = 400
         camera.fieldOfView = 48
-        camera.wantsHDR = true
-        camera.bloomIntensity = 0.18
-        camera.bloomThreshold = 0.88
+        // SK3DNode composites SceneKit into SpriteKit's render pass. Camera
+        // HDR/bloom can select a SceneKit post-processing render pipeline
+        // without the host depth32Float_stencil8 attachment, triggering a
+        // Metal validation assertion. Keep the initial embedded render path
+        // single-pass; test advanced effects only after moving to SCNView.
+        camera.wantsHDR = false
+        camera.bloomIntensity = 0
+        camera.bloomThreshold = 1
         cameraNode.camera = camera
         scene.rootNode.addChildNode(cameraNode)
         viewport.pointOfView = cameraNode
