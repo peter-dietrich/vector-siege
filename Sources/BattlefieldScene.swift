@@ -154,6 +154,9 @@ final class BattlefieldScene: SKScene {
     private var cockpitV5Clock = 0.0
     private var approvedCockpit: CockpitV53LiveRenderer?
     private var true3DWorld: Tronzone3DWorld?
+    // Exposed only to the native host container: SceneKit owns its own
+    // render pass and framebuffer, independent of transparent SpriteKit.
+    var tronzoneRenderView: NSView? { true3DWorld?.renderView }
     private var approvedCockpitMissingAssets = false
     private var steerHoldSeconds: Double = 0
     private var previousSteerDirection: Double = 0
@@ -3083,7 +3086,6 @@ final class BattlefieldScene: SKScene {
         if true3DWorld == nil {
             let world = Tronzone3DWorld(viewportSize:size)
             true3DWorld = world
-            addChild(world.viewport)
         }
         guard battlefieldEnvironment == .alpine else { return }
         let sites = obstacles.map { o -> Tronzone3DWorld.Site in
@@ -3102,7 +3104,10 @@ final class BattlefieldScene: SKScene {
 
     private func renderTrue3D(_ camera: CameraProjection) {
         let show = battlefieldEnvironment == .alpine && displayMode != .classic
-        true3DWorld?.viewport.isHidden = !show
+        true3DWorld?.renderView.isHidden = !show
+        // A transparent SKView overlays the native SCNView for the approved
+        // cockpit and weapon FX. City and Classic retain opaque black canvas.
+        backgroundColor = show ? .clear : .black
         // These are only the legacy projected WORLD graphics. The cockpit,
         // rear optics, radar, reticle, projectiles, and effects remain intact.
         for layer in [ground,groundMesh,streetMarks,structures,
