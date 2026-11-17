@@ -157,6 +157,33 @@ final class Tronzone3DWorld {
         let node = SCNNode(geometry: geometry)
         node.castsShadow = false
         terrainRoot.addChildNode(node)
+
+        // A real depth-tested neon floor lattice. These segments follow the
+        // sampled 3D topography rather than floating across a flat 2D plane.
+        var gridIndices: [Int32] = []
+        gridIndices.reserveCapacity((count-1) * count * 4)
+        for row in 0..<count {
+            for col in 0..<count {
+                let vertex = Int32(row * count + col)
+                if col + 1 < count {
+                    gridIndices.append(vertex)
+                    gridIndices.append(vertex+1)
+                }
+                if row + 1 < count {
+                    gridIndices.append(vertex)
+                    gridIndices.append(vertex+Int32(count))
+                }
+            }
+        }
+        let gridElement = SCNGeometryElement(indices:gridIndices,
+                                             primitiveType:.line)
+        let gridGeometry = SCNGeometry(sources:[source],elements:[gridElement])
+        gridGeometry.firstMaterial = trim
+        let gridNode = SCNNode(geometry:gridGeometry)
+        gridNode.position.y = 0.045
+        gridNode.castsShadow = false
+        gridNode.opacity = 0.63
+        terrainRoot.addChildNode(gridNode)
     }
 
     func load(_ sites: [Site]) {
