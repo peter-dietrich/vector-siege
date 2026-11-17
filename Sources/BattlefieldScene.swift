@@ -931,7 +931,8 @@ final class BattlefieldScene: SKScene {
                             CockpitV53LiveRenderer.MapBuilding(
                                 x: $0.center.x, z: $0.center.z,
                                 size: $0.size,
-                                isSolid: $0.kind == .building || $0.kind == .block)
+                                isSolid: battlefieldEnvironment == .alpine ||
+                                    $0.kind == .building || $0.kind == .block)
                         }, mgAmmo: mgAmmo, mgHeat: mgHeat,
                         mgLocked: mgOverheatLock)
                 }
