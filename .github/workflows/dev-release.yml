@@ -76,10 +76,23 @@ jobs:
           echo "$DETAILS" | grep -F "TeamIdentifier=$APPLE_TEAM_ID"
           echo "$DETAILS" | grep -F "Identifier=io.vectorsiege.game"
           ditto -c -k --keepParent "$APP" "$RUNNER_TEMP/notarization.zip"
-          xcrun notarytool submit "$RUNNER_TEMP/notarization.zip" \
-            --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" \
-            --password "$APPLE_APP_SPECIFIC_PASSWORD" --wait \
-            --output-format json > "$RUNNER_TEMP/notary-result.json"
+          # Apple's notary service may transiently return HTTP 5xx; retry
+          # only the submission, never bypass notarization or verification.
+          for attempt in 1 2 3 4 5; do
+            if xcrun notarytool submit "$RUNNER_TEMP/notarization.zip" \
+              --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" \
+              --password "$APPLE_APP_SPECIFIC_PASSWORD" --wait \
+              --output-format json > "$RUNNER_TEMP/notary-result.json"; then
+              break
+            fi
+            if [[ "$attempt" == "5" ]]; then
+              echo "::error::Apple notarization failed after five attempts"
+              exit 1
+            fi
+            delay=$((attempt * 30))
+            echo "::warning::Notarization submission attempt $attempt failed; retrying after ${delay}s"
+            sleep "$delay"
+          done
           python3 -c 'import json,sys; r=json.load(open(sys.argv[1])); s=r.get("status"); print("Apple notarization:",s); sys.exit(0 if s=="Accepted" else 1)' \
             "$RUNNER_TEMP/notary-result.json"
           xcrun stapler staple "$APP"
