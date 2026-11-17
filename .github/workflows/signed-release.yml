@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - ci/manual-signed-release-pilot
+      - ci/siege-restored-cockpit-signed-qa
     paths:
       - .github/workflows/signed-release.yml
   workflow_dispatch:
