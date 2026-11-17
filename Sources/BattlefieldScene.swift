@@ -411,7 +411,9 @@ final class BattlefieldScene: SKScene {
             layer.strokeColor = .clear
             addChild(layer)
         }
-        glassLayer.zPosition = 3.7
+        // Solid world polygons must draw over legacy structure/foliage strokes,
+        // but below enemy sprites and live weapon effects.
+        glassLayer.zPosition = 4.45
         addChild(glassLayer)
         for (node, layer) in [(radarEnemyContacts, 13.3), (radarHunterContacts, 13.4),
                                (radarSaucerContacts, 13.45), (radarDroneContacts, 13.47),
