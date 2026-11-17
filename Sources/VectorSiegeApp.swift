@@ -92,10 +92,10 @@ struct SiegeWindow: View {
                 Text("VECTOR SIEGE")
                     .font(.system(size: 15, weight: .bold, design: .monospaced))
                     .tracking(1.5)
-                Text("v2026.11.17d")
+                Text("v2026.11.17e")
                     .font(.system(size: 10, weight: .medium, design: .monospaced))
                     .foregroundStyle(.gray)
-                    .help("Source build identifier: v2026.11.17d — true 3D Tronzone battlefield preview")
+                    .help("Source build identifier: v2026.11.17e — true 3D Tronzone battlefield preview")
                 Spacer(minLength: 4)
                 Picker("Display", selection: $session.displayMode) {
                     ForEach(DisplayMode.allCases) { Text($0.rawValue).tag($0) }
@@ -262,21 +262,44 @@ struct SiegeWindow: View {
 struct BattlefieldView: NSViewRepresentable {
     let scene: BattlefieldScene
 
-    func makeNSView(context: Context) -> TankKeyView {
-        let view = TankKeyView()
-        view.allowsTransparency = false
-        view.ignoresSiblingOrder = true
-        view.preferredFramesPerSecond = 60
-        view.presentScene(scene)
-        view.sceneRef = scene
-        DispatchQueue.main.async {
-            view.window?.makeFirstResponder(view)
+    func makeNSView(context: Context) -> NSView {
+        // Two native sibling renderers, not SceneKit inside SK3DNode.
+        // SceneKit renders opaque 3D terrain with its own depth-stencil buffer;
+        // transparent SpriteKit draws the approved cockpit, HUD and effects.
+        let container = NSView(frame: CGRect(origin: .zero, size: scene.size))
+        container.wantsLayer = true
+        container.layer?.backgroundColor = NSColor.black.cgColor
+        if let world = scene.tronzoneRenderView {
+            world.frame = container.bounds
+            world.autoresizingMask = [.width, .height]
+            container.addSubview(world)
         }
-        return view
+        let overlay = TankKeyView(frame: container.bounds)
+        overlay.allowsTransparency = true
+        overlay.ignoresSiblingOrder = true
+        overlay.preferredFramesPerSecond = 60
+        overlay.autoresizingMask = [.width, .height]
+        overlay.presentScene(scene)
+        overlay.sceneRef = scene
+        container.addSubview(overlay)
+        DispatchQueue.main.async {
+            overlay.window?.makeFirstResponder(overlay)
+        }
+        return container
     }
 
-    func updateNSView(_ nsView: TankKeyView, context: Context) {
-        if nsView.scene !== scene { nsView.presentScene(scene) }
+    func updateNSView(_ nsView: NSView, context: Context) {
+        guard let overlay = nsView.subviews.compactMap({ $0 as? TankKeyView }).first else { return }
+        if overlay.scene !== scene {
+            overlay.presentScene(scene)
+            overlay.sceneRef = scene
+        }
+        if let world = scene.tronzoneRenderView, world.superview !== nsView {
+            world.removeFromSuperview()
+            world.frame = nsView.bounds
+            world.autoresizingMask = [.width, .height]
+            nsView.addSubview(world, positioned: .below, relativeTo: overlay)
+        }
     }
 }
 
