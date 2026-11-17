@@ -3398,6 +3398,9 @@ final class BattlefieldScene: SKScene {
         }
         structures.path = battlefieldEnvironment == .alpine ? alpineOutline : structurePath
         alpineSurfaces.path = battlefieldEnvironment == .alpine ? alpineFill : nil
+        alpineSurfaces.fillColor = NSColor(calibratedRed: 0.015, green: 0.075,
+                                           blue: 0.038, alpha: 0.88)
+        alpineSurfaces.strokeColor = .clear
         renderVegetation(c)
         updateGlassFaces(facets, camera: c)
 
@@ -3455,6 +3458,83 @@ final class BattlefieldScene: SKScene {
         opponentSaucerLines.path = saucerPath
         droneLines.path = dronePath
         fighterLines.path = fighterPath
+    }
+
+    // Physical Tronzone environment geometry. All four forms use an
+    // existing ObstacleCollision.Body (same center, size and kind) and
+    // participate in AI avoidance, projectiles, radar and player collision.
+    // Only distant skyline facets are decorative.
+    private func drawAlpineObstacle(_ obstacle: Obstacle,
+                                     outline: CGMutablePath,
+                                     surfaces: CGMutablePath,
+                                     camera c: CameraProjection) {
+        let p = obstacle.center
+        let s = obstacle.size
+        func w(_ x: Double, _ y: Double, _ z: Double) -> WorldPoint {
+            WorldPoint(p.x+x, y, p.z+z)
+        }
+        func edge(_ a: WorldPoint, _ b: WorldPoint) {
+            line(outline, a, b, c)
+        }
+        func polygon(_ corners: [WorldPoint], fill: Bool = true) {
+            guard corners.count > 2 else { return }
+            for i in corners.indices {
+                edge(corners[i], corners[(i+1)%corners.count])
+            }
+            if fill, let path = glassFacePath(corners, camera: c) {
+                surfaces.addPath(path)
+            }
+        }
+        switch obstacle.kind {
+        case .tower: // Pine: layered illuminated triangular foliage and trunk
+            let height = s*4.1
+            let root = w(0,0,0)
+            let tip = w(0,height,0)
+            edge(root, tip)
+            for level in 0..<3 {
+                let y = 0.8 + Double(level)*height*0.24
+                let reach = s*(1.15-Double(level)*0.22)
+                let crownTip = w(0,min(height,y+height*0.50),0)
+                let north = w(0,y,reach)
+                let south = w(0,y,-reach)
+                let east = w(reach,y,0)
+                let west = w(-reach,y,0)
+                polygon([north,crownTip,east])
+                polygon([east,crownTip,south])
+                polygon([south,crownTip,west])
+                polygon([west,crownTip,north])
+                polygon([north,east,south,west], fill: false)
+            }
+        case .pyramid: // Faceted polygon boulder, no floating geometry
+            let h = s*1.2
+            let a = w(-s,0,-s*0.75), b = w(s,0,-s*0.75)
+            let d = w(-s,0,s*0.8), e = w(s,0,s*0.8)
+            let peak = w(-s*0.13,h,s*0.08)
+            polygon([a,b,peak]); polygon([b,e,peak])
+            polygon([e,d,peak]); polygon([d,a,peak])
+            edge(a,e); edge(b,d)
+        case .block: // Low-profile fortified forward outpost
+            let h = s*1.35
+            let b = [w(-s,0,-s),w(s,0,-s),w(s,0,s),w(-s,0,s)]
+            let roof = [w(-s*0.75,h,-s*0.75),w(s*0.75,h,-s*0.75),
+                        w(s*0.75,h,s*0.75),w(-s*0.75,h,s*0.75)]
+            for i in 0..<4 { polygon([b[i],b[(i+1)%4],roof[(i+1)%4],roof[i]]) }
+            polygon(roof)
+            edge(w(-s*0.4,h*0.58,s),w(s*0.4,h*0.58,s))
+            edge(w(0,h,0),w(0,h+1.6,0))
+        case .monolith: // Elevated communications / radar relay
+            let h = s*5.0
+            let corners = [w(-s*0.5,0,-s*0.5),w(s*0.5,0,-s*0.5),
+                           w(s*0.5,0,s*0.5),w(-s*0.5,0,s*0.5)]
+            let tops = corners.map { WorldPoint($0.x,h,$0.z) }
+            for i in 0..<4 { polygon([corners[i],corners[(i+1)%4],
+                                       tops[(i+1)%4],tops[i]]) }
+            edge(w(-s*1.2,h,0),w(s*1.2,h,0))
+            edge(w(0,h-0.3,-s),w(0,h-0.3,s))
+            edge(w(0,h,0),w(0,h+2.3,0))
+        case .building:
+            drawArchitecture(obstacle, on: outline, camera: c)
+        }
     }
 
     // Filled translucent polygons are rendered back-to-front beneath the vector
