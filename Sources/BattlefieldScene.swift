@@ -3564,7 +3564,9 @@ final class BattlefieldScene: SKScene {
             if battlefieldEnvironment == .alpine {
                 drawAlpineObstacle(o, outline: alpineOutline,
                                    surfaces: alpineFill, camera: c)
-                facets.append(contentsOf: tronzoneObstacleFaces(o, camera: c))
+                if displayMode != .classic {
+                    facets.append(contentsOf: tronzoneObstacleFaces(o, camera: c))
+                }
                 continue
             }
             switch o.kind {
