@@ -2861,9 +2861,11 @@ final class BattlefieldScene: SKScene {
             mountainFacetLines.glowWidth = 1.6
             groundMesh.strokeColor = NSColor(calibratedRed: 0.10, green: 0.93, blue: 0.30, alpha: 0.48)
             groundMesh.glowWidth = 0.8
-            structures.strokeColor = NSColor(calibratedRed: 0.28, green: 1.0, blue: 0.40, alpha: 0.96)
-            structures.lineWidth = 1.7
-            structures.glowWidth = 2.4
+            // Neon trim is a detail over fully shaded bodies, not the body.
+            structures.strokeColor = NSColor(calibratedRed: 0.28, green: 1.0,
+                                              blue: 0.40, alpha: 0.64)
+            structures.lineWidth = 1.15
+            structures.glowWidth = 0.85
             foliageLines.strokeColor = NSColor(calibratedRed: 0.11, green: 0.67, blue: 0.26, alpha: 0.75)
         } else {
             distantMountains.fillColor = NSColor(calibratedRed: 0.10, green: 0.16, blue: 0.22, alpha: 0.92)
