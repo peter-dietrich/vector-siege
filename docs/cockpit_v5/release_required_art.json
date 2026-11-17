@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "description": "Approved live cockpit: thirteen v5.3 upper artwork PNGs plus Phase 1 approved lower-chassis PNG. Required in signed macOS builds.",
+  "required_pngs": [
+    "cockpit_fire_bezel.png",
+    "fire_screen_wells.png",
+    "tank_technical_art.png",
+    "fire_glass_overlay.png",
+    "cockpit_map_bezel.png",
+    "map_terrain_underlay.png",
+    "map_glass_overlay.png",
+    "cockpit_optics_bezel.png",
+    "optics_sensor_underlay.png",
+    "optics_glass_overlay.png",
+    "cockpit_systems_bezel.png",
+    "systems_screen_underlay.png",
+    "systems_glass_overlay.png",
+    "VectorSiege_Lower_Cockpit_Phase1_Approved.png"
+  ]
+}
