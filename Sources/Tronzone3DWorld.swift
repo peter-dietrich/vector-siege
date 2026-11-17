@@ -192,25 +192,25 @@ final class Tronzone3DWorld {
                 node.addChildNode(rockNode)
             } else if site.kind == 2 {
                 let body = box(s*1.9,s*1.25,s*1.9,material:bunkerMaterial,chamfer:s*0.08)
-                body.position.y = Float(s*0.625)
+                body.position.y = (s*0.625)
                 node.addChildNode(body)
                 let roof = box(s*2.3,s*0.18,s*2.3,material:hullMaterial)
-                roof.position.y = Float(s*1.32)
+                roof.position.y = (s*1.32)
                 node.addChildNode(roof)
                 let beam = box(s*1.2,s*0.04,s*0.08,material:trim,chamfer:0)
                 beam.position = SCNVector3(0,Float(s*0.85),Float(-s*0.98))
                 node.addChildNode(beam)
             } else {
                 let tower = box(s*0.72,s*5,s*0.72,material:bunkerMaterial)
-                tower.position.y = Float(s*2.5)
+                tower.position.y = (s*2.5)
                 node.addChildNode(tower)
                 let beacon = box(s*1.6,s*0.12,s*1.6,material:trim)
-                beacon.position.y = Float(s*5)
+                beacon.position.y = (s*5)
                 node.addChildNode(beacon)
                 let dish = SCNTorus(ringRadius:s*0.8, pipeRadius:s*0.06)
                 dish.firstMaterial = trim
                 let radar = SCNNode(geometry:dish)
-                radar.position.y = Float(s*5.5)
+                radar.position.y = (s*5.5)
                 radar.eulerAngles.x = 0.33
                 node.addChildNode(radar)
             }
@@ -263,7 +263,7 @@ final class Tronzone3DWorld {
             node.position = SCNVector3(Float(contact.x),
                                        level(contact.x, contact.z) + Float(contact.altitude),
                                        Float(-contact.z))
-            node.eulerAngles.y = Float(-contact.heading)
+            node.eulerAngles.y = CGFloat(-contact.heading)
             node.isHidden = false
             remaining.remove(contact.id)
         }
