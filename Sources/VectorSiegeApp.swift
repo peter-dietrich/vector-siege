@@ -225,9 +225,12 @@ struct SiegeWindow: View {
         .onChange(of: session.displayMode) { _ in session.apply() }
         .onChange(of: session.threatLevel) { _ in session.apply() }
         .onChange(of: session.startTime) { preset in
-            // Changing the preset previews the lighting immediately and
-            // establishes the starting hour for the next New Game.
-            session.scene.setTimeOfDay(preset, hoursPerWave:session.hoursPerWave)
+            // A restored save already set the exact clock; changing the
+            // SwiftUI picker model during resume must NOT reset that clock.
+            if session.scene.startTime != preset {
+                session.scene.setTimeOfDay(preset,
+                                           hoursPerWave:session.hoursPerWave)
+            }
         }
         .onChange(of: session.hoursPerWave) { amount in
             session.scene.setTimeOfDay(session.startTime,
