@@ -171,6 +171,44 @@ enum CockpitV53LowerChassis {
             bolt(gapX, 235)
         }
 
+        // Recessed structural fastening rails reinforce the lower modules.
+        // These follow the same physical framing and light direction as the
+        // upper cockpit bezels without adding false telemetry.
+        gradient(CGRect(x: 16, y: 207, width: 1568, height: 18),
+                 [rgb(0.055,0.062,0.071),rgb(0.36,0.37,0.36),
+                  rgb(0.15,0.17,0.18)], [0,0.30,1],radius: 2)
+        line(CGPoint(x: 23, y: 223), CGPoint(x: 1577, y: 223),
+             rgb(0.62,0.60,0.53), 1.1)
+        for opening in openings {
+            let x = opening.x
+            let w = opening.width
+            // Inset metallic inner bezel and the narrow amber socket on the
+            // right edge provide mechanical depth, even on short displays.
+            outline(CGRect(x: x+13, y: 74, width: w-26, height: 135),
+                    6, rgb(0.48,0.50,0.49,0.85), 1.3)
+            outline(CGRect(x: x+18, y: 79, width: w-36, height: 120),
+                    4, rgb(0.015,0.040,0.044), 2.2)
+            gradient(CGRect(x: x+w-20, y: 103, width: 3, height: 45),
+                     [rgb(0.23,0.11,0.025),rgb(0.96,0.54,0.15),
+                      rgb(0.16,0.075,0.019)], [0,0.50,1],
+                     radius: 1, vertical: false)
+            // Triangular dark ventilation pockets are subtle and distinct
+            // from the live gauges, tucked between monitor housing and rail.
+            for j in 0..<3 {
+                let xx = x + w*0.32 + CGFloat(j)*w*0.13
+                line(CGPoint(x: xx, y: 66), CGPoint(x: xx+7, y: 66),
+                     rgb(0.36,0.37,0.36), 1)
+            }
+        }
+        // Broad connecting joint at center creates the visual impression of
+        // an armored console mounted to a single cockpit frame.
+        gradient(CGRect(x: 675, y: 214, width: 250, height: 25),
+                 [rgb(0.42,0.42,0.39),rgb(0.12,0.14,0.15),
+                  rgb(0.06,0.07,0.08)], [0,0.40,1],radius: 4)
+        outline(CGRect(x: 680, y: 216, width: 240, height: 21),
+                4, edge, 1.1)
+        for x in [688.0, 912.0] { bolt(x,226) }
+
         // The physical control rail is integral to the assembly and sits
         // fully ABOVE the game help footer.
         gradient(CGRect(x: 10, y: 3, width: 1580, height: 49),
