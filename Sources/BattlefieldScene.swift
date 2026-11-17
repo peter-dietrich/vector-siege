@@ -2894,9 +2894,9 @@ final class BattlefieldScene: SKScene {
             layer.isHidden = !modern
         }
         if battlefieldEnvironment == .alpine {
-            distantMountains.fillColor = NSColor(calibratedRed: 0.04, green: 0.17, blue: 0.085, alpha: 0.92)
-            middleMountains.fillColor = NSColor(calibratedRed: 0.027, green: 0.12, blue: 0.064, alpha: 0.97)
-            nearMountains.fillColor = NSColor(calibratedRed: 0.013, green: 0.072, blue: 0.038, alpha: 1)
+            distantMountains.fillColor = NSColor(calibratedRed: 0.14, green: 0.30, blue: 0.25, alpha: 1)
+            middleMountains.fillColor = NSColor(calibratedRed: 0.09, green: 0.22, blue: 0.19, alpha: 1)
+            nearMountains.fillColor = NSColor(calibratedRed: 0.045, green: 0.15, blue: 0.12, alpha: 1)
             horizonMist.fillColor = NSColor(calibratedRed: 0.17, green: 0.97, blue: 0.38, alpha: 0.075)
             mountainFacetLines.strokeColor = NSColor(calibratedRed: 0.18, green: 0.87, blue: 0.36, alpha: 0.48)
             mountainFacetLines.lineWidth = 0.8
@@ -3453,8 +3453,8 @@ final class BattlefieldScene: SKScene {
         }
         farSkyline.path = farPath
         skyline.path = nearPath
-        mountainFacetLines.path = battlefieldEnvironment == .alpine
-            ? alpineFacets : nil
+        mountainFacetLines.path = battlefieldEnvironment == .alpine &&
+            displayMode == .classic ? alpineFacets : nil
         if displayMode != .classic {
             distantMountains.path = distantFill
             middleMountains.path = middleFill
@@ -3587,13 +3587,20 @@ final class BattlefieldScene: SKScene {
                 }
             }
         }
-        structures.path = battlefieldEnvironment == .alpine ? alpineOutline : structurePath
+        // Classic retains the vintage outlines; modern uses opaque shaded mesh
+        // faces and leaves just subtle controlled edge definition on each face.
+        structures.path = displayMode == .classic
+            ? (battlefieldEnvironment == .alpine ? alpineOutline : structurePath)
+            : nil
         alpineSurfaces.path = battlefieldEnvironment == .alpine ? alpineFill : nil
         alpineSurfaces.fillColor = .clear
         // Solid polygons are owned by the same sorted face pool as tank armor,
         // not a translucent overlay painted over the entire forest.
         alpineSurfaces.strokeColor = .clear
         renderVegetation(c)
+        if displayMode != .classic && battlefieldEnvironment == .alpine {
+            foliageLines.path = nil
+        }
         // The face pool is updated after ground vehicles are appended so
         // solid armor and architectural faces share one depth ordering.
 
@@ -3967,19 +3974,29 @@ final class BattlefieldScene: SKScene {
             face.isHidden = false
             face.path = path
             if facet.solid && facet.tint >= 20 {
+                // Distinct light-facing planes create visible 3D volume.
+                // Surface values deliberately span more than the legacy
+                // near-black palette: the neon belongs on edges, not faces.
                 let base: [NSColor] = [
-                    NSColor(calibratedRed: 0.016, green: 0.065, blue: 0.046, alpha: 1),
-                    NSColor(calibratedRed: 0.035, green: 0.13, blue: 0.075, alpha: 1),
-                    NSColor(calibratedRed: 0.075, green: 0.21, blue: 0.12, alpha: 1),
-                    NSColor(calibratedRed: 0.028, green: 0.11, blue: 0.085, alpha: 1),
-                    NSColor(calibratedRed: 0.072, green: 0.12, blue: 0.095, alpha: 1),
-                    NSColor(calibratedRed: 0.13, green: 0.24, blue: 0.16, alpha: 1),
-                    NSColor(calibratedRed: 0.08, green: 0.10, blue: 0.13, alpha: 1),
-                    NSColor(calibratedRed: 0.20, green: 0.14, blue: 0.12, alpha: 1),
-                    NSColor(calibratedRed: 0.25, green: 0.13, blue: 0.095, alpha: 1),
-                    NSColor(calibratedRed: 0.08, green: 0.20, blue: 0.17, alpha: 1)
+                    NSColor(calibratedRed: 0.055, green: 0.19, blue: 0.13, alpha: 1),
+                    NSColor(calibratedRed: 0.12, green: 0.34, blue: 0.19, alpha: 1),
+                    NSColor(calibratedRed: 0.21, green: 0.43, blue: 0.25, alpha: 1),
+                    NSColor(calibratedRed: 0.075, green: 0.24, blue: 0.19, alpha: 1),
+                    NSColor(calibratedRed: 0.16, green: 0.28, blue: 0.23, alpha: 1),
+                    NSColor(calibratedRed: 0.24, green: 0.40, blue: 0.29, alpha: 1),
+                    NSColor(calibratedRed: 0.13, green: 0.19, blue: 0.24, alpha: 1),
+                    NSColor(calibratedRed: 0.29, green: 0.23, blue: 0.20, alpha: 1),
+                    NSColor(calibratedRed: 0.39, green: 0.26, blue: 0.18, alpha: 1),
+                    NSColor(calibratedRed: 0.15, green: 0.34, blue: 0.28, alpha: 1)
                 ]
-                face.fillColor = base[(facet.tint - 20) % base.count]
+                let cycle = ((gameClock / 240) + 0.35).truncatingRemainder(dividingBy: 1)
+                let lighting = 0.48 + 0.52 * max(0, sin(Double.pi * cycle))
+                let material = base[(facet.tint - 20) % base.count]
+                face.fillColor = NSColor(
+                    calibratedRed: material.redComponent * lighting,
+                    green: material.greenComponent * lighting,
+                    blue: material.blueComponent * lighting,
+                    alpha: 1)
             } else {
                 face.fillColor = facet.solid
                     ? NSColor(calibratedRed: 0.025, green: 0.095, blue: 0.105, alpha: 1)
@@ -3990,11 +4007,11 @@ final class BattlefieldScene: SKScene {
             // treatment, so they read as genuine non-transparent walls.
             face.strokeColor = facet.solid
                 ? (facet.tint >= 20
-                    ? NSColor(calibratedRed: 0.28, green: 0.92, blue: 0.40, alpha: 0.75)
-                    : NSColor(calibratedRed: 0.13, green: 0.42, blue: 0.34, alpha: 0.8))
+                    ? NSColor(calibratedRed: 0.26, green: 0.60, blue: 0.35, alpha: 0.40)
+                    : NSColor(calibratedRed: 0.13, green: 0.42, blue: 0.34, alpha: 0.38))
                 : NSColor(calibratedRed: 0.71, green: 0.98,
                           blue: 0.97, alpha: 0.25)
-            face.lineWidth = facet.solid ? 1.0 : 0.5
+            face.lineWidth = facet.solid ? 0.55 : 0.5
             visible += 1
         }
         for i in visible..<glassFacePool.count { glassFacePool[i].isHidden = true }
