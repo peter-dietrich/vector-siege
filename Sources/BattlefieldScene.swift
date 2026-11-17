@@ -3108,7 +3108,8 @@ final class BattlefieldScene: SKScene {
         for layer in [ground,groundMesh,streetMarks,structures,
                       alpineSurfaces,mountainFacetLines,foliageLines,
                       distantMountains,middleMountains,nearMountains,
-                      farSkyline,skyline,horizonMist,opponentLines,armoredLines] {
+                      farSkyline,skyline,horizonMist,opponentLines,armoredLines,
+                      droneLines,fighterLines,opponentSaucerLines] {
             layer.isHidden = show
         }
         for layer in skyBands { layer.isHidden = show }
@@ -3118,11 +3119,22 @@ final class BattlefieldScene: SKScene {
         world.updateCamera(x:tankPosition.x,z:tankPosition.z,heading:heading,
                            eyeHeight:camera.eyeHeight,
                            viewportSize:size,pitchPoints:camera.pitchPoints)
-        world.updateContacts(enemies.enumerated().compactMap { index, enemy in
-            guard enemy.kind.isVehicle else { return nil }
+        world.updateContacts(enemies.enumerated().map { index, enemy in
+            let kind: Int
+            let altitude: Double
+            switch enemy.kind {
+            case .drone:
+                kind = 1; altitude = enemy.droneAltitude
+            case .saucer:
+                kind = 2; altitude = 7.5 + sin(gameClock*2.4+enemy.phase)*0.55
+            case .fighter:
+                kind = 3; altitude = 3.9 + 0.4*sin(enemy.phase*0.9)
+            default:
+                kind = 0; altitude = 0
+            }
             return Tronzone3DWorld.Contact(id:index,x:enemy.center.x,
                                           z:enemy.center.z,heading:enemy.heading,
-                                          kind:0,altitude:0)
+                                          kind:kind,altitude:altitude)
         })
         _ = ground
     }
