@@ -29,6 +29,7 @@ final class Tronzone3DWorld {
     private let actorRoot = SCNNode()
     private let sun = SCNNode()
     private var contactNodes: [Int: SCNNode] = [:]
+    private var contactKinds: [Int: Int] = [:]
     private var terrainOrigin = (Int.min, Int.min)
     private let groundMaterial = Tronzone3DWorld.material(0.018, 0.075, 0.047, roughness: 0.38)
     private let rockMaterial = Tronzone3DWorld.material(0.075, 0.13, 0.13, roughness: 0.85)
@@ -276,16 +277,68 @@ final class Tronzone3DWorld {
         return root
     }
 
+    private func airModel(kind: Int) -> SCNNode {
+        let root = SCNNode()
+        if kind == 1 {
+            let body = box(1.5,0.45,2.0,material:enemyMaterial,chamfer:0.16)
+            root.addChildNode(body)
+            for side in [-1.0,1.0] {
+                for z in [-1.2,1.2] {
+                    let arm = box(3.5,0.12,0.13,material:enemyMaterial,chamfer:0.02)
+                    arm.position = SCNVector3(0,0.06,CGFloat(z))
+                    root.addChildNode(arm)
+                    let motor = SCNCylinder(radius:0.56,height:0.12)
+                    motor.firstMaterial = redTrim
+                    let node = SCNNode(geometry:motor)
+                    node.position = SCNVector3(CGFloat(side*1.45),0.16,CGFloat(z))
+                    root.addChildNode(node)
+                }
+            }
+        } else if kind == 2 {
+            let disk = SCNCylinder(radius:3.7,height:0.6)
+            disk.radialSegmentCount = 20
+            disk.firstMaterial = hullMaterial
+            root.addChildNode(SCNNode(geometry:disk))
+            let center = SCNSphere(radius:1.7)
+            center.segmentCount = 12
+            center.firstMaterial = enemyMaterial
+            let dome = SCNNode(geometry:center)
+            dome.scale.y = 0.6
+            dome.position.y = 0.5
+            root.addChildNode(dome)
+            let ring = SCNTorus(ringRadius:3.6,pipeRadius:0.09)
+            ring.firstMaterial = redTrim
+            root.addChildNode(SCNNode(geometry:ring))
+        } else {
+            let fuselage = box(1.3,0.58,6.5,material:enemyMaterial,chamfer:0.15)
+            root.addChildNode(fuselage)
+            let wing = box(9.3,0.16,2.2,material:hullMaterial,chamfer:0.22)
+            wing.position.z = -0.3
+            root.addChildNode(wing)
+            let tail = box(3.8,0.17,1.3,material:enemyMaterial,chamfer:0.12)
+            tail.position.z = 2.2
+            root.addChildNode(tail)
+            let beam = box(0.10,0.05,5.0,material:redTrim,chamfer:0)
+            beam.position.y = 0.35
+            root.addChildNode(beam)
+        }
+        return root
+    }
+
     func updateContacts(_ contacts: [Contact]) {
         var remaining = Set(contactNodes.keys)
         for contact in contacts {
             let node: SCNNode
-            if let existing = contactNodes[contact.id] {
+            if let existing = contactNodes[contact.id],
+               contactKinds[contact.id] == contact.kind {
                 node = existing
             } else {
-                node = tankModel(isEnemy: true)
+                contactNodes[contact.id]?.removeFromParentNode()
+                node = contact.kind == 0
+                    ? tankModel(isEnemy: true) : airModel(kind: contact.kind)
                 actorRoot.addChildNode(node)
                 contactNodes[contact.id] = node
+                contactKinds[contact.id] = contact.kind
             }
             node.position = SCNVector3(Float(contact.x),
                                        level(contact.x, contact.z) + Float(contact.altitude),
@@ -296,6 +349,7 @@ final class Tronzone3DWorld {
         }
         for id in remaining {
             contactNodes.removeValue(forKey:id)?.removeFromParentNode()
+            contactKinds.removeValue(forKey:id)
         }
     }
 
