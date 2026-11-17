@@ -10,7 +10,8 @@ enum BattlefieldEnvironment: String, CaseIterable, Identifiable, Codable {
 /// Shared, deterministic environmental geometry. Interactive mountain
 /// features use the same collision and AI model as city architecture.
 enum TronzoneBiome {
-    static var active: BattlefieldEnvironment = .alpine
+    // Accessed by the single SpriteKit game scene on the main thread.
+    nonisolated(unsafe) static var active: BattlefieldEnvironment = .alpine
 
     static func mountainHeight(_ p: GroundPoint) -> Double {
         // Graded valley around the initial spawn; contiguous traversable
