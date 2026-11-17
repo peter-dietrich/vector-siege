@@ -228,6 +228,9 @@ final class BattlefieldScene: SKScene {
     private let skyline = SKShapeNode()
     private let farSkyline = SKShapeNode()
     private let skyBands = (0..<10).map { _ in SKShapeNode() }
+    private let celestialDetails = SKShapeNode()
+    private let skyClouds = SKShapeNode()
+    private let skyBirds = SKShapeNode()
     private let distantMountains = SKShapeNode()
     private let middleMountains = SKShapeNode()
     private let nearMountains = SKShapeNode()
@@ -394,6 +397,11 @@ final class BattlefieldScene: SKScene {
             band.zPosition = 0.1
             band.strokeColor = .clear
             addChild(band)
+        }
+        for (node, depth) in [(celestialDetails, 0.25), (skyClouds, 0.35), (skyBirds, 0.45)] {
+            node.zPosition = depth
+            node.strokeColor = .clear
+            addChild(node)
         }
         for (layer, z) in [
             (distantMountains, 0.8), (middleMountains, 1.25),
@@ -1363,7 +1371,9 @@ final class BattlefieldScene: SKScene {
                     radius: shell.payload == "bomb" ? 5.0 :
                         shell.payload == "droneCharge" ? 2.7 : 2.0)
             } else {
-                for idx in enemies.indices where !casualties.contains(idx) {
+                for idx in enemies.indices where !casualties.contains(idx) &&
+                    enemies[idx].kind != .drone &&
+                    (enemies[idx].kind != .saucer || saucerIsVulnerable(enemies[idx])) {
                     let radius: Double
                     switch enemies[idx].kind {
                     case .fighter: radius = 5.5
@@ -1378,6 +1388,36 @@ final class BattlefieldScene: SKScene {
                         hit < (targetTime ?? .infinity) {
                         targetTime = hit
                         targetIndex = idx
+                    }
+                }
+            }
+
+            // One cannon round can shred several light drones on the swept
+            // path, but never travels through terrain, structures or armor.
+            if !shell.hostile {
+                let blockingTime = min(terrainTime ?? .infinity,
+                                       wallTime ?? .infinity,
+                                       targetTime ?? .infinity)
+                var droneContacts: [(index: Int, time: Double)] = []
+                for index in enemies.indices where !casualties.contains(index) &&
+                    enemies[index].kind == .drone {
+                    if let contact = ObstacleCollision.firstCircleImpact(
+                        from: old, to: shell.center, center: enemies[index].center,
+                        radius: 1.8), contact < blockingTime {
+                        droneContacts.append((index, contact))
+                    }
+                }
+                for contact in droneContacts.sorted(by: { $0.time < $1.time }) {
+                    let index = contact.index
+                    shotTally.hit()
+                    enemies[index].hitPoints -= 1
+                    let position = old + (shell.center - old) * contact.time
+                    burst(at: WorldPoint(position, height: enemies[index].droneAltitude), count: 12)
+                    registerImpact(at: position, kind: .aircraft)
+                    if enemies[index].hitPoints <= 0 {
+                        casualties.insert(index)
+                        addPoints(225)
+                        sound("impact.wav")
                     }
                 }
             }
@@ -1758,7 +1798,7 @@ final class BattlefieldScene: SKScene {
         mgBarrel = 1 - mgBarrel
         mgAmmo -= 1
         mgFired += 1
-        if mgFired.isMultiple(of: 3) { sound("shot.wav") }
+        combatAudio.play(.machineGun, enabled: soundOn)
         mgShotCooldown = 0.095
         mgHeat = min(110, mgHeat + 3.8)
         if mgHeat >= 100 { mgOverheatLock = true }
@@ -3255,6 +3295,84 @@ final class BattlefieldScene: SKScene {
         return multiplier * (7 + 56 * pow(a, 5.2) + 26 * pow(b, 9) + 7 * pow(c, 3))
     }
 
+
+    // Procedural sky: sun/moon, altitude haze, drifting layered clouds,
+    // birds and an anchored night star field. No image assets or frame-random
+    // flicker; everything remains stable under camera motion.
+    private func renderSkyDetails(camera c: CameraProjection) {
+        guard displayMode != .classic else {
+            celestialDetails.path = nil
+            skyClouds.path = nil
+            skyBirds.path = nil
+            return
+        }
+        let width = c.viewportWidth
+        let top = c.viewportHeight
+        let horizon = c.horizon
+        let cycle = (gameClock / 240).truncatingRemainder(dividingBy: 1)
+        let night = cycle >= 0.70 || cycle < 0.12
+        let phase = 2 * Double.pi * cycle
+        let disk = CGMutablePath()
+        let clouds = CGMutablePath()
+        let birds = CGMutablePath()
+        let celestialX = width * (0.5 + 0.38 * cos(phase - 0.6))
+        let celestialY = horizon + (top - horizon) * (0.28 + 0.55 * abs(sin(phase)))
+        disk.addEllipse(in: CGRect(x: celestialX - (night ? 9 : 16),
+                                   y: celestialY - (night ? 9 : 16),
+                                   width: night ? 18 : 32, height: night ? 18 : 32))
+        // Deterministic stars, scaled by the phase of the day.
+        if night {
+            for i in 0..<105 {
+                let seed = Double(i)
+                let x = (sin(seed * 127.1 + heading * 0.9) * 43758.5453)
+                let y = (sin(seed * 311.7 + 0.34) * 18542.143)
+                let px = (x - floor(x)) * width
+                let py = horizon + 22 + (y - floor(y)) * max(1, top - horizon - 35)
+                let radius = i.isMultiple(of: 11) ? 1.5 : 0.65
+                disk.addEllipse(in: CGRect(x: px, y: py, width: radius * 2,
+                                            height: radius * 2))
+            }
+        }
+        for i in 0..<8 {
+            let seed = Double(i)
+            let drift = gameClock * (1.2 + seed * 0.18)
+            let centerX = (seed * 137 + drift - heading * 68)
+                .truncatingRemainder(dividingBy: width + 220) - 100
+            let centerY = horizon + 28 + seed.truncatingRemainder(dividingBy: 4) * 31
+            let span = 65 + seed.truncatingRemainder(dividingBy: 3) * 27
+            for layer in 0..<4 {
+                let dx = Double(layer) * 21
+                clouds.addEllipse(in: CGRect(x: centerX + dx - span * 0.5,
+                    y: centerY + sin(seed * 2 + Double(layer)) * 7,
+                    width: span, height: 13 + Double(layer % 2) * 7))
+            }
+        }
+        if !night {
+            for i in 0..<6 {
+                let seed = Double(i)
+                let bx = (seed * 173 + gameClock * (6 + seed) - heading * 80)
+                    .truncatingRemainder(dividingBy: width + 120) - 60
+                let by = horizon + 40 + seed.truncatingRemainder(dividingBy: 3) * 22
+                let wing = 3.0 + 1.2 * sin(gameClock * 7 + seed)
+                birds.move(to: CGPoint(x: bx - wing * 2, y: by + wing))
+                birds.addLine(to: CGPoint(x: bx, y: by))
+                birds.addLine(to: CGPoint(x: bx + wing * 2, y: by + wing))
+            }
+        }
+        celestialDetails.path = disk
+        celestialDetails.fillColor = night
+            ? NSColor(calibratedRed: 0.71, green: 0.84, blue: 0.98, alpha: 0.86)
+            : NSColor(calibratedRed: 1, green: 0.83, blue: 0.40, alpha: 0.95)
+        celestialDetails.glowWidth = night ? 5 : 11
+        skyClouds.path = clouds
+        skyClouds.fillColor = NSColor(calibratedRed: 0.21, green: 0.44,
+                                      blue: 0.39, alpha: night ? 0.08 : 0.14)
+        skyBirds.path = birds
+        skyBirds.strokeColor = NSColor(calibratedRed: 0.31, green: 0.67,
+                                        blue: 0.51, alpha: 0.62)
+        skyBirds.lineWidth = 1.0
+    }
+
     private func renderMountains(_ c: CameraProjection) {
         let farPath = CGMutablePath()
         let nearPath = CGMutablePath()
@@ -3285,6 +3403,7 @@ final class BattlefieldScene: SKScene {
                               blue: CGFloat(0.16 - t * 0.083), alpha: 1)
             }
         }
+        renderSkyDetails(camera: c)
         for i in 0...samples {
             let x = min(width + 10, Double(i) * step - 10)
             let azimuth = heading + atan2((x - width / 2) / c.focal, 1)
@@ -4250,12 +4369,23 @@ final class BattlefieldScene: SKScene {
         line(path, v(-1.0, 0, 0.2), v(1.0, 0, 0.2), c)
     }
 
+    // Saucer patrols bob at different phases. A low attack pass creates a
+    // real opportunity to shoot; high-altitude flyovers cannot be hit.
+    private func saucerAltitude(_ e: Foe) -> Double {
+        6.0 + 3.2 * sin(e.phase * 0.72 + e.center.x * 0.013) +
+            0.65 * sin(e.phase * 1.83 + e.center.z * 0.021)
+    }
+
+    private func saucerIsVulnerable(_ e: Foe) -> Bool {
+        saucerAltitude(e) <= 5.1
+    }
+
     private func drawSaucer(_ e: Foe, on path: CGMutablePath, camera c: CameraProjection) {
         // Animated rotating wireframe disk: moving facets and radial spokes make
         // the spin obvious in both Classic and Modern display modes.
         let n = displayMode != .classic ? 18 : 12
         let spin = gameClock * 2.9 + e.phase
-        let hover = 7.5 + sin(gameClock * 2.4 + e.phase) * 0.55
+        let hover = saucerAltitude(e)
         let radius = displayMode != .classic ? 3.7 : 3.1
         func ring(_ angle: Double, radius r: Double, elevation: Double) -> WorldPoint {
             WorldPoint(e.center.x + cos(angle) * r, elevation,
@@ -4422,14 +4552,21 @@ final class BattlefieldScene: SKScene {
         flashLines.path = flarePath
         let mgPath = CGMutablePath()
         for round in mgRounds {
-            let back = round.center - round.direction * 3.5
-            line(mgPath, WorldPoint(round.center, height: 3.2),
+            // Staggered tracer lengths and a hot core give each twin-barrel
+            // round an unmistakable high-velocity streak.
+            let length = 4.2 + Double(round.barrel) * 1.3
+            let back = round.center - round.direction * length
+            line(mgPath, WorldPoint(round.center + round.direction * 0.8, height: 3.2),
                  WorldPoint(back, height: 3.2), c)
+            let mid = round.center - round.direction * 0.55
+            line(mgPath, WorldPoint(round.center + round.direction * 0.5, height: 3.2),
+                 WorldPoint(mid, height: 3.2), c)
         }
         machineGunLines.path = mgPath
         machineGunLines.strokeColor = NSColor(calibratedRed: 1,
             green: 0.83, blue: 0.37, alpha: 0.95)
-        machineGunLines.lineWidth = 1.3
+        machineGunLines.lineWidth = 2.0
+        machineGunLines.glowWidth = 3.2
         let bouncePath = CGMutablePath()
         for spark in mgRicochets {
             let fraction = spark.timeLeft / 0.23
@@ -6005,15 +6142,16 @@ final class BattlefieldScene: SKScene {
 /// Deep procedural combat transients with short noise attacks and low-frequency
 /// body. Generated in memory to avoid packaging or changing existing sounds.
 private final class TankCombatAudio {
-    enum Kind: Int { case cannon = 0, impact = 1, explosion = 2 }
-    private var players: [AVAudioPlayer?] = [nil, nil, nil]
+    enum Kind: Int { case cannon = 0, impact = 1, explosion = 2, machineGun = 3 }
+    private var players: [AVAudioPlayer?] = [nil, nil, nil, nil]
 
     init() {
-        for type in [Kind.cannon, .impact, .explosion] {
+        for type in [Kind.cannon, .impact, .explosion, .machineGun] {
             let index = type.rawValue
             players[index] = try? AVAudioPlayer(data: Self.makeWAV(type))
             players[index]?.prepareToPlay()
-            players[index]?.volume = type == .impact ? 0.48 : 0.72
+            players[index]?.volume = type == .impact ? 0.48 :
+                (type == .machineGun ? 0.52 : 0.72)
         }
     }
 
@@ -6027,7 +6165,7 @@ private final class TankCombatAudio {
     private static func makeWAV(_ kind: Kind) -> Data {
         let rate = 22_050
         let duration: Double = kind == .cannon ? 0.48 :
-            (kind == .impact ? 0.26 : 0.88)
+            (kind == .impact ? 0.26 : kind == .machineGun ? 0.085 : 0.88)
         let count = Int(Double(rate) * duration)
         var data = Data(capacity: 44 + count * 2)
         func put16(_ n: UInt16) {
@@ -6072,6 +6210,10 @@ private final class TankCombatAudio {
                 frequency = 142 - 66 * progress
                 noiseWeight = 0.68
                 decay = exp(-t * 14)
+            case .machineGun:
+                frequency = 245 - 100 * progress
+                noiseWeight = 0.82
+                decay = exp(-t * 23)
             case .explosion:
                 frequency = 78 - 44 * progress
                 noiseWeight = 0.75
