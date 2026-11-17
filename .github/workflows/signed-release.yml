@@ -1,0 +1,116 @@
+name: Controlled signed VectorSiege release
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_version:
+        description: "Version tag to package (stable v0.1.0 for first approved release)"
+        required: true
+        default: "v0.1.0"
+        type: string
+      publish_release:
+        description: "Publish a PUBLIC stable GitHub Release (default NO)"
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+
+jobs:
+  sign-notarize:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate version and build
+        env:
+          RELEASE_VERSION: ${{ inputs.release_version }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$RELEASE_VERSION" =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+            echo "::error::Expected a stable semver tag like v0.1.0"
+            exit 1
+          fi
+          VERSION="${RELEASE_VERSION#v}"
+          xcodebuild -project VectorSiege.xcodeproj -scheme VectorSiege -configuration Release \
+            -derivedDataPath "$RUNNER_TEMP/derived" -destination "platform=macOS" \
+            CODE_SIGNING_ALLOWED=NO build
+          APP="$RUNNER_TEMP/derived/Build/Products/Release/VectorSiege.app"
+          test -d "$APP"
+          PLIST="$APP/Contents/Info.plist"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$PLIST")" = "io.vectorsiege.game"
+          if ! /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" "$PLIST" 2>/dev/null; then
+            /usr/libexec/PlistBuddy -c "Add :CFBundleShortVersionString string $VERSION" "$PLIST"
+          fi
+          if ! /usr/libexec/PlistBuddy -c "Set :CFBundleVersion 1" "$PLIST" 2>/dev/null; then
+            /usr/libexec/PlistBuddy -c "Add :CFBundleVersion string 1" "$PLIST"
+          fi
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$PLIST")" = "$VERSION"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$PLIST")" = 1
+
+      - name: Import Developer ID certificate and notarize
+        env:
+          APPLE_DEVELOPER_ID_CERT_BASE64: ${{ secrets.APPLE_DEVELOPER_ID_CERT_BASE64 }}
+          APPLE_DEVELOPER_ID_CERT_PASSWORD: ${{ secrets.APPLE_DEVELOPER_ID_CERT_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+        run: |
+          set -euo pipefail
+          for variable in APPLE_DEVELOPER_ID_CERT_BASE64 APPLE_DEVELOPER_ID_CERT_PASSWORD APPLE_SIGNING_IDENTITY APPLE_ID APPLE_TEAM_ID APPLE_APP_SPECIFIC_PASSWORD; do
+            if [[ -z "${!variable:-}" ]]; then echo "::error::Missing $variable"; exit 1; fi
+          done
+          KEYCHAIN="$RUNNER_TEMP/release.keychain-db"
+          PASS="$(uuidgen)"
+          trap 'security delete-keychain "$KEYCHAIN" >/dev/null 2>&1 || true; rm -f "$RUNNER_TEMP/developer-id.p12"' EXIT
+          printf '%s' "$APPLE_DEVELOPER_ID_CERT_BASE64" | base64 -D > "$RUNNER_TEMP/developer-id.p12"
+          security create-keychain -p "$PASS" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "$PASS" "$KEYCHAIN"
+          security import "$RUNNER_TEMP/developer-id.p12" -k "$KEYCHAIN" \
+            -P "$APPLE_DEVELOPER_ID_CERT_PASSWORD" -T /usr/bin/codesign
+          security list-keychains -d user -s "$KEYCHAIN"
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$PASS" "$KEYCHAIN"
+
+          APP="$RUNNER_TEMP/derived/Build/Products/Release/VectorSiege.app"
+          codesign --force --deep --options runtime --timestamp \
+            --sign "$APPLE_SIGNING_IDENTITY" --keychain "$KEYCHAIN" "$APP"
+          codesign --verify --deep --strict --verbose=2 "$APP"
+          DETAILS="$(codesign --display --verbose=4 "$APP" 2>&1)"
+          echo "$DETAILS" | grep -F "TeamIdentifier=$APPLE_TEAM_ID"
+          echo "$DETAILS" | grep -F "Identifier=io.vectorsiege.game"
+          ditto -c -k --keepParent "$APP" "$RUNNER_TEMP/notarization.zip"
+          xcrun notarytool submit "$RUNNER_TEMP/notarization.zip" \
+            --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" \
+            --password "$APPLE_APP_SPECIFIC_PASSWORD" --wait \
+            --output-format json > "$RUNNER_TEMP/notary-result.json"
+          python3 -c 'import json,sys; r=json.load(open(sys.argv[1])); s=r.get("status"); print("Apple notarization:",s); sys.exit(0 if s=="Accepted" else 1)' \
+            "$RUNNER_TEMP/notary-result.json"
+          xcrun stapler staple "$APP"
+          xcrun stapler validate "$APP"
+          mkdir -p dist
+          ditto -c -k --keepParent "$APP" "dist/VectorSiege-macOS.zip"
+          (cd dist && shasum -a 256 VectorSiege-macOS.zip > VectorSiege-macOS.zip.sha256)
+
+      - name: Upload test artifact only
+        uses: actions/upload-artifact@v4
+        with:
+          name: VectorSiege-signed-candidate
+          path: |
+            dist/VectorSiege-macOS.zip
+            dist/VectorSiege-macOS.zip.sha256
+          retention-days: 7
+
+      - name: Publish PUBLIC stable release (explicit opt-in)
+        if: ${{ inputs.publish_release }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_VERSION: ${{ inputs.release_version }}
+        run: |
+          set -euo pipefail
+          gh release create "$RELEASE_VERSION" \
+            "dist/VectorSiege-macOS.zip" "dist/VectorSiege-macOS.zip.sha256" \
+            --target "$GITHUB_SHA" --title "VectorSiege $RELEASE_VERSION" \
+            --notes "Signed and notarized Fun City Arcade macOS distribution. Stable release; tested before publication."
