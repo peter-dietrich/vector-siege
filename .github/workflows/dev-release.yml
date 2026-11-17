@@ -15,7 +15,8 @@ permissions:
 
 concurrency:
   group: dev-release-${{ github.ref }}
-  cancel-in-progress: true
+  # Let the active notarization finish even while gameplay changes land.
+  cancel-in-progress: false
 
 jobs:
   sign-notarize-publish:
