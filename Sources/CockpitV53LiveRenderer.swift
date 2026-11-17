@@ -185,7 +185,107 @@ final class CockpitV53LiveRenderer {
         root.addChild(shape)
     }
 
+    // Physical, dimensioned tank-armor surrounding the live battlefield.
+    // Unlike a full-size illustration, these shapes leave the game camera
+    // uncovered; they connect the four independent upper screens to the lower
+    // five-bay command chassis and scale in the same 1600x900 coordinates.
+    private func addViewportArmor() {
+        let armor = NSColor(calibratedRed: 0.115, green: 0.128, blue: 0.135, alpha: 1)
+        let recess = NSColor(calibratedRed: 0.023, green: 0.031, blue: 0.038, alpha: 1)
+        let steel = NSColor(calibratedRed: 0.39, green: 0.41, blue: 0.42, alpha: 1)
+        let steelDark = NSColor(calibratedRed: 0.17, green: 0.19, blue: 0.205, alpha: 1)
+        let warning = NSColor(calibratedRed: 0.97, green: 0.54, blue: 0.13, alpha: 1)
+
+        func polygon(_ points: [CGPoint], fill: NSColor, stroke: NSColor,
+                     width: CGFloat = 1.6, z: CGFloat = 18) {
+            guard let first = points.first else { return }
+            let path = CGMutablePath()
+            path.move(to: first)
+            for point in points.dropFirst() { path.addLine(to: point) }
+            path.closeSubpath()
+            let shape = SKShapeNode(path: path)
+            shape.fillColor = fill
+            shape.strokeColor = stroke
+            shape.lineWidth = width
+            shape.lineJoin = .round
+            shape.zPosition = z
+            root.addChild(shape)
+        }
+
+        func beam(_ frame: CGRect, fill: NSColor, edge: NSColor,
+                  radius: CGFloat = 2, z: CGFloat = 18) {
+            let node = SKShapeNode(rect: frame, cornerRadius: radius)
+            node.fillColor = fill
+            node.strokeColor = edge
+            node.lineWidth = 1.2
+            node.zPosition = z
+            root.addChild(node)
+        }
+
+        // Angled windshield pillars: narrow high up and widen toward the
+        // bottom, like the approved armored cockpit reference. All central
+        // battlefield visibility is preserved.
+        polygon([
+            CGPoint(x: 0, y: 552), CGPoint(x: 25, y: 552),
+            CGPoint(x: 38, y: 503), CGPoint(x: 38, y: 344),
+            CGPoint(x: 89, y: 245), CGPoint(x: 62, y: 220),
+            CGPoint(x: 0, y: 255)
+        ], fill: armor, stroke: steel)
+        polygon([
+            CGPoint(x: 1600, y: 552), CGPoint(x: 1575, y: 552),
+            CGPoint(x: 1562, y: 503), CGPoint(x: 1562, y: 344),
+            CGPoint(x: 1511, y: 245), CGPoint(x: 1538, y: 220),
+            CGPoint(x: 1600, y: 255)
+        ], fill: armor, stroke: steel)
+        // Inset brackets give each pillar visible material thickness.
+        polygon([
+            CGPoint(x: 17, y: 531), CGPoint(x: 27, y: 525),
+            CGPoint(x: 52, y: 313), CGPoint(x: 74, y: 246),
+            CGPoint(x: 61, y: 241), CGPoint(x: 29, y: 323)
+        ], fill: steelDark, stroke: steelDark, width: 0.8, z: 18.2)
+        polygon([
+            CGPoint(x: 1583, y: 531), CGPoint(x: 1573, y: 525),
+            CGPoint(x: 1548, y: 313), CGPoint(x: 1526, y: 246),
+            CGPoint(x: 1539, y: 241), CGPoint(x: 1571, y: 323)
+        ], fill: steelDark, stroke: steelDark, width: 0.8, z: 18.2)
+
+        // Continuous lower window sill visually receives the cockpit deck.
+        // The center remains low, preserving target reticles and tank silhouettes.
+        beam(CGRect(x: 49, y: 216, width: 1502, height: 21),
+             fill: recess, edge: steelDark, radius: 3, z: 18.1)
+        beam(CGRect(x: 80, y: 223, width: 1440, height: 5),
+             fill: steel, edge: steelDark, radius: 1, z: 18.3)
+        beam(CGRect(x: 160, y: 216, width: 1280, height: 4),
+             fill: warning.withAlphaComponent(0.40), edge: .clear,
+             radius: 1, z: 18.4)
+        for x in [118.0, 350.0, 625.0, 975.0, 1250.0, 1482.0] {
+            let bolt = SKShapeNode(circleOfRadius: 3)
+            bolt.fillColor = recess
+            bolt.strokeColor = steel
+            bolt.lineWidth = 0.8
+            bolt.position = CGPoint(x: x, y: 228)
+            bolt.zPosition = 18.5
+            root.addChild(bolt)
+        }
+
+        // Low triangular shoulders close the gaps between the pillars and
+        // the instrument shell without laying UI over the battlefield.
+        polygon([
+            CGPoint(x: 0, y: 219), CGPoint(x: 94, y: 245),
+            CGPoint(x: 178, y: 219), CGPoint(x: 178, y: 199),
+            CGPoint(x: 0, y: 199)
+        ], fill: steelDark, stroke: steel, width: 1.1, z: 18.2)
+        polygon([
+            CGPoint(x: 1600, y: 219), CGPoint(x: 1506, y: 245),
+            CGPoint(x: 1422, y: 219), CGPoint(x: 1422, y: 199),
+            CGPoint(x: 1600, y: 199)
+        ], fill: steelDark, stroke: steel, width: 1.1, z: 18.2)
+        beam(CGRect(x: 175, y: 202, width: 1250, height: 13),
+             fill: armor, edge: steelDark, radius: 2, z: 18.4)
+    }
+
     private func assemble() {
+        addViewportArmor()
         // Artist-supplied 2x bitmap layers: each original stays separately editable.
         // All numbers, target marks and contacts remain native SpriteKit nodes.
         sprite("fire_screen_wells", frame: rect(40, 94, 326, 231), z: 2)
