@@ -122,6 +122,9 @@ final class BattlefieldScene: SKScene {
     } }
     var threatLevel: ThreatLevel = .veteran
     var soundOn = true
+    var battlefieldEnvironment: BattlefieldEnvironment = .alpine {
+        didSet { TronzoneBiome.active = battlefieldEnvironment }
+    }
     var customRules: SiegeRules?
     var activePresetID = ""
     private var rules: SiegeRules { (customRules ?? SiegeRules()).validated() }
@@ -232,6 +235,8 @@ final class BattlefieldScene: SKScene {
     private let groundMesh = SKShapeNode()
     private let streetMarks = SKShapeNode()
     private let structures = SKShapeNode()
+    private let alpineSurfaces = SKShapeNode()
+    private let mountainFacetLines = SKShapeNode()
     private let foliageLines = SKShapeNode()
     private let opponentLines = SKShapeNode()
     private let opponentSaucerLines = SKShapeNode()
@@ -425,7 +430,9 @@ final class BattlefieldScene: SKScene {
 
         for (layer, z) in [
             (farSkyline, 1.0), (skyline, 2.0), (ground, 3.0),
-            (groundMesh, 3.1), (streetMarks, 3.2), (foliageLines, 3.9), (structures, 4.0),
+            (groundMesh, 3.1), (streetMarks, 3.2),
+            (alpineSurfaces, 3.65), (mountainFacetLines, 2.25),
+            (foliageLines, 3.9), (structures, 4.0),
             (opponentLines, 5.0), (opponentSaucerLines, 5.1), (shotLines, 6.0),
             (modernFriendlyShells, 6.2), (modernHostileShells, 6.3),
             (modernBombShells, 6.4), (saucerPulseLines, 6.5),
@@ -713,6 +720,7 @@ final class BattlefieldScene: SKScene {
             addChild(label)
         }
         configurePalette()
+        TronzoneBiome.active = battlefieldEnvironment
         makeObstacles()
         spawnWave()
     }
@@ -844,6 +852,7 @@ final class BattlefieldScene: SKScene {
         destructionRemaining = 0
         shells.removeAll()
         sparks.removeAll()
+        TronzoneBiome.active = battlefieldEnvironment
         makeObstacles()
         makeVegetation()
         selectSolidBuildings()
@@ -1959,6 +1968,21 @@ final class BattlefieldScene: SKScene {
 
     private func makeObstacles() {
         obstacles.removeAll()
+        if battlefieldEnvironment == .alpine {
+            let seed = UInt64.random(in: 1...UInt64.max)
+            for site in TronzoneBiome.mountainSites(count: rules.obstacleCount, seed: seed) {
+                let kind: Obstacle.Kind
+                switch site.kind {
+                case 0: kind = .tower      // Solid pine trunks and canopy
+                case 1: kind = .pyramid    // Faceted rocks
+                case 2: kind = .block      // Reinforced bunker
+                default: kind = .monolith // Communications relay
+                }
+                obstacles.append(Obstacle(center: site.location,
+                                          size: site.size, kind: kind))
+            }
+            return
+        }
         // Layout the connected street grid first. Then fill a minority of
         // city-block interiors with small clusters, leaving broad empty blocks.
         let seed = UInt64.random(in: 1...UInt64.max)
@@ -1991,6 +2015,12 @@ final class BattlefieldScene: SKScene {
     }
 
     private func selectSolidBuildings() {
+        if battlefieldEnvironment == .alpine {
+            // Every visible alpine obstacle uses the same collision body for
+            // driving, cannon interception, AI routing and line-of-sight.
+            solidBuildingIndices = Set(obstacles.indices)
+            return
+        }
         // Choose exactly thirty percent of actual building structures.
         let indices = obstacles.indices.filter {
             switch obstacles[$0].kind {
@@ -2010,6 +2040,22 @@ final class BattlefieldScene: SKScene {
 
     private func makeVegetation() {
         vegetation.removeAll()
+        if battlefieldEnvironment == .alpine {
+            // Small soft ground cover only; all full-sized pines are already
+            // obstacle bodies and therefore genuinely collision-aware.
+            for index in 0..<120 {
+                let a = Double(index)*2.39996322972865
+                let r = 22.0 + Double((index*47) % 137)
+                let p = GroundPoint(cos(a)*r, sin(a)*r)
+                if !blocked(p, radius: 2.5) {
+                    vegetation.append(Vegetation(location: p,
+                                                height: 0.55+Double(index%5)*0.19,
+                                                crown: 0.7+Double(index%4)*0.14,
+                                                isTree: false))
+                }
+            }
+            return
+        }
         // Sparse, irregular planting belongs outside the dense urban core.
         // Downtown is intentionally free of tree wireframes so the tighter
         // ground contours and buildings can establish depth.
@@ -2445,7 +2491,8 @@ final class BattlefieldScene: SKScene {
             directorWaveStartFired: directorWaveStartFired,
             directorWaveStartHits: directorWaveStartHits,
             machineGunAmmo: mgAmmo, machineGunHeat: mgHeat,
-            machineGunFired: mgFired, machineGunHits: mgHits
+            machineGunFired: mgFired, machineGunHits: mgHits,
+            battlefieldEnvironment: battlefieldEnvironment.rawValue
         )
     }
 
@@ -2461,6 +2508,11 @@ final class BattlefieldScene: SKScene {
         displayMode = DisplayMode(rawValue: saved.displayMode) ?? .classic
         threatLevel = ThreatLevel(rawValue: saved.threatLevel) ?? .veteran
         soundOn = saved.soundOn
+        // Existing saves have urban coordinates and building layouts.
+        battlefieldEnvironment = saved.battlefieldEnvironment.flatMap {
+            BattlefieldEnvironment(rawValue: $0)
+        } ?? .city
+        TronzoneBiome.active = battlefieldEnvironment
         score = saved.score
         lives = saved.lives
         wave = saved.wave
@@ -3259,6 +3311,12 @@ final class BattlefieldScene: SKScene {
                      WorldPoint(anchorX + b, 0.018, z), c)
             }
         }
+        if battlefieldEnvironment == .alpine {
+            ground.path = nil
+            streetMarks.path = nil
+            groundMesh.path = mesh
+            return
+        }
         // Wide, continuous orthogonal streets frame 60-unit city blocks.
         // World-space layout matches obstacle placement and the square radar.
         let halfStreet = CityLayout.streetHalfWidth
@@ -3305,6 +3363,8 @@ final class BattlefieldScene: SKScene {
     private func renderObjects(_ c: CameraProjection) {
         let structurePath = CGMutablePath()
         var facets: [GlassFace] = []
+        let alpineOutline = CGMutablePath()
+        let alpineFill = CGMutablePath()
         for (index, o) in obstacles.enumerated() {
             // Culling far outside the visible scene.
             let offset = o.center - tankPosition
@@ -3313,6 +3373,11 @@ final class BattlefieldScene: SKScene {
                 !BattlefieldRenderLOD.isVisible(
                     depth: view.forward, lateral: view.right,
                     margin: max(20, o.size * 2.5)) { continue }
+            if battlefieldEnvironment == .alpine {
+                drawAlpineObstacle(o, outline: alpineOutline,
+                                   surfaces: alpineFill, camera: c)
+                continue
+            }
             switch o.kind {
             case .pyramid: drawPyramid(o, on: structurePath, camera: c)
             case .block: drawBlock(o, on: structurePath, camera: c)
@@ -3331,7 +3396,8 @@ final class BattlefieldScene: SKScene {
                 }
             }
         }
-        structures.path = structurePath
+        structures.path = battlefieldEnvironment == .alpine ? alpineOutline : structurePath
+        alpineSurfaces.path = battlefieldEnvironment == .alpine ? alpineFill : nil
         renderVegetation(c)
         updateGlassFaces(facets, camera: c)
 
