@@ -2621,6 +2621,7 @@ final class BattlefieldScene: SKScene {
         bestScore = max(bestScore, score)
         UserDefaults.standard.set(bestScore, forKey: "VectorSiegeHighScore")
         round = saved.awaitingLevelStart == true ? .levelReady : .paused
+        setupTrue3DWorld()
         // Older saves continue paused and require P; a saved level-intro
         // remains on its any-key start screen.
         return true
