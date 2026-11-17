@@ -26,6 +26,7 @@ final class Tronzone3DWorld {
     private let cameraNode = SCNNode()
     private let terrainRoot = SCNNode()
     private let structureRoot = SCNNode()
+    private let backdropRoot = SCNNode()
     private let actorRoot = SCNNode()
     private let sun = SCNNode()
     private var contactNodes: [Int: SCNNode] = [:]
@@ -67,11 +68,13 @@ final class Tronzone3DWorld {
         scene.fogColor = NSColor(calibratedRed: 0.075, green: 0.21,
                                 blue: 0.11, alpha: 1)
         scene.fogStartDistance = 78
-        scene.fogEndDistance = 225
+        scene.fogEndDistance = 345
         scene.fogDensityExponent = 0.85
 
+        scene.rootNode.addChildNode(backdropRoot)
         scene.rootNode.addChildNode(terrainRoot)
         scene.rootNode.addChildNode(structureRoot)
+        buildMountainBackdrop()
         scene.rootNode.addChildNode(actorRoot)
         let camera = SCNCamera()
         camera.zNear = 0.4
@@ -115,6 +118,52 @@ final class Tronzone3DWorld {
         let node = SCNNode(geometry: mesh)
         node.castsShadow = true
         return node
+    }
+
+
+    private func buildMountainBackdrop() {
+        // World-anchored physical terrain, not a static panoramic screenshot.
+        // Two depth-sorted ridge walls give the fog and directional lighting
+        // a real surface to shade beyond the combat area.
+        for layer in 0..<2 {
+            let samples = 72
+            let radius = layer == 0 ? 215.0 : 305.0
+            let low = layer == 0 ? 0.0 : 6.0
+            var vertices: [SCNVector3] = []
+            var indices: [Int32] = []
+            for i in 0...samples {
+                let a = Double(i) * 2 * Double.pi / Double(samples)
+                let ripple = abs(sin(a*9.0+Double(layer)*0.7))
+                let spire = pow(abs(sin(a*16.0+0.45)), 12)
+                let peak = 18.0 + ripple*20.0 + spire*40.0
+                let near = radius - 33
+                let far = radius + 33
+                vertices.append(SCNVector3(Float(cos(a)*near),
+                                           Float(low),
+                                           Float(-sin(a)*near)))
+                vertices.append(SCNVector3(Float(cos(a)*radius),
+                                           Float(peak),
+                                           Float(-sin(a)*radius)))
+                vertices.append(SCNVector3(Float(cos(a)*far),
+                                           Float(low),
+                                           Float(-sin(a)*far)))
+                if i < samples {
+                    let base = Int32(i*3)
+                    indices.append(contentsOf:[
+                        base,base+1,base+3,
+                        base+1,base+4,base+3,
+                        base+1,base+2,base+4,
+                        base+2,base+5,base+4])
+                }
+            }
+            let geometry = SCNGeometry(sources:[SCNGeometrySource(vertices:vertices)],
+                                       elements:[SCNGeometryElement(
+                                         indices:indices, primitiveType:.triangles)])
+            geometry.firstMaterial = layer == 0 ? rockMaterial : groundMaterial
+            let mountains = SCNNode(geometry:geometry)
+            mountains.castsShadow = false
+            backdropRoot.addChildNode(mountains)
+        }
     }
 
     private func level(_ x: Double, _ z: Double) -> Float {
