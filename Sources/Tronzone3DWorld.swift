@@ -30,6 +30,11 @@ final class Tronzone3DWorld {
     private let backdropRoot = SCNNode()
     private let actorRoot = SCNNode()
     private let sun = SCNNode()
+    private let ambientNode = SCNNode()
+    private let sunDisc = SCNNode()
+    private let moonDisc = SCNNode()
+    private let starRoot = SCNNode()
+    private var lightingHour: Double = 12
     private var contactNodes: [Int: SCNNode] = [:]
     private var contactKinds: [Int: Int] = [:]
     private var terrainTexture: CGImage?
@@ -109,7 +114,6 @@ final class Tronzone3DWorld {
         ambient.color = NSColor(calibratedRed: 0.20, green: 0.42,
                                 blue: 0.31, alpha: 1)
         ambient.intensity = 460
-        let ambientNode = SCNNode()
         ambientNode.light = ambient
         scene.rootNode.addChildNode(ambientNode)
 
@@ -125,8 +129,133 @@ final class Tronzone3DWorld {
         sun.light = sunlight
         sun.eulerAngles = SCNVector3(-0.88, -0.65, 0)
         scene.rootNode.addChildNode(sun)
+        scene.rootNode.addChildNode(sunDisc)
+        scene.rootNode.addChildNode(moonDisc)
+        scene.rootNode.addChildNode(starRoot)
+        setupCelestialObjects()
+        applyTimeOfDay(12)
     }
 
+
+
+    private func setupCelestialObjects() {
+        func orb(_ radius: CGFloat, _ color: NSColor) -> SCNNode {
+            let shape = SCNSphere(radius:radius)
+            shape.segmentCount = 24
+            let mat = SCNMaterial()
+            mat.lightingModel = .constant
+            mat.diffuse.contents = color
+            mat.emission.contents = color
+            mat.isDoubleSided = true
+            shape.firstMaterial = mat
+            let node = SCNNode(geometry:shape)
+            node.castsShadow = false
+            return node
+        }
+        sunDisc.addChildNode(orb(7.8,NSColor(calibratedRed:1,green:0.81,blue:0.53,alpha:1)))
+        moonDisc.addChildNode(orb(4.2,NSColor(calibratedRed:0.72,green:0.82,blue:0.97,alpha:1)))
+        // Static seed: stars do not flicker or jump as the player drives.
+        // Positions are world anchored, not an opaque photographic sky.
+        for i in 0..<105 {
+            let a = Double(i)*2.399963229728653
+            let elevation = 0.19 + Double((i*37)%71)/110.0
+            let direction = Double((i*73)%127)/127.0
+            let altitude = 190*elevation
+            let radius = 245.0
+            let star = orb(i.isMultiple(of:13) ? 0.47 : 0.24,
+                NSColor(calibratedRed:direction > 0.8 ? 0.92 : 0.78,
+                        green:0.87,blue:1,alpha:1))
+            star.position = SCNVector3(radius*cos(a),altitude,-radius*sin(a))
+            starRoot.addChildNode(star)
+        }
+    }
+
+    /// Vector Barrage solar model: bright midday, amber twilight, cool
+    /// moonlit night. All shading is applied to the *same* 3D meshes.
+    /// No post-processing HDR/bloom is enabled (avoids prior Metal crash).
+    func applyTimeOfDay(_ rawHour: Double) {
+        let hour = SiegeDaylight.hour(rawHour)
+        guard abs(hour - lightingHour) > 0.00001 ||
+              scene.background.contents == nil || !sunDisc.hasActions else {
+            return
+        }
+        lightingHour = hour
+        let day = SiegeDaylight.strength(at:hour)
+        let twilight = SiegeDaylight.twilight(at:hour)
+        let night = 1-day
+        let evening = hour >= 12
+        let warm = twilight * (evening ? 1.0 : 0.86)
+        // SceneKit light intensities are measured in lumens. Daytime needs
+        // much more ambient fill than the original dark Tronzone preview.
+        ambientNode.light?.intensity = CGFloat(380 + 920*day + 190*warm)
+        ambientNode.light?.color = NSColor(
+            calibratedRed:CGFloat(0.35+0.32*day+0.30*warm),
+            green:CGFloat(0.48+0.30*day+0.09*warm),
+            blue:CGFloat(0.65+0.24*day-0.25*warm),alpha:1)
+        sun.light?.intensity = CGFloat(130 + 1850*day + 430*warm)
+        sun.light?.color = NSColor(
+            calibratedRed:1,
+            green:CGFloat(0.74+0.26*day-0.10*warm),
+            blue:CGFloat(0.56+0.44*day-0.24*warm),alpha:1)
+        let solarElevation = sin((hour-6)*Double.pi/12)
+        let solarAzimuth = (hour-6)*Double.pi/12
+        sun.eulerAngles = SCNVector3(
+            CGFloat(-0.15 - max(0.04,solarElevation)*1.05),
+            CGFloat(-solarAzimuth),0)
+        scene.fogColor = NSColor(
+            calibratedRed:CGFloat(0.025+0.24*day+0.21*warm),
+            green:CGFloat(0.070+0.39*day+0.06*warm),
+            blue:CGFloat(0.065+0.36*day-0.05*warm),alpha:1)
+        scene.fogStartDistance = 92+day*65
+        scene.fogEndDistance = 260+day*155
+        scene.background.contents = Self.skyTexture(day:day,warm:warm)
+        starRoot.opacity = CGFloat(pow(night,1.6)*0.82)
+        sunDisc.isHidden = day < 0.035
+        moonDisc.isHidden = day >= 0.035
+        positionCelestialObjects(cameraX:Double(cameraNode.position.x),
+                                  cameraZ:-Double(cameraNode.position.z))
+    }
+
+    private static func skyTexture(day: Double,warm: Double) -> CGImage? {
+        guard let ctx = CGContext(data:nil,width:4,height:512,
+            bitsPerComponent:8,bytesPerRow:0,
+            space:CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo:CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
+        func color(_ r: Double,_ g: Double,_ b: Double) -> CGColor {
+            NSColor(calibratedRed:CGFloat(max(0,min(1,r))),
+                    green:CGFloat(max(0,min(1,g))),
+                    blue:CGFloat(max(0,min(1,b))),alpha:1).cgColor
+        }
+        let top = color(0.012+day*0.21+warm*0.055,
+                        0.025+day*0.38+warm*0.055,
+                        0.052+day*0.49+warm*0.04)
+        let middle = color(0.025+day*0.33+warm*0.28,
+                           0.055+day*0.46+warm*0.11,
+                           0.092+day*0.48-warm*0.015)
+        let horizon = color(0.052+day*0.36+warm*0.36,
+                            0.10+day*0.52+warm*0.07,
+                            0.12+day*0.47-warm*0.05)
+        guard let gradient = CGGradient(colorsSpace:CGColorSpaceCreateDeviceRGB(),
+                                       colors:[horizon,middle,top] as CFArray,
+                                       locations:[0,0.48,1]) else { return nil }
+        ctx.drawLinearGradient(gradient,
+           start:CGPoint(x:0,y:0),end:CGPoint(x:0,y:512),options:[])
+        return ctx.makeImage()
+    }
+
+    private func positionCelestialObjects(cameraX: Double,cameraZ: Double) {
+        let h = lightingHour
+        let elevation = sin((h-6)*Double.pi/12)
+        let azimuth = (h-6)*Double.pi/12
+        let distance=195.0
+        sunDisc.position = SCNVector3(cameraX+distance*cos(azimuth),
+                                      20+145*max(0,elevation),
+                                      -cameraZ-distance*sin(azimuth))
+        moonDisc.position = SCNVector3(cameraX-distance*cos(azimuth),
+                                       52+30*max(0,-elevation),
+                                       -cameraZ+distance*sin(azimuth))
+        starRoot.position = SCNVector3(cameraX,0,-cameraZ)
+    }
 
     // Source-controlled, deterministic runtime material artwork. No local
     // bitmap dependencies and no translucent geometry masquerading as ground.
@@ -525,6 +654,7 @@ final class Tronzone3DWorld {
                       eyeHeight: Double, viewportSize: CGSize,
                       pitchPoints: Double) {
         buildTerrain(aroundX:x,z:z)
+        positionCelestialObjects(cameraX:x,cameraZ:z)
         // The host NSView controls the SCNView's actual framebuffer size.
         // Updating projection here changes only the 3D camera, never depth
         // or stencil attachment formats owned by the SceneKit view.
