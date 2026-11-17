@@ -775,6 +775,20 @@ struct GeometrySmoke {
         TronzoneBiome.active = .city
         let cityHeight = LandscapeTopology.height(GroundPoint(103, -48))
         precondition(abs(cityHeight - alpineHeight) > 0.001)
+        // Vector Barrage-style sunlight mapping and clock wraparound.
+        precondition(SiegeDaylight.strength(at:12) > 0.99)
+        precondition(SiegeDaylight.strength(at:0) == 0)
+        precondition(SiegeDaylight.strength(at:22) == 0)
+        precondition(SiegeDaylight.twilight(at:6) > 0.99)
+        precondition(SiegeDaylight.period(at:6.5) == "DAWN")
+        precondition(SiegeDaylight.period(at:12) == "DAY")
+        precondition(SiegeDaylight.period(at:18.5) == "DUSK")
+        precondition(SiegeDaylight.period(at:22) == "NIGHT")
+        precondition(SiegeDaylight.clock(at:25.5) == "01:30")
+        precondition(SiegeDaylight.clock(at:-0.5) == "23:30")
+        precondition(abs(SiegeDaylight.hour(23.0+2.75) - 1.75) < 0.001)
+        precondition(SiegeStartTime.day.fixedHour == 12)
+        precondition(SiegeStartTime.random.fixedHour == nil)
         print("Perspective, combat, AI detours and Tronzone mountain geometry passed.")
     }
 }
