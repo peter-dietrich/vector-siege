@@ -3615,12 +3615,9 @@ final class BattlefieldScene: SKScene {
             for i in 0..<4 {
                 faces.append(tronzoneFace(
                     [low[i],low[(i+1)%4],high[(i+1)%4],high[i]],
-                    tint: _tintForFace(_tint, index: i),camera: c))
+                    tint: tint + (i % 3), camera: c))
             }
-            faces.append(tronzoneFace(high,tint: _tint, camera: c))
-        }
-        func _tintForFace(_ value: Int, index: Int) -> Int {
-            value + (index % 3)
+            faces.append(tronzoneFace(high, tint: tint, camera: c))
         }
         if enemy.kind.isVehicle {
             quadBox(2.5, 3.2, 0.22, 0.94, 3.2, -3.2, 26)
