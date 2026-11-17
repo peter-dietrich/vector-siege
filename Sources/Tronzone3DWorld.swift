@@ -383,14 +383,55 @@ final class Tronzone3DWorld {
         gun.eulerAngles.x = -.pi / 2
         gun.position = SCNVector3(0,1.85,-3.0)
         root.addChildNode(gun)
+        let muzzle = SCNTorus(ringRadius:0.28,pipeRadius:0.055)
+        muzzle.firstMaterial = glowing
+        let muzzleNode = SCNNode(geometry:muzzle)
+        muzzleNode.eulerAngles.x = .pi/2
+        muzzleNode.position = SCNVector3(0,1.85,-4.9)
+        root.addChildNode(muzzleNode)
+        // Continuous armored skirts with visible independent road wheels.
+        // These are real depth-tested meshes, not decals or glowing outlines.
         for sign in [-1.0,1.0] {
-            let track = box(0.52,0.85,6.2,material:rockMaterial,chamfer:0.16)
-            track.position = SCNVector3(Float(Double(sign)*2.3),0.47,0)
+            let track = box(0.58,0.90,6.2,material:rockMaterial,chamfer:0.18)
+            track.position = SCNVector3(CGFloat(sign*2.3),0.46,0)
             root.addChildNode(track)
-            let rail = box(0.11,0.06,4.6,material:glowing,chamfer:0)
-            rail.position = SCNVector3(Float(Double(sign)*2.52),1.02,0)
+            let skirt = box(0.12,0.36,5.95,material:armor,chamfer:0.035)
+            skirt.position = SCNVector3(CGFloat(sign*2.68),0.83,0)
+            root.addChildNode(skirt)
+            for wheel in 0..<6 {
+                let tire = SCNCylinder(radius:0.36,height:0.15)
+                tire.radialSegmentCount = 12
+                tire.firstMaterial = rockMaterial
+                let wheelNode = SCNNode(geometry:tire)
+                wheelNode.eulerAngles.z = .pi/2
+                wheelNode.position = SCNVector3(CGFloat(sign*2.70),0.36,
+                                                 CGFloat(-2.35+Double(wheel)*0.94))
+                root.addChildNode(wheelNode)
+                let hub = SCNCylinder(radius:0.14,height:0.16)
+                hub.radialSegmentCount = 10
+                hub.firstMaterial = armor
+                let hubNode = SCNNode(geometry:hub)
+                hubNode.eulerAngles.z = .pi/2
+                hubNode.position = SCNVector3(CGFloat(sign*2.78),0.36,
+                                               CGFloat(-2.35+Double(wheel)*0.94))
+                root.addChildNode(hubNode)
+            }
+            let rail = box(0.10,0.045,4.8,material:glowing,chamfer:0)
+            rail.position = SCNVector3(CGFloat(sign*2.78),1.04,0)
             root.addChildNode(rail)
         }
+        // Flush illuminated armor bands, recessed ventilation and gun optics.
+        for z in [-1.9, 1.9] {
+            let deck = box(3.25,0.065,0.075,material:glowing,chamfer:0)
+            deck.position = SCNVector3(0,1.59,CGFloat(z))
+            root.addChildNode(deck)
+        }
+        let sight = box(0.48,0.22,0.36,material:rockMaterial,chamfer:0.05)
+        sight.position = SCNVector3(0.65,2.43,-0.75)
+        root.addChildNode(sight)
+        let optic = box(0.34,0.10,0.04,material:glowing,chamfer:0)
+        optic.position = SCNVector3(0.65,2.47,-0.96)
+        root.addChildNode(optic)
         return root
     }
 
