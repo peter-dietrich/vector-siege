@@ -27,6 +27,13 @@ jobs:
       - name: Validate release artifact and Fun City compatibility
         run: bash Tests/check-release-candidate.sh "$RUNNER_TEMP/derived/Build/Products/Release/VectorSiege.app"
 
+      - name: Require approved v5.3 cockpit artwork in release bundle
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          set -euo pipefail
+          python3 Tests/verify-approved-cockpit-art.py \
+            --app "$RUNNER_TEMP/derived/Build/Products/Release/VectorSiege.app"
+
       - name: Import Developer ID signing certificate
         if: startsWith(github.ref, 'refs/tags/v')
         env:
