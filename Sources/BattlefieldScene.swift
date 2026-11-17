@@ -153,6 +153,7 @@ final class BattlefieldScene: SKScene {
     var onCockpitV5Snapshot: ((CockpitV5Snapshot) -> Void)?
     private var cockpitV5Clock = 0.0
     private var approvedCockpit: CockpitV53LiveRenderer?
+    private var true3DWorld: Tronzone3DWorld?
     private var approvedCockpitMissingAssets = false
     private var steerHoldSeconds: Double = 0
     private var previousSteerDirection: Double = 0
@@ -728,6 +729,7 @@ final class BattlefieldScene: SKScene {
         makeVegetation()
         selectSolidBuildings()
         spawnWave()
+        setupTrue3DWorld()
     }
 
     required init?(coder: NSCoder) { fatalError("Use init(size:)") }
@@ -862,6 +864,7 @@ final class BattlefieldScene: SKScene {
         makeVegetation()
         selectSolidBuildings()
         spawnWave()
+        setupTrue3DWorld()
         round = .levelReady
         lastUpdateTime = 0
     }
@@ -3074,6 +3077,55 @@ final class BattlefieldScene: SKScene {
         stagePanel.strokeColor = amber.withAlphaComponent(0.55)
     }
 
+
+    private func setupTrue3DWorld() {
+        if true3DWorld == nil {
+            let world = Tronzone3DWorld(viewportSize:size)
+            true3DWorld = world
+            addChild(world.viewport)
+        }
+        guard battlefieldEnvironment == .alpine else { return }
+        let sites = obstacles.map { o -> Tronzone3DWorld.Site in
+            let kind: Int
+            switch o.kind {
+            case .tower: kind = 0
+            case .pyramid: kind = 1
+            case .block: kind = 2
+            case .monolith, .building: kind = 3
+            }
+            return Tronzone3DWorld.Site(x:o.center.x,z:o.center.z,
+                                        size:o.size,kind:kind)
+        }
+        true3DWorld?.load(sites)
+    }
+
+    private func renderTrue3D(_ camera: CameraProjection) {
+        let show = battlefieldEnvironment == .alpine && displayMode != .classic
+        true3DWorld?.viewport.isHidden = !show
+        // These are only the legacy projected WORLD graphics. The cockpit,
+        // rear optics, radar, reticle, projectiles, and effects remain intact.
+        for layer in [ground,groundMesh,streetMarks,structures,
+                      alpineSurfaces,mountainFacetLines,foliageLines,
+                      distantMountains,middleMountains,nearMountains,
+                      farSkyline,skyline,horizonMist,opponentLines,armoredLines] {
+            layer.isHidden = show
+        }
+        for layer in skyBands { layer.isHidden = show }
+        glassLayer.isHidden = show
+        guard show, let world = true3DWorld else { return }
+        let ground = LandscapeTopology.height(tankPosition)
+        world.updateCamera(x:tankPosition.x,z:tankPosition.z,heading:heading,
+                           eyeHeight:camera.eyeHeight,
+                           viewportSize:size,pitchPoints:camera.pitchPoints)
+        world.updateContacts(enemies.enumerated().compactMap { index, enemy in
+            guard enemy.kind.isVehicle else { return nil }
+            return Tronzone3DWorld.Contact(id:index,x:enemy.center.x,
+                                          z:enemy.center.z,heading:enemy.heading,
+                                          kind:0,altitude:0)
+        })
+        _ = ground
+    }
+
     private func render() {
         // Each frame computes the expensive cover-aware target solution only
         // once, shared by radar, both HUD layouts, and warning telemetry.
@@ -3110,6 +3162,7 @@ final class BattlefieldScene: SKScene {
         renderObjects(worldCamera)
         renderProjectiles(worldCamera)
         renderWorldCombatEffects(worldCamera)
+        renderTrue3D(worldCamera)
         renderHUD(camera)
         renderCombatEffects(camera)
         if displayMode == .cockpitV53 {
