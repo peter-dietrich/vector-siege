@@ -3360,11 +3360,19 @@ final class BattlefieldScene: SKScene {
             }
         }
         if battlefieldEnvironment == .alpine {
-            ground.path = nil
+            // A filled dark terrain plane provides material beneath the
+            // phosphor grid (not transparent floating vector lines).
+            ground.path = CGPath(rect: CGRect(x: 0, y: 0,
+                                 width: c.viewportWidth,
+                                 height: max(0, c.horizon)), transform: nil)
+            ground.fillColor = NSColor(calibratedRed: 0.008, green: 0.045,
+                                       blue: 0.025, alpha: 0.90)
+            ground.strokeColor = .clear
             streetMarks.path = nil
             groundMesh.path = mesh
             return
         }
+        ground.fillColor = .clear
         // Wide, continuous orthogonal streets frame 60-unit city blocks.
         // World-space layout matches obstacle placement and the square radar.
         let halfStreet = CityLayout.streetHalfWidth
