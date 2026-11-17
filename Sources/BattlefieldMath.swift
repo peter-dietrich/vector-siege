@@ -1,5 +1,62 @@
 import Foundation
 
+
+enum BattlefieldEnvironment: String, CaseIterable, Identifiable, Codable {
+    case alpine = "Mountain Wilderness"
+    case city = "Futuristic City"
+    var id: String { rawValue }
+}
+
+/// Shared, deterministic environmental geometry. Interactive mountain
+/// features use the same collision and AI model as city architecture.
+enum TronzoneBiome {
+    static var active: BattlefieldEnvironment = .alpine
+
+    static func mountainHeight(_ p: GroundPoint) -> Double {
+        // Graded valley around the initial spawn; contiguous traversable
+        // ridges beyond it. Combat raycasts use this exact height function.
+        let valley = min(1.0, max(0, (hypot(p.x,p.z)-14)/24))
+        let waves = 1.65*sin(p.x/29)*cos(p.z/34) +
+                    1.1*cos((p.x+p.z)/49) +
+                    0.6*sin(p.z/13)*cos(p.x/18)
+        return waves*valley + 0.33*sin(p.x/60 + p.z/47)
+    }
+
+    struct Site {
+        var location: GroundPoint
+        var size: Double
+        var kind: Int // 0: pine, 1: boulder, 2: bunker, 3: radar tower
+    }
+
+    static func mountainSites(count: Int, seed: UInt64) -> [Site] {
+        var state = seed == 0 ? 0xC0FFEE4211 : seed
+        func random() -> Double {
+            state = state &* 6364136223846793005 &+ 1442695040888963407
+            return Double(state >> 11) / 9007199254740992
+        }
+        var sites: [Site] = []
+        let target = max(60, min(138, count * 2))
+        for _ in 0..<target*12 {
+            if sites.count >= target { break }
+            let x = -168 + random()*336
+            let z = -168 + random()*336
+            let pos = GroundPoint(x,z)
+            if hypot(x,z) < 21 { continue }
+            let roll = random()
+            let kind = roll < 0.58 ? 0 : roll < 0.87 ? 1 : roll < 0.97 ? 2 : 3
+            let size = kind == 0 ? 1.6+random()*0.8 :
+                       kind == 1 ? 2.4+random()*2.1 :
+                       kind == 2 ? 3.2+random()*1.7 : 2.0+random()*0.7
+            let spacing = kind == 0 ? 3.4 : 5.3
+            if sites.contains(where: { $0.location.distance(to: pos) < spacing + $0.size + size }) {
+                continue
+            }
+            sites.append(Site(location: pos,size: size,kind: kind))
+        }
+        return sites
+    }
+}
+
 struct GroundPoint: Codable {
     var x: Double
     var z: Double
@@ -32,6 +89,7 @@ enum LandscapeTopology {
     }
 
     static func height(_ p: GroundPoint) -> Double {
+        if TronzoneBiome.active == .alpine { return TronzoneBiome.mountainHeight(p) }
         let dx = distanceToRoadAxis(p.x)
         let dz = distanceToRoadAxis(p.z)
         let nearest = min(dx, dz)
@@ -799,6 +857,7 @@ struct SiegeSnapshot: Codable {
     var machineGunHeat: Double? = nil
     var machineGunFired: Int? = nil
     var machineGunHits: Int? = nil
+    var battlefieldEnvironment: String? = nil
 }
 
 struct SiegeSaveSlot: Codable, Identifiable {
