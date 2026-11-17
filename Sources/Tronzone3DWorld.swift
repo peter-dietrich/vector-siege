@@ -170,7 +170,7 @@ final class Tronzone3DWorld {
                 let trunk = SCNCylinder(radius: s * 0.13, height: s * 2.3)
                 trunk.firstMaterial = rockMaterial
                 let trunkNode = SCNNode(geometry: trunk)
-                trunkNode.position.y = Float(s * 1.15)
+                trunkNode.position.y = CGFloat(s * 1.15)
                 node.addChildNode(trunkNode)
                 for tier in 0..<4 {
                     let cone = SCNCone(topRadius: 0, bottomRadius: s * (1.25-CGFloat(tier)*0.16),
@@ -178,7 +178,7 @@ final class Tronzone3DWorld {
                     cone.radialSegmentCount = 9
                     cone.firstMaterial = pineMaterial
                     let crown = SCNNode(geometry: cone)
-                    crown.position.y = Float(s * (1.2 + CGFloat(tier)*0.72))
+                    crown.position.y = CGFloat(s * (1.2 + CGFloat(tier)*0.72))
                     node.addChildNode(crown)
                 }
             } else if site.kind == 1 {
@@ -187,8 +187,8 @@ final class Tronzone3DWorld {
                 rock.firstMaterial = rockMaterial
                 let rockNode = SCNNode(geometry: rock)
                 rockNode.scale = SCNVector3(1.2, 0.63, 0.92)
-                rockNode.position.y = Float(s * 0.52)
-                rockNode.eulerAngles.y = Float(Double(idx) * 0.73)
+                rockNode.position.y = CGFloat(s * 0.52)
+                rockNode.eulerAngles.y = CGFloat(Double(idx) * 0.73)
                 node.addChildNode(rockNode)
             } else if site.kind == 2 {
                 let body = box(s*1.9,s*1.25,s*1.9,material:bunkerMaterial,chamfer:s*0.08)
