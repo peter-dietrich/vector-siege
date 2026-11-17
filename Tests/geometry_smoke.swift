@@ -3,6 +3,9 @@ import Foundation
 @main
 struct GeometrySmoke {
     static func main() {
+        // Legacy geometry assumptions are explicitly urban; the playable
+        // Mountain Wilderness uses a distinct terrain profile.
+        TronzoneBiome.active = .city
         let c = CameraProjection(position: GroundPoint(0,0), yaw: 0,
                                  viewportWidth: 1200, viewportHeight: 700)
         guard let (a,b) = c.clipLine(WorldPoint(-2,0,20), WorldPoint(2,0,20)) else {
@@ -735,6 +738,26 @@ struct GeometrySmoke {
             GroundPoint(10, 10), obstacles: [],
             otherTanks: [GroundPoint(12, 10)]))
 
-        print("Perspective, ammo, patrol, five-length warning and enemy detours passed.")
+        // Tronzone Phase 1/2: reproducible scenery, collision spacing,
+        // safe spawn, and world-correct terrain that isn't city pavement.
+        let alpineA = TronzoneBiome.mountainSites(count: 55, seed: 24680)
+        let alpineB = TronzoneBiome.mountainSites(count: 55, seed: 24680)
+        precondition(alpineA.count >= 60 && alpineA.count == alpineB.count)
+        for (a, b) in zip(alpineA, alpineB) {
+            precondition(a.location.x == b.location.x &&
+                         a.location.z == b.location.z &&
+                         a.kind == b.kind && a.size == b.size)
+            precondition(a.location.distance(to: GroundPoint(0,0)) > 20,
+                         "Mountain start zone must be unobstructed")
+        }
+        precondition(alpineA.contains(where: { $0.kind == 0 }))
+        precondition(alpineA.contains(where: { $0.kind == 1 }))
+        TronzoneBiome.active = .alpine
+        let alpineHeight = LandscapeTopology.height(GroundPoint(103, -48))
+        precondition(alpineHeight.isFinite)
+        TronzoneBiome.active = .city
+        let cityHeight = LandscapeTopology.height(GroundPoint(103, -48))
+        precondition(abs(cityHeight - alpineHeight) > 0.001)
+        print("Perspective, combat, AI detours and Tronzone mountain geometry passed.")
     }
 }
