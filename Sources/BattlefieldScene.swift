@@ -2902,11 +2902,14 @@ final class BattlefieldScene: SKScene {
             groundMesh.strokeColor = NSColor(calibratedRed: 0.10, green: 0.93, blue: 0.30, alpha: 0.48)
             groundMesh.glowWidth = 0.8
             // Neon trim is a detail over fully shaded bodies, not the body.
-            structures.strokeColor = NSColor(calibratedRed: 0.28, green: 1.0,
-                                              blue: 0.40, alpha: 0.64)
-            structures.lineWidth = 1.15
-            structures.glowWidth = 0.85
-            foliageLines.strokeColor = NSColor(calibratedRed: 0.11, green: 0.67, blue: 0.26, alpha: 0.75)
+            // Modern opaque geometry must lead; contour lines are subdued
+            // edge highlights, not the old all-wireframe presentation.
+            structures.strokeColor = NSColor(calibratedRed: 0.18, green: 0.61,
+                                              blue: 0.30, alpha: modern ? 0.22 : 0.72)
+            structures.lineWidth = modern ? 0.62 : 1.15
+            structures.glowWidth = modern ? 0 : 0.85
+            foliageLines.strokeColor = NSColor(calibratedRed: 0.11, green: 0.55,
+                                                blue: 0.25, alpha: modern ? 0.20 : 0.75)
         } else {
             distantMountains.fillColor = NSColor(calibratedRed: 0.10, green: 0.16, blue: 0.22, alpha: 0.92)
             middleMountains.fillColor = NSColor(calibratedRed: 0.085, green: 0.18, blue: 0.21, alpha: 0.94)
@@ -3366,8 +3369,8 @@ final class BattlefieldScene: SKScene {
             : NSColor(calibratedRed: 1, green: 0.83, blue: 0.40, alpha: 0.95)
         celestialDetails.glowWidth = night ? 5 : 11
         skyClouds.path = clouds
-        skyClouds.fillColor = NSColor(calibratedRed: 0.21, green: 0.44,
-                                      blue: 0.39, alpha: night ? 0.08 : 0.14)
+        skyClouds.fillColor = NSColor(calibratedRed: 0.30, green: 0.53,
+                                      blue: 0.48, alpha: night ? 0.12 : 0.28)
         skyBirds.path = birds
         skyBirds.strokeColor = NSColor(calibratedRed: 0.31, green: 0.67,
                                         blue: 0.51, alpha: 0.62)
