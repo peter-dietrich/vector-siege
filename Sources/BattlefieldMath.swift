@@ -1,6 +1,61 @@
 import Foundation
 
 
+/// Mirrors Vector Barrage's starting-hour presets and time advancement.
+/// Fixed times stay selectable during play; random is resolved once at New Game.
+enum SiegeStartTime: String, CaseIterable, Identifiable, Codable {
+    case random = "Random"
+    case dawn = "Dawn"
+    case day = "Day"
+    case dusk = "Dusk"
+    case night = "Night"
+
+    var id: String { rawValue }
+    var fixedHour: Double? {
+        switch self {
+        case .random: return nil
+        case .dawn: return 6.5
+        case .day: return 12
+        case .dusk: return 18.5
+        case .night: return 22
+        }
+    }
+}
+
+/// The same solar-strength model used by Vector Barrage, shared between
+/// simulation, UI and the SceneKit lighting engine.
+enum SiegeDaylight {
+    static func hour(_ h: Double) -> Double {
+        guard h.isFinite else { return 12 }
+        let r = h.truncatingRemainder(dividingBy: 24)
+        return r < 0 ? r + 24 : r
+    }
+
+    static func strength(at h: Double) -> Double {
+        let sun = sin((hour(h) - 6) * .pi / 12)
+        return max(0, min(1, (sun + 0.13) / 0.85))
+    }
+
+    static func twilight(at h: Double) -> Double {
+        let sun = sin((hour(h) - 6) * .pi / 12)
+        return max(0, min(1, 1 - abs(sun) / 0.35))
+    }
+
+    static func period(at h: Double) -> String {
+        switch hour(h) {
+        case 5..<8: return "DAWN"
+        case 8..<17: return "DAY"
+        case 17..<20: return "DUSK"
+        default: return "NIGHT"
+        }
+    }
+
+    static func clock(at h: Double) -> String {
+        let minutes = Int(floor(hour(h) * 60 + 0.0001)) % (24 * 60)
+        return String(format: "%02d:%02d", minutes / 60, minutes % 60)
+    }
+}
+
 enum BattlefieldEnvironment: String, CaseIterable, Identifiable, Codable {
     case alpine = "Mountain Wilderness"
     case city = "Futuristic City"
@@ -859,6 +914,10 @@ struct SiegeSnapshot: Codable {
     var machineGunFired: Int? = nil
     var machineGunHits: Int? = nil
     var battlefieldEnvironment: String? = nil
+    // Additive time-of-day state; older saves load with a bright default.
+    var timeOfDayHour: Double? = nil
+    var timeOfDayPreset: String? = nil
+    var hoursPerWave: Double? = nil
 }
 
 struct SiegeSaveSlot: Codable, Identifiable {
