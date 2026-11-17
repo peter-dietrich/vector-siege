@@ -55,6 +55,12 @@ jobs:
           test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$PLIST")" = "$VERSION"
           test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$PLIST")" = 1
 
+      - name: Require approved v5.3 cockpit artwork in release bundle
+        run: |
+          set -euo pipefail
+          python3 Tests/verify-approved-cockpit-art.py \
+            --app "$RUNNER_TEMP/derived/Build/Products/Release/VectorSiege.app"
+
       - name: Import Developer ID certificate and notarize
         env:
           APPLE_DEVELOPER_ID_CERT_BASE64: ${{ secrets.APPLE_DEVELOPER_ID_CERT_BASE64 }}
