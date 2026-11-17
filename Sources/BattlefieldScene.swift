@@ -3115,7 +3115,6 @@ final class BattlefieldScene: SKScene {
         for layer in skyBands { layer.isHidden = show }
         glassLayer.isHidden = show
         guard show, let world = true3DWorld else { return }
-        let ground = LandscapeTopology.height(tankPosition)
         world.updateCamera(x:tankPosition.x,z:tankPosition.z,heading:heading,
                            eyeHeight:camera.eyeHeight,
                            viewportSize:size,pitchPoints:camera.pitchPoints)
@@ -3136,7 +3135,6 @@ final class BattlefieldScene: SKScene {
                                           z:enemy.center.z,heading:enemy.heading,
                                           kind:kind,altitude:altitude)
         })
-        _ = ground
     }
 
     private func render() {
@@ -3170,9 +3168,16 @@ final class BattlefieldScene: SKScene {
                                   + recoil * (displayMode != .classic ? 9 : 5)
                                   + kick * 3.0 * sin(gameClock * 77)
         worldCamera.cameraLateral += kick * 0.028 * sin(gameClock * 63)
-        renderMountains(worldCamera)
-        renderGround(worldCamera)
-        renderObjects(worldCamera)
+        let threeDimensionalBattlefield =
+            battlefieldEnvironment == .alpine && displayMode != .classic
+        // Do not spend CPU every frame building the obsolete projected
+        // mountain/ground/vehicle scene only to hide it behind SceneKit.
+        // The legacy renderer still operates unchanged in Classic/city.
+        if !threeDimensionalBattlefield {
+            renderMountains(worldCamera)
+            renderGround(worldCamera)
+            renderObjects(worldCamera)
+        }
         renderProjectiles(worldCamera)
         renderWorldCombatEffects(worldCamera)
         renderTrue3D(worldCamera)
