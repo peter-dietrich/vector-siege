@@ -31,6 +31,7 @@ final class Tronzone3DWorld {
     private let sun = SCNNode()
     private var contactNodes: [Int: SCNNode] = [:]
     private var contactKinds: [Int: Int] = [:]
+    private var terrainTexture: CGImage?
     private var terrainOrigin = (Int.min, Int.min)
     private let groundMaterial = Tronzone3DWorld.material(0.018, 0.075, 0.047, roughness: 0.38)
     private let rockMaterial = Tronzone3DWorld.material(0.075, 0.13, 0.13, roughness: 0.85)
@@ -63,8 +64,14 @@ final class Tronzone3DWorld {
         viewport.scnScene = scene
         viewport.autoenablesDefaultLighting = false
 
-        scene.background.contents = NSColor(calibratedRed: 0.014, green: 0.045,
-                                            blue: 0.026, alpha: 1)
+        scene.background.contents = Self.makeSkyTexture()
+        terrainTexture = Self.makeGroundTexture()
+        if let texture = terrainTexture {
+            groundMaterial.diffuse.contents = texture
+            groundMaterial.diffuse.wrapS = .repeat
+            groundMaterial.diffuse.wrapT = .repeat
+            groundMaterial.diffuse.mipFilter = .linear
+        }
         scene.fogColor = NSColor(calibratedRed: 0.075, green: 0.21,
                                 blue: 0.11, alpha: 1)
         scene.fogStartDistance = 78
@@ -108,6 +115,64 @@ final class Tronzone3DWorld {
         sun.light = sunlight
         sun.eulerAngles = SCNVector3(-0.88, -0.65, 0)
         scene.rootNode.addChildNode(sun)
+    }
+
+
+    // Source-controlled, deterministic runtime material artwork. No local
+    // bitmap dependencies and no translucent geometry masquerading as ground.
+    private static func makeSkyTexture() -> CGImage? {
+        guard let ctx = CGContext(data:nil,width:4,height:512,
+                                  bitsPerComponent:8,bytesPerRow:0,
+                                  space:CGColorSpaceCreateDeviceRGB(),
+                                  bitmapInfo:CGImageAlphaInfo.premultipliedLast.rawValue),
+              let gradient = CGGradient(colorsSpace:CGColorSpaceCreateDeviceRGB(),
+                colors:[
+                    NSColor(calibratedRed:0.14,green:0.27,blue:0.18,alpha:1).cgColor,
+                    NSColor(calibratedRed:0.048,green:0.11,blue:0.076,alpha:1).cgColor,
+                    NSColor(calibratedRed:0.008,green:0.018,blue:0.022,alpha:1).cgColor
+                ] as CFArray,locations:[0,0.48,1]) else { return nil }
+        ctx.drawLinearGradient(gradient,start:CGPoint(x:0,y:0),
+                               end:CGPoint(x:0,y:512),options:[])
+        return ctx.makeImage()
+    }
+
+    private static func makeGroundTexture() -> CGImage? {
+        let width = 256, height = 256
+        guard let ctx = CGContext(data:nil,width:width,height:height,
+                                  bitsPerComponent:8,bytesPerRow:0,
+                                  space:CGColorSpaceCreateDeviceRGB(),
+                                  bitmapInfo:CGImageAlphaInfo.premultipliedLast.rawValue) else {
+            return nil
+        }
+        ctx.setFillColor(NSColor(calibratedRed:0.045,green:0.13,
+                                 blue:0.08,alpha:1).cgColor)
+        ctx.fill(CGRect(x:0,y:0,width:width,height:height))
+        // Fine strata, granular material variation and irregular fissures.
+        // The terrain mesh supplies real lighting, shadows and depth.
+        var state: UInt64 = 0x49F3C1A7
+        func next() -> CGFloat {
+            state = state &* 2862933555777941757 &+ 3037000493
+            return CGFloat(state >> 32) / CGFloat(UInt32.max)
+        }
+        for _ in 0..<3400 {
+            let x=next()*CGFloat(width), y=next()*CGFloat(height)
+            let bright=next()>0.72
+            ctx.setFillColor(NSColor(calibratedRed:bright ? 0.14 : 0.022,
+                                     green:bright ? 0.25 : 0.073,
+                                     blue:bright ? 0.15 : 0.058,
+                                     alpha:0.42).cgColor)
+            ctx.fill(CGRect(x:x,y:y,width:1+next()*2,height:0.6+next()))
+        }
+        for _ in 0..<23 {
+            let x=next()*255, y=next()*255
+            ctx.setStrokeColor(NSColor(calibratedRed:0.012,green:0.036,
+                                       blue:0.026,alpha:0.65).cgColor)
+            ctx.setLineWidth(0.7+next())
+            ctx.move(to:CGPoint(x:x,y:y))
+            ctx.addLine(to:CGPoint(x:x+7+next()*31,y:y-4-next()*12))
+            ctx.strokePath()
+        }
+        return ctx.makeImage()
     }
 
     private func box(_ width: CGFloat, _ height: CGFloat, _ length: CGFloat,
@@ -184,6 +249,7 @@ final class Tronzone3DWorld {
         let originX = Double(chunkX) * 24
         let originZ = Double(chunkZ) * 24
         var vertices: [SCNVector3] = []
+        var uv: [CGPoint] = []
         var indices: [Int32] = []
         vertices.reserveCapacity(count * count)
         for row in 0..<count {
@@ -191,6 +257,7 @@ final class Tronzone3DWorld {
                 let xx = originX + Double(col-half) * step
                 let zz = originZ + Double(row-half) * step
                 vertices.append(SCNVector3(Float(xx), level(xx, zz), Float(-zz)))
+                uv.append(CGPoint(x:xx/17, y:zz/17))
             }
         }
         for row in 0..<(count-1) {
@@ -202,7 +269,8 @@ final class Tronzone3DWorld {
         }
         let source = SCNGeometrySource(vertices: vertices)
         let triangles = SCNGeometryElement(indices: indices, primitiveType: .triangles)
-        let geometry = SCNGeometry(sources: [source], elements: [triangles])
+        let texcoords = SCNGeometrySource(textureCoordinates:uv)
+        let geometry = SCNGeometry(sources: [source,texcoords], elements: [triangles])
         geometry.firstMaterial = groundMaterial
         let node = SCNNode(geometry: geometry)
         node.castsShadow = false
