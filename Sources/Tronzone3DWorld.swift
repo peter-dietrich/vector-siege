@@ -1,9 +1,10 @@
 import AppKit
 import SceneKit
-import SpriteKit
 
-/// A real depth-buffered 3D world embedded behind the existing SpriteKit HUD.
-/// Simulation, AI, collisions, weapons, and radar remain in BattlefieldScene.
+/// Depth-buffered SceneKit world hosted in its own SCNView behind a transparent
+/// SpriteKit SKView. Never embed SceneKit via SK3DNode: the latter caused an
+/// MTLPixelFormatInvalid vs Depth32Float_Stencil8 render pipeline assertion.
+/// Combat simulation, radar, cockpit and input remain owned by BattlefieldScene.
 /// World coordinates are mirrored in Z because SceneKit cameras look toward -Z.
 final class Tronzone3DWorld {
     struct Site {
@@ -21,7 +22,7 @@ final class Tronzone3DWorld {
         let altitude: Double
     }
 
-    let viewport: SK3DNode
+    let renderView: SCNView
     private let scene = SCNScene()
     private let cameraNode = SCNNode()
     private let terrainRoot = SCNNode()
@@ -59,10 +60,14 @@ final class Tronzone3DWorld {
     }
 
     init(viewportSize: CGSize) {
-        viewport = SK3DNode(viewportSize: viewportSize)
-        viewport.zPosition = 3.75
-        viewport.scnScene = scene
-        viewport.autoenablesDefaultLighting = false
+        renderView = SCNView(frame: CGRect(origin: .zero, size: viewportSize))
+        renderView.scene = scene
+        renderView.autoenablesDefaultLighting = false
+        renderView.allowsCameraControl = false
+        renderView.preferredFramesPerSecond = 60
+        renderView.rendersContinuously = true
+        renderView.isPlaying = true
+        renderView.isHidden = true
 
         scene.background.contents = Self.makeSkyTexture()
         terrainTexture = Self.makeGroundTexture()
@@ -97,7 +102,7 @@ final class Tronzone3DWorld {
         camera.bloomThreshold = 1
         cameraNode.camera = camera
         scene.rootNode.addChildNode(cameraNode)
-        viewport.pointOfView = cameraNode
+        renderView.pointOfView = cameraNode
 
         let ambient = SCNLight()
         ambient.type = .ambient
@@ -520,8 +525,9 @@ final class Tronzone3DWorld {
                       eyeHeight: Double, viewportSize: CGSize,
                       pitchPoints: Double) {
         buildTerrain(aroundX:x,z:z)
-        viewport.viewportSize = viewportSize
-        viewport.position = CGPoint(x: viewportSize.width/2, y: viewportSize.height/2)
+        // The host NSView controls the SCNView's actual framebuffer size.
+        // Updating projection here changes only the 3D camera, never depth
+        // or stencil attachment formats owned by the SceneKit view.
         cameraNode.position = SCNVector3(Float(x),Float(eyeHeight),Float(-z))
         cameraNode.eulerAngles = SCNVector3(
             Float(pitchPoints / max(300,Double(viewportSize.height))),
