@@ -35,6 +35,7 @@ final class Tronzone3DWorld {
     private let moonDisc = SCNNode()
     private let starRoot = SCNNode()
     private var lightingHour: Double = 12
+    private var lightingConfigured = false
     private var contactNodes: [Int: SCNNode] = [:]
     private var contactKinds: [Int: Int] = [:]
     private var terrainTexture: CGImage?
@@ -175,11 +176,11 @@ final class Tronzone3DWorld {
     /// No post-processing HDR/bloom is enabled (avoids prior Metal crash).
     func applyTimeOfDay(_ rawHour: Double) {
         let hour = SiegeDaylight.hour(rawHour)
-        guard abs(hour - lightingHour) > 0.00001 ||
-              scene.background.contents == nil || !sunDisc.hasActions else {
+        guard !lightingConfigured || abs(hour - lightingHour) > 0.00001 else {
             return
         }
         lightingHour = hour
+        lightingConfigured = true
         let day = SiegeDaylight.strength(at:hour)
         let twilight = SiegeDaylight.twilight(at:hour)
         let night = 1-day
