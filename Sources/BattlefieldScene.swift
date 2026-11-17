@@ -3309,7 +3309,8 @@ final class BattlefieldScene: SKScene {
         let width = c.viewportWidth
         let top = c.viewportHeight
         let horizon = c.horizon
-        let cycle = (gameClock / 240).truncatingRemainder(dividingBy: 1)
+        // Start in a brighter afternoon phase; then transition to dusk/night.
+        let cycle = ((gameClock / 240) + 0.35).truncatingRemainder(dividingBy: 1)
         let night = cycle >= 0.70 || cycle < 0.12
         let phase = 2 * Double.pi * cycle
         let disk = CGMutablePath()
@@ -3394,13 +3395,17 @@ final class BattlefieldScene: SKScene {
                 skyBands[i].path = CGPath(rect: CGRect(x: 0, y: y, width: width + 1,
                                                         height: bandHeight + 1), transform: nil)
                 let t = Double(i) / Double(max(1, skyBands.count - 1))
-                skyBands[i].fillColor = battlefieldEnvironment == .alpine
-                    ? NSColor(calibratedRed: CGFloat(0.018 - t*0.012),
-                              green: CGFloat(0.102 - t*0.078),
-                              blue: CGFloat(0.046 - t*0.033), alpha: 1)
-                    : NSColor(calibratedRed: CGFloat(0.045 - t * 0.027),
-                              green: CGFloat(0.105 - t * 0.072),
-                              blue: CGFloat(0.16 - t * 0.083), alpha: 1)
+                let cycle = ((gameClock / 240) + 0.35).truncatingRemainder(dividingBy: 1)
+                let daylight = max(0.04, sin(Double.pi * cycle))
+                let brightness = 0.38 + 1.65 * daylight
+                let red = battlefieldEnvironment == .alpine ? 0.025 : 0.045
+                let green = battlefieldEnvironment == .alpine ? 0.102 : 0.105
+                let blue = battlefieldEnvironment == .alpine ? 0.055 : 0.16
+                skyBands[i].fillColor = NSColor(
+                    calibratedRed: CGFloat(min(0.35, (red - t * 0.012) * brightness)),
+                    green: CGFloat(min(0.45, (green - t * 0.078) * brightness)),
+                    blue: CGFloat(min(0.50, (blue - t * 0.033) * brightness)),
+                    alpha: 1)
             }
         }
         renderSkyDetails(camera: c)
