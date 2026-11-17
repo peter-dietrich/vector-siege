@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "description": "Approved live cockpit: thirteen v5.3 upper artwork PNGs plus Phase 1 approved lower-chassis PNG. Required in signed macOS builds.",
+  "description": "Release-required art: thirteen recovered v5.3 upper-cockpit PNGs. The lower chassis is supplied by the source-controlled CockpitV53LowerChassis Swift renderer, which must be compiled into the app. The optional separately approved Phase 1 lower PNG is not available.",
   "required_pngs": [
     "cockpit_fire_bezel.png",
     "fire_screen_wells.png",
@@ -14,7 +14,12 @@
     "optics_glass_overlay.png",
     "cockpit_systems_bezel.png",
     "systems_screen_underlay.png",
-    "systems_glass_overlay.png",
-    "VectorSiege_Lower_Cockpit_Phase1_Approved.png"
-  ]
+    "systems_glass_overlay.png"
+  ],
+  "lower_chassis": {
+    "mode": "source-controlled procedural renderer",
+    "swift_source": "Sources/CockpitV53LowerChassis.swift",
+    "host_source": "Sources/CockpitV53LowerDeck.swift",
+    "optional_override_png": "VectorSiege_Lower_Cockpit_Phase1_Approved.png"
+  }
 }
