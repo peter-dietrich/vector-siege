@@ -154,6 +154,26 @@ final class BattlefieldScene: SKScene {
     private var cockpitV5Clock = 0.0
     private var approvedCockpit: CockpitV53LiveRenderer?
     private var true3DWorld: Tronzone3DWorld?
+    var startTime: SiegeStartTime = .day
+    var hoursPerWave: Double = 2.75
+    private(set) var timeOfDayHour: Double = 12
+    var onTimeOfDayChange: ((Double) -> Void)?
+
+    func setTimeOfDay(_ preset: SiegeStartTime, hoursPerWave advance: Double,
+                      preview: Bool = true) {
+        startTime = preset
+        hoursPerWave = max(0, min(12, advance))
+        if preview {
+            timeOfDayHour = preset.fixedHour ?? Double.random(in: 0..<24)
+            refreshTimeOfDay()
+        }
+    }
+
+    private func refreshTimeOfDay() {
+        true3DWorld?.applyTimeOfDay(timeOfDayHour)
+        onTimeOfDayChange?(timeOfDayHour)
+    }
+
     // Exposed only to the native host container: SceneKit owns its own
     // render pass and framebuffer, independent of transparent SpriteKit.
     var tronzoneRenderView: NSView? { true3DWorld?.renderView }
@@ -868,6 +888,8 @@ final class BattlefieldScene: SKScene {
         selectSolidBuildings()
         spawnWave()
         setupTrue3DWorld()
+        timeOfDayHour = startTime.fixedHour ?? Double.random(in: 0..<24)
+        refreshTimeOfDay()
         round = .levelReady
         lastUpdateTime = 0
     }
@@ -1513,6 +1535,10 @@ final class BattlefieldScene: SKScene {
                 mgRounds.removeAll()
                 mgRicochets.removeAll()
                 wave += 1
+                // Vector Barrage rule: the sun moves between waves, without
+                // changing lighting abruptly during combat.
+                timeOfDayHour = SiegeDaylight.hour(timeOfDayHour + hoursPerWave)
+                refreshTimeOfDay()
                 spawnWave()
                 for shell in shells where !shell.hostile { shotTally.miss() }
                 shells.removeAll()
@@ -2504,7 +2530,10 @@ final class BattlefieldScene: SKScene {
             directorWaveStartHits: directorWaveStartHits,
             machineGunAmmo: mgAmmo, machineGunHeat: mgHeat,
             machineGunFired: mgFired, machineGunHits: mgHits,
-            battlefieldEnvironment: battlefieldEnvironment.rawValue
+            battlefieldEnvironment: battlefieldEnvironment.rawValue,
+            timeOfDayHour: timeOfDayHour,
+            timeOfDayPreset: startTime.rawValue,
+            hoursPerWave: hoursPerWave
         )
     }
 
@@ -2529,6 +2558,9 @@ final class BattlefieldScene: SKScene {
         lives = saved.lives
         wave = saved.wave
         gameClock = saved.gameClock
+        startTime = saved.timeOfDayPreset.flatMap(SiegeStartTime.init(rawValue:)) ?? .day
+        hoursPerWave = max(0, min(12, saved.hoursPerWave ?? 2.75))
+        timeOfDayHour = SiegeDaylight.hour(saved.timeOfDayHour ?? 12)
         heading = wrapAngle(saved.heading)
         driveSpeed = saved.driveSpeed.isFinite ? saved.driveSpeed : 0
         tankPosition = saved.tankPosition
@@ -2625,6 +2657,7 @@ final class BattlefieldScene: SKScene {
         UserDefaults.standard.set(bestScore, forKey: "VectorSiegeHighScore")
         round = saved.awaitingLevelStart == true ? .levelReady : .paused
         setupTrue3DWorld()
+        refreshTimeOfDay()
         // Older saves continue paused and require P; a saved level-intro
         // remains on its any-key start screen.
         return true
@@ -3100,6 +3133,7 @@ final class BattlefieldScene: SKScene {
                                         size:o.size,kind:kind)
         }
         true3DWorld?.load(sites)
+        refreshTimeOfDay()
     }
 
     private func renderTrue3D(_ camera: CameraProjection) {
