@@ -406,10 +406,23 @@ final class Tronzone3DWorld {
             let water = Self.material(0.018,0.21,0.29,roughness:0.14,glow:0.05)
             water.transparency = 0.78
             water.writesToDepthBuffer = false
+            // The old sea slab started precisely at |z|=109, one unit
+            // beyond the nominal shoreline. That hard end cap caused the
+            // visible dark slit and intermittent clipping at grazing angles.
+            // Begin the ocean beneath the sand instead, with a thin low-alpha
+            // surf band overlapping the main surface. Both are world-fixed,
+            // not attached to a streaming terrain chunk.
+            let shallows = Self.material(0.10,0.36,0.39,roughness:0.32,glow:0.025)
+            shallows.transparency = 0.22
+            shallows.writesToDepthBuffer = false
             for sign in [-1.0,1.0] {
-                let sea = box(700,0.06,520,material:water,chamfer:0)
-                sea.position = SCNVector3(0,0.32,CGFloat(sign*369))
+                // The top of both slabs is y=0.35, matching immersion logic.
+                let sea = box(760,0.06,545,material:water,chamfer:0)
+                sea.position = SCNVector3(0,0.32,CGFloat(sign*365))
                 backdropRoot.addChildNode(sea)
+                let surf = box(760,0.015,38,material:shallows,chamfer:0)
+                surf.position = SCNVector3(0,0.3375,CGFloat(sign*93))
+                backdropRoot.addChildNode(surf)
             }
             // Low coastal cliffs frame the scene without enclosing the sea
             // behind Alpine mountain walls.
