@@ -72,7 +72,7 @@ func render(_ pixels:Int) -> Data {
   draw([CGPoint(x:266,y:321),CGPoint(x:416,y:371)],color:secondary,width:16)
  } else if game == "vector-barrage" {
   for x in stride(from:130,through:390,by:52) {
-   let rect=NSBezierPath(rect:CGRect(x:x-17,y:122,width:35,height:47+x.truncatingRemainder(dividingBy:65)))
+   let rect=NSBezierPath(rect:CGRect(x:x-17,y:122,width:35,height:CGFloat(47 + (Int(x) % 65))))
    rect.lineWidth=4;secondary.setStroke();rect.stroke()
   }
   for x in [160.0,256.0,353.0] {draw([CGPoint(x:x,y:181),CGPoint(x:256,y:371)],color:primary,width:7)}
