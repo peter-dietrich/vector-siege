@@ -151,8 +151,130 @@ private struct HelpBookView: View {
     }
 }
 
+// Dock and About window identity are explicit: the app must not rely on
+// LaunchServices caches or a system-generated About panel for its branding.
+final class ArcadeIconAppDelegate: NSObject, NSApplicationDelegate {
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        guard let iconURL = Bundle.main.url(forResource: "AppIcon", withExtension: "icns"),
+              let icon = NSImage(contentsOf: iconURL), icon.isValid else {
+            NSLog("Fun City branding: AppIcon.icns is missing or invalid in %@", Bundle.main.bundlePath)
+            return
+        }
+        NSApplication.shared.applicationIconImage = icon
+    }
+}
+
+@MainActor
+private enum GameAboutPanel {
+    private static var aboutWindow: NSWindow?
+
+    static func show() {
+        if let window = aboutWindow {
+            window.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+            return
+        }
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 600, height: 365),
+            styleMask: [.titled, .closable, .miniaturizable],
+            backing: .buffered, defer: false
+        )
+        window.title = "About " + GameHelpContent.title
+        window.center()
+        window.isReleasedWhenClosed = false
+        window.contentView = NSHostingView(rootView: GameAboutView())
+        aboutWindow = window
+        window.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
+    static func close() {
+        aboutWindow?.close()
+    }
+}
+
+private struct GameAboutView: View {
+    private let amber = Color(red: 1, green: 0.67, blue: 0.29)
+    private let navy = Color(red: 0.035, green: 0.045, blue: 0.09)
+
+    private var version: String {
+        let value = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
+        return value.flatMap { $0.isEmpty ? nil : $0 } ?? "Development build"
+    }
+    private var build: String {
+        let value = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String
+        return value.flatMap { $0.isEmpty ? nil : $0 } ?? "—"
+    }
+    private var appIcon: NSImage? {
+        guard let url = Bundle.main.url(forResource: "AppIcon", withExtension: "icns") else { return nil }
+        return NSImage(contentsOf: url)
+    }
+
+    var body: some View {
+        VStack(spacing: 20) {
+            HStack(alignment: .center, spacing: 24) {
+                Group {
+                    if let image = appIcon {
+                        Image(nsImage: image)
+                            .resizable()
+                            .interpolation(.high)
+                            .scaledToFit()
+                    } else {
+                        Image(systemName: "gamecontroller.fill")
+                            .resizable()
+                            .scaledToFit()
+                            .foregroundStyle(amber)
+                            .padding(24)
+                    }
+                }
+                .frame(width: 140, height: 140)
+                .accessibilityLabel(GameHelpContent.title + " application icon")
+
+                VStack(alignment: .leading, spacing: 10) {
+                    Text(GameHelpContent.title.uppercased())
+                        .font(.system(size: 25, weight: .black, design: .rounded))
+                        .foregroundStyle(.white)
+                    Text(GameHelpContent.tagline)
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(amber)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text("Version " + version + "  •  Build " + build)
+                        .font(.system(size: 12, weight: .medium, design: .monospaced))
+                        .foregroundStyle(.white.opacity(0.82))
+                    Text("A native Fun City Arcade experience for macOS")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.white.opacity(0.65))
+                }
+                Spacer(minLength: 0)
+            }
+
+            Divider().overlay(amber.opacity(0.3))
+            HStack(spacing: 12) {
+                Text("© 2026 Fun City Arcade")
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundStyle(.white.opacity(0.65))
+                Spacer()
+                Button("Help & Controls…") { GameHelpPanel.show(.overview) }
+                    .buttonStyle(.bordered)
+                Button("Close") { GameAboutPanel.close() }
+                    .buttonStyle(.borderedProminent)
+                    .tint(amber)
+                    .keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(25)
+        .frame(width: 600, height: 365)
+        .background(navy)
+        .preferredColorScheme(.dark)
+    }
+}
+
+
 struct GameHelpCommands: Commands {
     var body: some Commands {
+        CommandGroup(replacing: .appInfo) {
+            Button("About " + GameHelpContent.title) { GameAboutPanel.show() }
+        }
         CommandMenu("Game") {
             Button("How to Play…") { GameHelpPanel.show(.overview) }
             Button("Controls & Shortcuts…") { GameHelpPanel.show(.controls) }
