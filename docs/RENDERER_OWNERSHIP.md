@@ -18,8 +18,8 @@
 2. Convert Futuristic City to the SceneKit world, then retire its old opaque SpriteKit face pool and `tronzoneEnemyFaces`.
 3. Remove residual Alpine-specific SpriteKit outlines/foliage geometry **only after** the Classic mode has its own equivalent preserved.
 4. Separate `BattlefieldScene` simulation and state/save handling from both renderer implementations.
-5. Port the cannon-pierces-drones, new machine-gun audio/tracers, and low-pass saucer vulnerability by reviewing code changes from the abandoned main branch selectively (not a merge).
-6. Check both debug and release macOS builds plus geometry tests and a real playthrough before any default-branch promotion.
+5. **Completed in v2026.11.17g:** Selectively ported cannon-pierces-drones, machine-gun synthesized audio/tracers, and low-pass saucer vulnerability. Both SceneKit and legacy fallback project the same saucer altitude. Validate in gameplay before production.
+6. Check both debug and release macOS builds plus geometry tests and a real playthrough before any default-branch promotion. Automated builds alone do not establish visual parity.
 
 ## Must-pass regressions
 - The launch view in Modern / Cockpit v5.3 + Alpine visibly renders the actual depth-buffered SceneKit terrain, tanks, sun/moon and sky, not flat SpriteKit polygon approximations.
