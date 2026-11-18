@@ -24,6 +24,7 @@ final class Tronzone3DWorld {
 
     let renderView: SCNView
     private let scene = SCNScene()
+    private var environment: BattlefieldEnvironment = .alpine
     private let cameraNode = SCNNode()
     private let terrainRoot = SCNNode()
     private let structureRoot = SCNNode()
@@ -92,7 +93,7 @@ final class Tronzone3DWorld {
         scene.rootNode.addChildNode(backdropRoot)
         scene.rootNode.addChildNode(terrainRoot)
         scene.rootNode.addChildNode(structureRoot)
-        buildMountainBackdrop()
+        buildEnvironmentBackdrop()
         scene.rootNode.addChildNode(actorRoot)
         let camera = SCNCamera()
         camera.zNear = 0.4
@@ -326,6 +327,55 @@ final class Tronzone3DWorld {
     }
 
 
+    func setEnvironment(_ value: BattlefieldEnvironment) {
+        guard environment != value else { return }
+        environment = value
+        terrainOrigin = (Int.min, Int.min)
+        terrainRoot.childNodes.forEach { $0.removeFromParentNode() }
+        backdropRoot.childNodes.forEach { $0.removeFromParentNode() }
+        contactNodes.values.forEach { $0.removeFromParentNode() }
+        contactNodes.removeAll()
+        contactKinds.removeAll()
+        // The previous biome may have applied a different sky/fog palette.
+        lightingConfigured = false
+        buildEnvironmentBackdrop()
+        applyTimeOfDay(lightingHour)
+    }
+
+    private func buildEnvironmentBackdrop() {
+        switch environment {
+        case .alpine:
+            buildMountainBackdrop()
+        case .city, .ruins:
+            let ruined = environment == .ruins
+            let concrete = Self.material(
+                ruined ? 0.19 : 0.12, ruined ? 0.14 : 0.24,
+                ruined ? 0.13 : 0.32, roughness:0.82)
+            for i in 0..<92 {
+                let angle = Double(i)*2.399963229728653
+                let radius = 223.0 + Double(i%4)*17
+                let x = cos(angle)*radius
+                let z = sin(angle)*radius
+                let width = CGFloat(7+i%5*3)
+                let height = CGFloat(ruined ? 7+i%9*3 : 21+i%10*7)
+                let tower = box(width,height,width*0.72,material:concrete,chamfer:ruined ? 0.0 : 0.7)
+                tower.position = SCNVector3(Float(x),Float(height*0.5),Float(-z))
+                tower.eulerAngles.y = CGFloat(Double(i)*0.37)
+                backdropRoot.addChildNode(tower)
+            }
+        case .coast:
+            // Water begins beyond the traversable battlefield and is a true
+            // depth-tested reflective plane, not a background photograph.
+            let water = Self.material(0.015,0.16,0.24,roughness:0.17,glow:0.07)
+            for sign in [-1.0,1.0] {
+                let sea = box(600,0.14,190,material:water,chamfer:0)
+                sea.position = SCNVector3(0,-0.7,CGFloat(sign*245))
+                backdropRoot.addChildNode(sea)
+            }
+            buildMountainBackdrop()
+        }
+    }
+
     private func buildMountainBackdrop() {
         // World-anchored physical terrain, not a static panoramic screenshot.
         // Two depth-sorted ridge walls give the fog and directional lighting
@@ -372,7 +422,7 @@ final class Tronzone3DWorld {
     }
 
     private func level(_ x: Double, _ z: Double) -> Float {
-        Float(TronzoneBiome.mountainHeight(GroundPoint(x, z)))
+        Float(LandscapeTopology.height(GroundPoint(x, z)))
     }
 
     /// Chunked real terrain triangles with SceneKit PBR shading and depth.
@@ -411,7 +461,13 @@ final class Tronzone3DWorld {
         let triangles = SCNGeometryElement(indices: indices, primitiveType: .triangles)
         let texcoords = SCNGeometrySource(textureCoordinates:uv)
         let geometry = SCNGeometry(sources: [source,texcoords], elements: [triangles])
-        geometry.firstMaterial = groundMaterial
+        geometry.firstMaterial = environment == .city
+            ? Self.material(0.12,0.16,0.20,roughness:0.82)
+            : environment == .ruins
+                ? Self.material(0.17,0.12,0.10,roughness:0.91)
+                : environment == .coast
+                    ? Self.material(0.17,0.20,0.17,roughness:0.88)
+                    : groundMaterial
         let node = SCNNode(geometry: geometry)
         node.castsShadow = false
         terrainRoot.addChildNode(node)
@@ -436,7 +492,11 @@ final class Tronzone3DWorld {
         let gridElement = SCNGeometryElement(indices:gridIndices,
                                              primitiveType:.line)
         let gridGeometry = SCNGeometry(sources:[source],elements:[gridElement])
-        gridGeometry.firstMaterial = trim
+        gridGeometry.firstMaterial = environment == .ruins
+            ? Self.material(0.66,0.30,0.14,roughness:0.45,glow:0.18)
+            : environment == .coast
+                ? Self.material(0.10,0.66,0.88,roughness:0.22,glow:0.28)
+                : trim
         let gridNode = SCNNode(geometry:gridGeometry)
         gridNode.position.y = 0.045
         gridNode.castsShadow = false
@@ -451,7 +511,44 @@ final class Tronzone3DWorld {
             node.position = SCNVector3(Float(site.x), level(site.x, site.z),
                                        Float(-site.z))
             let s = CGFloat(site.size)
-            if site.kind == 0 {
+            if environment == .city || environment == .ruins {
+                let ruined = environment == .ruins
+                let height = s * (site.kind == 3 ? 6.8 : site.kind == 0 ? 4.2 : 2.4)
+                let building = box(s*1.8,height,s*1.8,
+                    material:ruined
+                        ? Self.material(0.26,0.16,0.13,roughness:0.94)
+                        : Self.material(0.15,0.27,0.31,roughness:0.36),
+                    chamfer:ruined ? 0.0 : 0.35)
+                building.position.y = height * 0.5
+                if ruined {
+                    building.eulerAngles.z = CGFloat(sin(Double(idx)*2.3)*0.095)
+                    let rubble = box(s*2.3,s*0.30,s*2.2,material:rockMaterial)
+                    rubble.position.y = s*0.12
+                    node.addChildNode(rubble)
+                } else {
+                    for floor in 1..<max(2,Int(height/2.8)) {
+                        let ribbon = box(s*1.82,0.07,s*1.82,material:trim,chamfer:0)
+                        ribbon.position.y = CGFloat(floor)*2.8
+                        node.addChildNode(ribbon)
+                    }
+                }
+                node.addChildNode(building)
+            } else if environment == .coast && site.kind == 0 {
+                let trunk = SCNCylinder(radius:s*0.18,height:s*3.8)
+                trunk.firstMaterial = bunkerMaterial
+                let stem = SCNNode(geometry:trunk)
+                stem.position.y = s*1.9
+                node.addChildNode(stem)
+                for arm in 0..<6 {
+                    let leaf = SCNCone(topRadius:0,bottomRadius:s*0.55,height:s*2.5)
+                    leaf.radialSegmentCount = 5
+                    leaf.firstMaterial = pineMaterial
+                    let frond = SCNNode(geometry:leaf)
+                    frond.eulerAngles.z = CGFloat(Double(arm)*Double.pi/3)
+                    frond.position.y = s*3.9
+                    node.addChildNode(frond)
+                }
+            } else if site.kind == 0 {
                 let trunk = SCNCylinder(radius: s * 0.13, height: s * 2.3)
                 trunk.firstMaterial = rockMaterial
                 let trunkNode = SCNNode(geometry: trunk)
