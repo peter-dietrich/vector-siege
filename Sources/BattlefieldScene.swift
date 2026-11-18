@@ -116,7 +116,7 @@ private struct Vegetation {
 
 final class BattlefieldScene: SKScene {
     var onDisplayModeChange: ((DisplayMode) -> Void)?
-    var displayMode: DisplayMode = .classic { didSet {
+    var displayMode: DisplayMode = .cockpitV53 { didSet {
         configurePalette()
         if oldValue != displayMode { onDisplayModeChange?(displayMode) }
     } }
