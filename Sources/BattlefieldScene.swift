@@ -959,7 +959,7 @@ final class BattlefieldScene: SKScene {
                             CockpitV53LiveRenderer.MapBuilding(
                                 x: $0.center.x, z: $0.center.z,
                                 size: $0.size,
-                                isSolid: battlefieldEnvironment == .alpine ||
+                                isSolid: (battlefieldEnvironment == .alpine || battlefieldEnvironment == .coast) ||
                                     $0.kind == .building || $0.kind == .block)
                         }, mgAmmo: mgAmmo, mgHeat: mgHeat,
                         mgLocked: mgOverheatLock)
@@ -2038,7 +2038,7 @@ final class BattlefieldScene: SKScene {
 
     private func makeObstacles() {
         obstacles.removeAll()
-        if battlefieldEnvironment == .alpine {
+        if (battlefieldEnvironment == .alpine || battlefieldEnvironment == .coast) || battlefieldEnvironment == .coast {
             let seed = UInt64.random(in: 1...UInt64.max)
             for site in TronzoneBiome.mountainSites(count: rules.obstacleCount, seed: seed) {
                 let kind: Obstacle.Kind
@@ -2085,7 +2085,7 @@ final class BattlefieldScene: SKScene {
     }
 
     private func selectSolidBuildings() {
-        if battlefieldEnvironment == .alpine {
+        if (battlefieldEnvironment == .alpine || battlefieldEnvironment == .coast) || battlefieldEnvironment == .coast {
             // Every visible alpine obstacle uses the same collision body for
             // driving, cannon interception, AI routing and line-of-sight.
             solidBuildingIndices = Set(obstacles.indices)
@@ -2110,7 +2110,7 @@ final class BattlefieldScene: SKScene {
 
     private func makeVegetation() {
         vegetation.removeAll()
-        if battlefieldEnvironment == .alpine {
+        if (battlefieldEnvironment == .alpine || battlefieldEnvironment == .coast) || battlefieldEnvironment == .coast {
             // Small soft ground cover only; all full-sized pines are already
             // obstacle bodies and therefore genuinely collision-aware.
             for index in 0..<120 {
@@ -2923,7 +2923,7 @@ final class BattlefieldScene: SKScene {
         for layer in [distantMountains, middleMountains, nearMountains, horizonMist] {
             layer.isHidden = !modern
         }
-        if battlefieldEnvironment == .alpine {
+        if (battlefieldEnvironment == .alpine || battlefieldEnvironment == .coast) || battlefieldEnvironment == .coast {
             distantMountains.fillColor = NSColor(calibratedRed: 0.04, green: 0.17, blue: 0.085, alpha: 0.92)
             middleMountains.fillColor = NSColor(calibratedRed: 0.027, green: 0.12, blue: 0.064, alpha: 0.97)
             nearMountains.fillColor = NSColor(calibratedRed: 0.013, green: 0.072, blue: 0.038, alpha: 1)
@@ -3152,7 +3152,7 @@ final class BattlefieldScene: SKScene {
             let world = Tronzone3DWorld(viewportSize:size)
             true3DWorld = world
         }
-        guard battlefieldEnvironment == .alpine else { return }
+        // All modern environments use SceneKit; Classic keeps its own renderer.
         let sites = obstacles.map { o -> Tronzone3DWorld.Site in
             let kind: Int
             switch o.kind {
@@ -3164,12 +3164,13 @@ final class BattlefieldScene: SKScene {
             return Tronzone3DWorld.Site(x:o.center.x,z:o.center.z,
                                         size:o.size,kind:kind)
         }
+        true3DWorld?.setEnvironment(battlefieldEnvironment)
         true3DWorld?.load(sites)
         refreshTimeOfDay()
     }
 
     private func renderTrue3D(_ camera: CameraProjection) {
-        let show = battlefieldEnvironment == .alpine && displayMode != .classic
+        let show = displayMode != .classic
         true3DWorld?.renderView.isHidden = !show
         // A transparent SKView overlays the native SCNView for the approved
         // cockpit and weapon FX. City and Classic retain opaque black canvas.
@@ -3239,8 +3240,7 @@ final class BattlefieldScene: SKScene {
                                   + recoil * (displayMode != .classic ? 9 : 5)
                                   + kick * 3.0 * sin(gameClock * 77)
         worldCamera.cameraLateral += kick * 0.028 * sin(gameClock * 63)
-        let threeDimensionalBattlefield =
-            battlefieldEnvironment == .alpine && displayMode != .classic
+        let threeDimensionalBattlefield = displayMode != .classic
         // Do not spend CPU every frame building the obsolete projected
         // mountain/ground/vehicle scene only to hide it behind SceneKit.
         // The legacy renderer still operates unchanged in Classic/city.
@@ -3383,7 +3383,7 @@ final class BattlefieldScene: SKScene {
     }
 
     private func ridge(_ azimuth: Double, multiplier: Double) -> Double {
-        if battlefieldEnvironment == .alpine {
+        if (battlefieldEnvironment == .alpine || battlefieldEnvironment == .coast) || battlefieldEnvironment == .coast {
             // Broad continental ridgelines plus pronounced angular alpine
             // summits. Three depth layers share the camera's actual heading.
             let shoulders = 18 + 28*abs(sin(azimuth*3.1+0.7))
@@ -3504,7 +3504,7 @@ final class BattlefieldScene: SKScene {
                      WorldPoint(anchorX + b, 0.018, z), c)
             }
         }
-        if battlefieldEnvironment == .alpine {
+        if (battlefieldEnvironment == .alpine || battlefieldEnvironment == .coast) || battlefieldEnvironment == .coast {
             // A filled dark terrain plane provides material beneath the
             // phosphor grid (not transparent floating vector lines).
             ground.path = CGPath(rect: CGRect(x: 0, y: 0,
@@ -3574,7 +3574,7 @@ final class BattlefieldScene: SKScene {
                 !BattlefieldRenderLOD.isVisible(
                     depth: view.forward, lateral: view.right,
                     margin: max(20, o.size * 2.5)) { continue }
-            if battlefieldEnvironment == .alpine {
+            if (battlefieldEnvironment == .alpine || battlefieldEnvironment == .coast) || battlefieldEnvironment == .coast {
                 drawAlpineObstacle(o, outline: alpineOutline,
                                    surfaces: alpineFill, camera: c)
                 // Alpine modern scenery is exclusively SceneKit; Classic uses
