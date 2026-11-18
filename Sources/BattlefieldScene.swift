@@ -2038,7 +2038,7 @@ final class BattlefieldScene: SKScene {
 
     private func makeObstacles() {
         obstacles.removeAll()
-        if (battlefieldEnvironment == .alpine || battlefieldEnvironment == .coast) || battlefieldEnvironment == .coast {
+        if (battlefieldEnvironment == .alpine || battlefieldEnvironment == .coast) {
             let seed = UInt64.random(in: 1...UInt64.max)
             for site in TronzoneBiome.mountainSites(count: rules.obstacleCount, seed: seed) {
                 let kind: Obstacle.Kind
@@ -2085,7 +2085,7 @@ final class BattlefieldScene: SKScene {
     }
 
     private func selectSolidBuildings() {
-        if (battlefieldEnvironment == .alpine || battlefieldEnvironment == .coast) || battlefieldEnvironment == .coast {
+        if (battlefieldEnvironment == .alpine || battlefieldEnvironment == .coast) {
             // Every visible alpine obstacle uses the same collision body for
             // driving, cannon interception, AI routing and line-of-sight.
             solidBuildingIndices = Set(obstacles.indices)
@@ -2110,7 +2110,7 @@ final class BattlefieldScene: SKScene {
 
     private func makeVegetation() {
         vegetation.removeAll()
-        if (battlefieldEnvironment == .alpine || battlefieldEnvironment == .coast) || battlefieldEnvironment == .coast {
+        if (battlefieldEnvironment == .alpine || battlefieldEnvironment == .coast) {
             // Small soft ground cover only; all full-sized pines are already
             // obstacle bodies and therefore genuinely collision-aware.
             for index in 0..<120 {
@@ -2923,7 +2923,7 @@ final class BattlefieldScene: SKScene {
         for layer in [distantMountains, middleMountains, nearMountains, horizonMist] {
             layer.isHidden = !modern
         }
-        if (battlefieldEnvironment == .alpine || battlefieldEnvironment == .coast) || battlefieldEnvironment == .coast {
+        if (battlefieldEnvironment == .alpine || battlefieldEnvironment == .coast) {
             distantMountains.fillColor = NSColor(calibratedRed: 0.04, green: 0.17, blue: 0.085, alpha: 0.92)
             middleMountains.fillColor = NSColor(calibratedRed: 0.027, green: 0.12, blue: 0.064, alpha: 0.97)
             nearMountains.fillColor = NSColor(calibratedRed: 0.013, green: 0.072, blue: 0.038, alpha: 1)
@@ -3383,7 +3383,7 @@ final class BattlefieldScene: SKScene {
     }
 
     private func ridge(_ azimuth: Double, multiplier: Double) -> Double {
-        if (battlefieldEnvironment == .alpine || battlefieldEnvironment == .coast) || battlefieldEnvironment == .coast {
+        if (battlefieldEnvironment == .alpine || battlefieldEnvironment == .coast) {
             // Broad continental ridgelines plus pronounced angular alpine
             // summits. Three depth layers share the camera's actual heading.
             let shoulders = 18 + 28*abs(sin(azimuth*3.1+0.7))
@@ -3504,7 +3504,7 @@ final class BattlefieldScene: SKScene {
                      WorldPoint(anchorX + b, 0.018, z), c)
             }
         }
-        if (battlefieldEnvironment == .alpine || battlefieldEnvironment == .coast) || battlefieldEnvironment == .coast {
+        if (battlefieldEnvironment == .alpine || battlefieldEnvironment == .coast) {
             // A filled dark terrain plane provides material beneath the
             // phosphor grid (not transparent floating vector lines).
             ground.path = CGPath(rect: CGRect(x: 0, y: 0,
@@ -3574,7 +3574,7 @@ final class BattlefieldScene: SKScene {
                 !BattlefieldRenderLOD.isVisible(
                     depth: view.forward, lateral: view.right,
                     margin: max(20, o.size * 2.5)) { continue }
-            if (battlefieldEnvironment == .alpine || battlefieldEnvironment == .coast) || battlefieldEnvironment == .coast {
+            if (battlefieldEnvironment == .alpine || battlefieldEnvironment == .coast) {
                 drawAlpineObstacle(o, outline: alpineOutline,
                                    surfaces: alpineFill, camera: c)
                 // Alpine modern scenery is exclusively SceneKit; Classic uses
