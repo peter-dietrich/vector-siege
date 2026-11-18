@@ -59,6 +59,8 @@ enum SiegeDaylight {
 enum BattlefieldEnvironment: String, CaseIterable, Identifiable, Codable {
     case alpine = "Mountain Wilderness"
     case city = "Futuristic City"
+    case ruins = "Post-Apocalyptic City"
+    case coast = "Oceanic Grid"
     var id: String { rawValue }
 }
 
@@ -67,6 +69,16 @@ enum BattlefieldEnvironment: String, CaseIterable, Identifiable, Codable {
 enum TronzoneBiome {
     // Accessed by the single SpriteKit game scene on the main thread.
     nonisolated(unsafe) static var active: BattlefieldEnvironment = .alpine
+
+    static func oceanHeight(_ p: GroundPoint) -> Double {
+        // A broad, traversable coastal plateau and coastal dunes. The ocean
+        // itself begins outside the playable encounter area, avoiding
+        // invisible underwater cover or inaccessible enemy spawns.
+        let dunes = 0.26*sin(p.x/25)*cos(p.z/34) +
+                    0.19*sin(p.z/14 + p.x/38)
+        let shore = max(0, (abs(p.z)-115)/85)
+        return dunes + shore*0.75*sin(p.x/30)
+    }
 
     static func mountainHeight(_ p: GroundPoint) -> Double {
         // Graded valley around the initial spawn; contiguous traversable
@@ -146,6 +158,7 @@ enum LandscapeTopology {
 
     static func height(_ p: GroundPoint) -> Double {
         if TronzoneBiome.active == .alpine { return TronzoneBiome.mountainHeight(p) }
+        if TronzoneBiome.active == .coast { return TronzoneBiome.oceanHeight(p) }
         let dx = distanceToRoadAxis(p.x)
         let dz = distanceToRoadAxis(p.z)
         let nearest = min(dx, dz)
