@@ -22,3 +22,5 @@ jobs:
             -destination 'platform=macOS' CODE_SIGNING_ALLOWED=NO build
       - name: Validate release app and Fun City identity
         run: bash Tests/check-release-candidate.sh "$RUNNER_TEMP/siege-rc/Build/Products/Release/VectorSiege.app"
+      - name: Verify bundled macOS app icon
+        run: bash scripts/check-app-branding.sh VectorSiege
