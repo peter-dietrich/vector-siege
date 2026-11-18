@@ -351,6 +351,21 @@ final class Tronzone3DWorld {
             let concrete = Self.material(
                 ruined ? 0.19 : 0.12, ruined ? 0.14 : 0.24,
                 ruined ? 0.13 : 0.32, roughness:0.82)
+            // Wide road corridors remain readable between city blocks.
+            // These have no collision bodies: combat obstacles continue to
+            // come exclusively from the shared deterministic site list.
+            let asphalt = Self.material(
+                ruined ? 0.08 : 0.075, ruined ? 0.065 : 0.10,
+                ruined ? 0.062 : 0.13, roughness:0.92)
+            for axis in -3...3 {
+                let coordinate = CGFloat(axis) * 60
+                let northSouth = box(13,0.10,420,material:asphalt,chamfer:0)
+                northSouth.position = SCNVector3(coordinate,0.18,0)
+                backdropRoot.addChildNode(northSouth)
+                let eastWest = box(420,0.10,13,material:asphalt,chamfer:0)
+                eastWest.position = SCNVector3(0,0.19,coordinate)
+                backdropRoot.addChildNode(eastWest)
+            }
             for i in 0..<92 {
                 let angle = Double(i)*2.399963229728653
                 let radius = 223.0 + Double(i%4)*17
@@ -372,7 +387,21 @@ final class Tronzone3DWorld {
                 sea.position = SCNVector3(0,-0.7,CGFloat(sign*245))
                 backdropRoot.addChildNode(sea)
             }
-            buildMountainBackdrop()
+            // Low coastal cliffs frame the scene without enclosing the sea
+            // behind Alpine mountain walls.
+            for sign in [-1.0,1.0] {
+                for ridge in 0..<14 {
+                    let size = CGFloat(8 + (ridge*7)%21)
+                    let rock = box(size*1.7,size,size*1.4,
+                        material:rockMaterial,chamfer:2)
+                    rock.position = SCNVector3(
+                        CGFloat(sign*Double(195 + ridge%3*12)),
+                        size*0.25,
+                        CGFloat((ridge-7)*29))
+                    rock.eulerAngles.y = CGFloat(Double(ridge)*0.41)
+                    backdropRoot.addChildNode(rock)
+                }
+            }
         }
     }
 
