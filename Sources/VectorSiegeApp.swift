@@ -42,7 +42,7 @@ enum ThreatLevel: String, CaseIterable, Identifiable {
 }
 
 final class SiegeSession: ObservableObject {
-    @Published var displayMode: DisplayMode = .classic
+    @Published var displayMode: DisplayMode = .cockpitV53
     @Published var threatLevel: ThreatLevel = .veteran
     @Published var battlefieldEnvironment: BattlefieldEnvironment = .alpine
     @Published var startTime: SiegeStartTime = .day
