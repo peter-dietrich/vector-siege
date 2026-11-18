@@ -966,7 +966,8 @@ final class BattlefieldScene: SKScene {
                                     battlefieldEnvironment != .city ||
                                     $0.kind == .building || $0.kind == .block)
                         }, mgAmmo: mgAmmo, mgHeat: mgHeat,
-                        mgLocked: mgOverheatLock)
+                        mgLocked: mgOverheatLock,
+                        environment: battlefieldEnvironment)
                 }
             }
         }
