@@ -13,6 +13,7 @@ struct VectorSiegeApp: App {
         .defaultSize(width: 1240, height: 790)
         .commands {
             CommandGroup(replacing: .newItem) { }
+            GameHelpCommands()
         }
     }
 }
