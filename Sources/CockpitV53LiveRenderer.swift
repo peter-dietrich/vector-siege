@@ -347,7 +347,7 @@ final class CockpitV53LiveRenderer {
 
     func update(_ snapshot: CockpitV5Snapshot, clock: Double,
                 buildings: [MapBuilding], mgAmmo: Int, mgHeat: Double,
-                mgLocked: Bool) {
+                mgLocked: Bool, environment: BattlefieldEnvironment) {
         guard snapshot.validate() else { return }
         set("fireHeading", String(format: "%03.0f°", snapshot.headingDegrees))
         set("fireSpeed", String(format: "%.1f",
@@ -453,7 +453,16 @@ final class CockpitV53LiveRenderer {
         mapSweep.zRotation = CGFloat(clock * 0.48)
 
         set("opticsBearing", String(format: "AZ %03.0f°", (snapshot.headingDegrees+180).truncatingRemainder(dividingBy: 360)))
-        set("opticsThreat", t == nil ? "NO TRACK" : "TARGET")
+        // Rear optics and terrain telemetry use the same physical seabed
+        // elevation as SceneKit and the gameplay collision model.
+        let seabed = snapshot.terrainElevationWorldUnits
+        let waterDepth = max(0, 0.35-seabed)
+        let submerged = environment == .coast && waterDepth > 1.5
+        set("opticsMode", submerged ? "SONAR / REAR" : "REAR / 1.0X")
+        set("opticsSubtitle", submerged ? "SONAR / LOW VISIBILITY" : "EO / LIVE REAR CAMERA")
+        set("opticsThreat", submerged
+            ? String(format: "DEPTH %.0fFT", waterDepth*3.28084)
+            : t == nil ? "NO TRACK" : "TARGET")
         powertrain.sample(clock: clock,
                           speed: snapshot.speedWorldUnitsPerSecond,
                           lives: snapshot.lives)
@@ -505,7 +514,8 @@ final class CockpitV53LiveRenderer {
                 snapshot.playerPosition.x + dx*distance,
                 snapshot.playerPosition.z + dz*distance))
         }
-        lowerDeck?.update(snapshot, terrain: forwardHeights)
+        lowerDeck?.update(snapshot, terrain: forwardHeights,
+                          waterline: environment == .coast ? 0.35 : nil)
     }
 
     /// Final per-frame pass. Legacy HUD draws underneath; never draw opaque
