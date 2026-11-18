@@ -5,6 +5,21 @@ struct GeometrySmoke {
     static func main() {
         // Legacy geometry assumptions are explicitly urban; the playable
         // Mountain Wilderness uses a distinct terrain profile.
+        precondition(BattlefieldEnvironment.allCases.count == 4,
+                     "All four playable landscape selectors must exist")
+        for environment in BattlefieldEnvironment.allCases {
+            let raw = environment.rawValue
+            precondition(BattlefieldEnvironment(rawValue:raw) == environment,
+                         "Environment must remain save-game round-trippable")
+        }
+        TronzoneBiome.active = .coast
+        let coastHeight = LandscapeTopology.height(GroundPoint(55,80))
+        precondition(coastHeight.isFinite && abs(coastHeight) < 3,
+                     "Coastal combat terrain must be smooth and traversable")
+        TronzoneBiome.active = .alpine
+        let mountainHeight = LandscapeTopology.height(GroundPoint(55,80))
+        precondition(abs(coastHeight-mountainHeight) > 0.1,
+                     "Coast and mountain topography must differ")
         TronzoneBiome.active = .city
         let c = CameraProjection(position: GroundPoint(0,0), yaw: 0,
                                  viewportWidth: 1200, viewportHeight: 700)

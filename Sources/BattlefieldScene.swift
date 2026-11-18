@@ -116,9 +116,12 @@ private struct Vegetation {
 
 final class BattlefieldScene: SKScene {
     var onDisplayModeChange: ((DisplayMode) -> Void)?
-    var displayMode: DisplayMode = .classic { didSet {
+    var displayMode: DisplayMode = .cockpitV53 { didSet {
         configurePalette()
-        if oldValue != displayMode { onDisplayModeChange?(displayMode) }
+        if oldValue != displayMode {
+            selectSolidBuildings()
+            onDisplayModeChange?(displayMode)
+        }
     } }
     var threatLevel: ThreatLevel = .veteran
     var soundOn = true
@@ -959,10 +962,12 @@ final class BattlefieldScene: SKScene {
                             CockpitV53LiveRenderer.MapBuilding(
                                 x: $0.center.x, z: $0.center.z,
                                 size: $0.size,
-                                isSolid: battlefieldEnvironment == .alpine ||
+                                isSolid: displayMode != .classic ||
+                                    battlefieldEnvironment != .city ||
                                     $0.kind == .building || $0.kind == .block)
                         }, mgAmmo: mgAmmo, mgHeat: mgHeat,
-                        mgLocked: mgOverheatLock)
+                        mgLocked: mgOverheatLock,
+                        environment: battlefieldEnvironment)
                 }
             }
         }
@@ -1391,7 +1396,9 @@ final class BattlefieldScene: SKScene {
                     radius: shell.payload == "bomb" ? 5.0 :
                         shell.payload == "droneCharge" ? 2.7 : 2.0)
             } else {
-                for idx in enemies.indices where !casualties.contains(idx) {
+                for idx in enemies.indices where !casualties.contains(idx) &&
+                    enemies[idx].kind != .drone &&
+                    (enemies[idx].kind != .saucer || saucerIsVulnerable(enemies[idx])) {
                     let radius: Double
                     switch enemies[idx].kind {
                     case .fighter: radius = 5.5
@@ -1406,6 +1413,36 @@ final class BattlefieldScene: SKScene {
                         hit < (targetTime ?? .infinity) {
                         targetTime = hit
                         targetIndex = idx
+                    }
+                }
+            }
+
+            // Cannon pierces every light drone before the first solid
+            // obstruction or armored target, retaining its trajectory.
+            if !shell.hostile {
+                let blockingTime = min(terrainTime ?? .infinity,
+                                       wallTime ?? .infinity,
+                                       targetTime ?? .infinity)
+                var droneContacts: [(index: Int, time: Double)] = []
+                for index in enemies.indices where !casualties.contains(index) &&
+                    enemies[index].kind == .drone {
+                    if let contact = ObstacleCollision.firstCircleImpact(
+                        from: old, to: shell.center, center: enemies[index].center,
+                        radius: 1.8), contact < blockingTime {
+                        droneContacts.append((index, contact))
+                    }
+                }
+                for contact in droneContacts.sorted(by: { $0.time < $1.time }) {
+                    let index = contact.index
+                    shotTally.hit()
+                    enemies[index].hitPoints -= 1
+                    let position = old + (shell.center - old) * contact.time
+                    burst(at: WorldPoint(position, height: enemies[index].droneAltitude), count: 12)
+                    registerImpact(at: position, kind: .aircraft)
+                    if enemies[index].hitPoints <= 0 {
+                        casualties.insert(index)
+                        addPoints(225)
+                        sound("impact.wav")
                     }
                 }
             }
@@ -1790,7 +1827,7 @@ final class BattlefieldScene: SKScene {
         mgBarrel = 1 - mgBarrel
         mgAmmo -= 1
         mgFired += 1
-        if mgFired.isMultiple(of: 3) { sound("shot.wav") }
+        combatAudio.play(.machineGun, enabled: soundOn)
         mgShotCooldown = 0.095
         mgHeat = min(110, mgHeat + 3.8)
         if mgHeat >= 100 { mgOverheatLock = true }
@@ -2006,7 +2043,7 @@ final class BattlefieldScene: SKScene {
 
     private func makeObstacles() {
         obstacles.removeAll()
-        if battlefieldEnvironment == .alpine {
+        if (battlefieldEnvironment == .alpine || battlefieldEnvironment == .coast) {
             let seed = UInt64.random(in: 1...UInt64.max)
             for site in TronzoneBiome.mountainSites(count: rules.obstacleCount, seed: seed) {
                 let kind: Obstacle.Kind
@@ -2053,7 +2090,9 @@ final class BattlefieldScene: SKScene {
     }
 
     private func selectSolidBuildings() {
-        if battlefieldEnvironment == .alpine {
+        if battlefieldEnvironment != .city || displayMode != .classic {
+            // All modern 3D structures must be real collision and cover geometry;
+            // Classic City alone retains its historical partial-cover rules.
             // Every visible alpine obstacle uses the same collision body for
             // driving, cannon interception, AI routing and line-of-sight.
             solidBuildingIndices = Set(obstacles.indices)
@@ -2078,7 +2117,7 @@ final class BattlefieldScene: SKScene {
 
     private func makeVegetation() {
         vegetation.removeAll()
-        if battlefieldEnvironment == .alpine {
+        if (battlefieldEnvironment == .alpine || battlefieldEnvironment == .coast) {
             // Small soft ground cover only; all full-sized pines are already
             // obstacle bodies and therefore genuinely collision-aware.
             for index in 0..<120 {
@@ -2891,7 +2930,7 @@ final class BattlefieldScene: SKScene {
         for layer in [distantMountains, middleMountains, nearMountains, horizonMist] {
             layer.isHidden = !modern
         }
-        if battlefieldEnvironment == .alpine {
+        if (battlefieldEnvironment == .alpine || battlefieldEnvironment == .coast) {
             distantMountains.fillColor = NSColor(calibratedRed: 0.04, green: 0.17, blue: 0.085, alpha: 0.92)
             middleMountains.fillColor = NSColor(calibratedRed: 0.027, green: 0.12, blue: 0.064, alpha: 0.97)
             nearMountains.fillColor = NSColor(calibratedRed: 0.013, green: 0.072, blue: 0.038, alpha: 1)
@@ -3120,7 +3159,7 @@ final class BattlefieldScene: SKScene {
             let world = Tronzone3DWorld(viewportSize:size)
             true3DWorld = world
         }
-        guard battlefieldEnvironment == .alpine else { return }
+        // All modern environments use SceneKit; Classic keeps its own renderer.
         let sites = obstacles.map { o -> Tronzone3DWorld.Site in
             let kind: Int
             switch o.kind {
@@ -3132,15 +3171,16 @@ final class BattlefieldScene: SKScene {
             return Tronzone3DWorld.Site(x:o.center.x,z:o.center.z,
                                         size:o.size,kind:kind)
         }
+        true3DWorld?.setEnvironment(battlefieldEnvironment)
         true3DWorld?.load(sites)
         refreshTimeOfDay()
     }
 
     private func renderTrue3D(_ camera: CameraProjection) {
-        let show = battlefieldEnvironment == .alpine && displayMode != .classic
+        let show = displayMode != .classic
         true3DWorld?.renderView.isHidden = !show
-        // A transparent SKView overlays the native SCNView for the approved
-        // cockpit and weapon FX. City and Classic retain opaque black canvas.
+        // A transparent SKView overlays SceneKit for live cockpit and weapon
+        // FX. Only the deliberate Classic presentation uses the 2D world.
         backgroundColor = show ? .clear : .black
         // These are only the legacy projected WORLD graphics. The cockpit,
         // rear optics, radar, reticle, projectiles, and effects remain intact.
@@ -3164,7 +3204,7 @@ final class BattlefieldScene: SKScene {
             case .drone:
                 kind = 1; altitude = enemy.droneAltitude
             case .saucer:
-                kind = 2; altitude = 7.5 + sin(gameClock*2.4+enemy.phase)*0.55
+                kind = 2; altitude = saucerAltitude(enemy)
             case .fighter:
                 kind = 3; altitude = 3.9 + 0.4*sin(enemy.phase*0.9)
             default:
@@ -3207,11 +3247,10 @@ final class BattlefieldScene: SKScene {
                                   + recoil * (displayMode != .classic ? 9 : 5)
                                   + kick * 3.0 * sin(gameClock * 77)
         worldCamera.cameraLateral += kick * 0.028 * sin(gameClock * 63)
-        let threeDimensionalBattlefield =
-            battlefieldEnvironment == .alpine && displayMode != .classic
+        let threeDimensionalBattlefield = displayMode != .classic
         // Do not spend CPU every frame building the obsolete projected
         // mountain/ground/vehicle scene only to hide it behind SceneKit.
-        // The legacy renderer still operates unchanged in Classic/city.
+        // The legacy projected renderer is only used in Classic mode.
         if !threeDimensionalBattlefield {
             renderMountains(worldCamera)
             renderGround(worldCamera)
@@ -3351,7 +3390,7 @@ final class BattlefieldScene: SKScene {
     }
 
     private func ridge(_ azimuth: Double, multiplier: Double) -> Double {
-        if battlefieldEnvironment == .alpine {
+        if (battlefieldEnvironment == .alpine || battlefieldEnvironment == .coast) {
             // Broad continental ridgelines plus pronounced angular alpine
             // summits. Three depth layers share the camera's actual heading.
             let shoulders = 18 + 28*abs(sin(azimuth*3.1+0.7))
@@ -3472,7 +3511,7 @@ final class BattlefieldScene: SKScene {
                      WorldPoint(anchorX + b, 0.018, z), c)
             }
         }
-        if battlefieldEnvironment == .alpine {
+        if (battlefieldEnvironment == .alpine || battlefieldEnvironment == .coast) {
             // A filled dark terrain plane provides material beneath the
             // phosphor grid (not transparent floating vector lines).
             ground.path = CGPath(rect: CGRect(x: 0, y: 0,
@@ -3542,10 +3581,11 @@ final class BattlefieldScene: SKScene {
                 !BattlefieldRenderLOD.isVisible(
                     depth: view.forward, lateral: view.right,
                     margin: max(20, o.size * 2.5)) { continue }
-            if battlefieldEnvironment == .alpine {
+            if (battlefieldEnvironment == .alpine || battlefieldEnvironment == .coast) {
                 drawAlpineObstacle(o, outline: alpineOutline,
                                    surfaces: alpineFill, camera: c)
-                facets.append(contentsOf: tronzoneObstacleFaces(o, camera: c))
+                // Alpine modern scenery is exclusively SceneKit; Classic uses
+                // its historical vector outlines. No duplicate SpriteKit mesh.
                 continue
             }
             switch o.kind {
@@ -3568,8 +3608,10 @@ final class BattlefieldScene: SKScene {
                 }
             }
         }
-        structures.path = battlefieldEnvironment == .alpine ? alpineOutline : structurePath
-        alpineSurfaces.path = battlefieldEnvironment == .alpine ? alpineFill : nil
+        structures.path = (battlefieldEnvironment == .alpine || battlefieldEnvironment == .coast)
+            ? alpineOutline : structurePath
+        alpineSurfaces.path = (battlefieldEnvironment == .alpine || battlefieldEnvironment == .coast)
+            ? alpineFill : nil
         alpineSurfaces.fillColor = .clear
         // Solid polygons are owned by the same sorted face pool as tank armor,
         // not a translucent overlay painted over the entire forest.
@@ -3639,72 +3681,14 @@ final class BattlefieldScene: SKScene {
     }
 
 
-    // Solid world-space mesh for Tronzone. Unlike the former wireframe or
-    // alpha-tinted polygons, every visible surface is fully opaque. A single
-    // sorted face pool shades buildings, vegetation, and enemy armor together.
+    // Legacy 2D mesh helper retained for Futuristic City only.
+    // Alpine modern environments render exclusively through SceneKit.
     private func tronzoneFace(_ vertices: [WorldPoint], tint: Int,
                               camera c: CameraProjection) -> GlassFace {
         let depth = vertices.reduce(0.0) { $0 + c.local($1).forward } /
             Double(max(1, vertices.count))
         return GlassFace(vertices: vertices, depth: depth,
                          tint: tint, solid: true)
-    }
-
-    private func tronzoneObstacleFaces(_ o: Obstacle,
-                                       camera c: CameraProjection) -> [GlassFace] {
-        let p = o.center
-        let size = o.size
-        func v(_ x: Double, _ y: Double, _ z: Double) -> WorldPoint {
-            WorldPoint(p.x+x, y, p.z+z)
-        }
-        var faces: [GlassFace] = []
-        func add(_ vertices: [WorldPoint], _ tint: Int) {
-            faces.append(tronzoneFace(vertices, tint: tint, camera: c))
-        }
-        switch o.kind {
-        case .tower:
-            // Four-sided, overlapping opaque pine canopies; each height band
-            // is deep enough to read as a tree, not a floating triangle.
-            for level in 0..<3 {
-                let rise = Double(level)*size*0.87
-                let spread = size*(1.42-Double(level)*0.22)
-                let base = rise+size*0.45
-                let apex = rise+size*2.35
-                let n = v(0,base,spread)
-                let e = v(spread,base,0)
-                let south = v(0,base,-spread)
-                let west = v(-spread,base,0)
-                let top = v(0,apex,0)
-                add([n,e,top],20+level%3)
-                add([e,south,top],21+level%3)
-                add([south,west,top],22+level%3)
-                add([west,n,top],20+level%3)
-                add([n,west,south,e],20)
-            }
-            add([v(-size*0.14,0,-size*0.14),
-                 v(size*0.14,0,-size*0.14),
-                 v(size*0.14,size*1.3,-size*0.14),
-                 v(-size*0.14,size*1.3,-size*0.14)],24)
-        case .pyramid:
-            let a = v(-size,0,-size*0.8), b = v(size,0,-size*0.8)
-            let d = v(-size,0,size*0.8), e = v(size,0,size*0.8)
-            let apex = v(-size*0.12,size*1.2,0)
-            add([a,b,apex],26);add([b,e,apex],24)
-            add([e,d,apex],25);add([d,a,apex],27)
-        case .block, .monolith, .building:
-            let sx = o.kind == .monolith ? size*0.55 : size
-            let sz = o.kind == .monolith ? size*0.55 : size
-            let height = o.kind == .monolith ? size*5 : size*1.35
-            let lo = [v(-sx,0,-sz),v(sx,0,-sz),v(sx,0,sz),v(-sx,0,sz)]
-            let hi = [v(-sx,height,-sz),v(sx,height,-sz),
-                      v(sx,height,sz),v(-sx,height,sz)]
-            for i in 0..<4 {
-                add([lo[i],lo[(i+1)%4],hi[(i+1)%4],hi[i]],
-                    i.isMultiple(of: 2) ? 23 : 24)
-            }
-            add(hi,25)
-        }
-        return faces
     }
 
     private func tronzoneEnemyFaces(_ enemy: Foe,
@@ -4360,12 +4344,23 @@ final class BattlefieldScene: SKScene {
         line(path, v(-1.0, 0, 0.2), v(1.0, 0, 0.2), c)
     }
 
+    // Canonical saucer altitude drives SceneKit, Classic art and collision.
+    // Patrols make independent high passes then dip into vulnerable range.
+    private func saucerAltitude(_ e: Foe) -> Double {
+        6.0 + 3.2 * sin(e.phase * 0.72 + e.center.x * 0.013) +
+            0.65 * sin(e.phase * 1.83 + e.center.z * 0.021)
+    }
+
+    private func saucerIsVulnerable(_ e: Foe) -> Bool {
+        saucerAltitude(e) <= 5.1
+    }
+
     private func drawSaucer(_ e: Foe, on path: CGMutablePath, camera c: CameraProjection) {
         // Animated rotating wireframe disk: moving facets and radial spokes make
         // the spin obvious in both Classic and Modern display modes.
         let n = displayMode != .classic ? 18 : 12
         let spin = gameClock * 2.9 + e.phase
-        let hover = 7.5 + sin(gameClock * 2.4 + e.phase) * 0.55
+        let hover = saucerAltitude(e)
         let radius = displayMode != .classic ? 3.7 : 3.1
         func ring(_ angle: Double, radius r: Double, elevation: Double) -> WorldPoint {
             WorldPoint(e.center.x + cos(angle) * r, elevation,
@@ -4532,14 +4527,19 @@ final class BattlefieldScene: SKScene {
         flashLines.path = flarePath
         let mgPath = CGMutablePath()
         for round in mgRounds {
-            let back = round.center - round.direction * 3.5
-            line(mgPath, WorldPoint(round.center, height: 3.2),
+            let length = 4.2 + Double(round.barrel) * 1.3
+            let back = round.center - round.direction * length
+            line(mgPath, WorldPoint(round.center + round.direction * 0.8, height: 3.2),
                  WorldPoint(back, height: 3.2), c)
+            let mid = round.center - round.direction * 0.55
+            line(mgPath, WorldPoint(round.center + round.direction * 0.5, height: 3.2),
+                 WorldPoint(mid, height: 3.2), c)
         }
         machineGunLines.path = mgPath
         machineGunLines.strokeColor = NSColor(calibratedRed: 1,
             green: 0.83, blue: 0.37, alpha: 0.95)
-        machineGunLines.lineWidth = 1.3
+        machineGunLines.lineWidth = 2.0
+        machineGunLines.glowWidth = 3.2
         let bouncePath = CGMutablePath()
         for spark in mgRicochets {
             let fraction = spark.timeLeft / 0.23
@@ -4585,14 +4585,31 @@ final class BattlefieldScene: SKScene {
             let farX = width / 2 + t * width * 0.07
             segment(gridPath, point(farX, horizon), point(nearX, 0))
         }
-        // The mountains continue to respond to rear-facing tank heading.
-        var previous = point(0, horizon)
-        for i in 0...40 {
-            let x = Double(i) * width / 40
-            let bearing = backHeading + atan2((x - width / 2) / backCamera.focal, 1)
-            let top = point(x, horizon + ridge(bearing, multiplier: 0.30))
-            if i > 0 { segment(gridPath, previous, top) }
-            previous = top
+        // A genuine rearward terrain sample replaces the fake Alpine
+        // silhouette. It uses precisely the same height map as the SceneKit
+        // terrain, collision model and forward topography gauge.
+        let behind = facing(backHeading)
+        let lateral = GroundPoint(behind.z, -behind.x)
+        for distance in [28.0, 58.0, 102.0] {
+            var previous: WorldPoint?
+            for step in 0...36 {
+                let sideways = (Double(step)/36.0-0.5)*distance*2.3
+                let position = tankPosition + behind*distance + lateral*sideways
+                let here = WorldPoint(position,
+                    height: LandscapeTopology.height(position)+0.08)
+                if let last = previous {
+                    line(gridPath,last,here,backCamera)
+                }
+                previous = here
+            }
+        }
+        // The physical coastal sea datum appears on rear optics as a
+        // reference, including when the player is descending underwater.
+        if battlefieldEnvironment == .coast {
+            let surface = CGMutablePath()
+            let lineY = horizon + (LandscapeTopology.height(tankPosition)+1.65 < 0.35 ? 17.0 : 0)
+            segment(surface,point(0,lineY),point(width,lineY))
+            gridPath.addPath(surface)
         }
         rearGround.path = gridPath
 
@@ -5425,7 +5442,10 @@ final class BattlefieldScene: SKScene {
             label.fontSize = CGFloat(max(7.4, min(9.5, unit.1 / 27)))
             label.fontColor = cyan.withAlphaComponent(0.77)
             label.horizontalAlignmentMode = .left
-            label.isHidden = false
+            // These legends belong to the old Modern command deck only.
+            // Never leak their projected positions into the approved v5.3
+            // cockpit or the visible SceneKit battlefield.
+            label.isHidden = displayMode != .modern
         }
         for index in 4..<8 {
             commandShellLabels[index].isHidden = true
@@ -6115,15 +6135,15 @@ final class BattlefieldScene: SKScene {
 /// Deep procedural combat transients with short noise attacks and low-frequency
 /// body. Generated in memory to avoid packaging or changing existing sounds.
 private final class TankCombatAudio {
-    enum Kind: Int { case cannon = 0, impact = 1, explosion = 2 }
-    private var players: [AVAudioPlayer?] = [nil, nil, nil]
+    enum Kind: Int { case cannon = 0, impact = 1, explosion = 2, machineGun = 3 }
+    private var players: [AVAudioPlayer?] = [nil, nil, nil, nil]
 
     init() {
-        for type in [Kind.cannon, .impact, .explosion] {
+        for type in [Kind.cannon, .impact, .explosion, .machineGun] {
             let index = type.rawValue
             players[index] = try? AVAudioPlayer(data: Self.makeWAV(type))
             players[index]?.prepareToPlay()
-            players[index]?.volume = type == .impact ? 0.48 : 0.72
+            players[index]?.volume = type == .impact ? 0.48 : (type == .machineGun ? 0.52 : 0.72)
         }
     }
 
@@ -6137,7 +6157,7 @@ private final class TankCombatAudio {
     private static func makeWAV(_ kind: Kind) -> Data {
         let rate = 22_050
         let duration: Double = kind == .cannon ? 0.48 :
-            (kind == .impact ? 0.26 : 0.88)
+            (kind == .impact ? 0.26 : kind == .machineGun ? 0.085 : 0.88)
         let count = Int(Double(rate) * duration)
         var data = Data(capacity: 44 + count * 2)
         func put16(_ n: UInt16) {
@@ -6182,6 +6202,10 @@ private final class TankCombatAudio {
                 frequency = 142 - 66 * progress
                 noiseWeight = 0.68
                 decay = exp(-t * 14)
+            case .machineGun:
+                frequency = 245 - 100 * progress
+                noiseWeight = 0.82
+                decay = exp(-t * 23)
             case .explosion:
                 frequency = 78 - 44 * progress
                 noiseWeight = 0.75

@@ -1,3 +1,37 @@
+# True-3D Tronzone battlefield expansion — v2026.11.17h
+
+**Canonical implementation:** `Sources/Tronzone3DWorld.swift` (SceneKit), with gameplay and collision state in `BattlefieldScene.swift` / `BattlefieldMath.swift`. This document supersedes the older procedural SpriteKit modernization notes below for the Modern / Cockpit v5.3 display. Classic retains its intentional vector visual style.
+
+## Four selectable Modern environments
+
+| Environment | New 3D landscape | Interactive cover / collision |
+| --- | --- | --- |
+| Mountain Wilderness | Shaded ridge geometry, detailed terrain mesh, pines, boulders, bunkers, relay towers | Existing deterministic Alpine obstacle footprints |
+| Futuristic City | Neon high-rise buildings, varied floors, urban skyline, road corridors | Existing seeded city obstacles; all modern buildings are solid cover |
+| Post-Apocalyptic City (Fallen Grid) | Damaged and tilted concrete blocks, debris/rubble, muted rust terrain and fractured skyline | Existing city footprints, fully solid in 3D |
+| Oceanic Grid | Coastal dunes and traversable terrain, ocean planes, cliffs, palm-like vegetation, rocky cover and towers | Existing seeded Alpine-style collision bodies, using coastal topology |
+
+All environments use the same SceneKit `SCNView`, depth buffer, 3D tank models, sky / sun / moon / star lighting system, current live cockpit, and gameplay simulation. There is no second modern SpriteKit rendering engine. The environment picker works with save-game environment raw strings; older saves still resolve by existing fallback.
+
+### Limitations before visual sign-off
+
+- This is a procedural first-pass, not photorealistic scenery. Textures and prop variety can be developed without changing world ownership.
+- City and ruined city currently share the deterministic city footprint generator; differentiation is in 3D art and materials. Coast uses seeded physical cover and low dune-like terrain, not swimming or watercraft physics.
+- Debug/Release macOS CI and actual cockpit playtesting are required. Do not present an unverified build as production-ready.
+- This work is on `refactor/true3d-core-cleanup`, not the older `main` branch. Preserve the archived main until the recovery branch is verified.
+- Cannon/drone piercing, improved machine guns and saucer low-altitude vulnerability are present in the recovered 3D code branch.
+
+## Four-landscape verification
+
+1. Open each environment in Cockpit v5.3; confirm **actual 3D geometry** instead of 2D green outlines.
+2. Drive and shoot into each biome's cover; confirm blocked movement, cannon impacts, enemy pathfinding and map contacts.
+3. Change time presets from midday to dusk and night in each biome; confirm lighting, sun/moon/star layering.
+4. Switch Modern / Classic / Cockpit v5.3, resize window, start next wave and save/restore each selected biome.
+5. Verify City and Fallen Grid are not indistinguishable; verify Oceanic Grid has a visible ocean horizon, not a continuous mountain ring.
+6. Run geometry smoke tests, Debug and Release builds on the actual latest commit; capture visual proof from macOS.
+
+---
+
 # Tronzone battlefield modernization — implementation status
 
 Reference: four user-supplied Tronzone concept images (Neon Battlezone / Neon Grid Tank series). These are **visual references**, not game backgrounds. Interactive scenes are constructed from live world coordinates and procedural shapes.

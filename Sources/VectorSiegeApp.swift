@@ -42,7 +42,7 @@ enum ThreatLevel: String, CaseIterable, Identifiable {
 }
 
 final class SiegeSession: ObservableObject {
-    @Published var displayMode: DisplayMode = .classic
+    @Published var displayMode: DisplayMode = .cockpitV53
     @Published var threatLevel: ThreatLevel = .veteran
     @Published var battlefieldEnvironment: BattlefieldEnvironment = .alpine
     @Published var startTime: SiegeStartTime = .day
@@ -102,10 +102,10 @@ struct SiegeWindow: View {
                 Text("VECTOR SIEGE")
                     .font(.system(size: 15, weight: .bold, design: .monospaced))
                     .tracking(1.5)
-                Text("v2026.11.17f")
+                Text("v2026.11.17j")
                     .font(.system(size: 10, weight: .medium, design: .monospaced))
                     .foregroundStyle(.gray)
-                    .help("Source build identifier: v2026.11.17f — true 3D Tronzone battlefield preview")
+                    .help("Source build identifier: v2026.11.17j — canonical SceneKit 3D battlefield and weapons cleanup")
                 Spacer(minLength: 4)
                 Picker("Display", selection: $session.displayMode) {
                     ForEach(DisplayMode.allCases) { Text($0.rawValue).tag($0) }
@@ -167,10 +167,15 @@ struct SiegeWindow: View {
                     }
                 }
                 .labelsHidden()
-                .frame(width: 203)
-                Text(session.battlefieldEnvironment == .alpine
-                     ? "ALPINE VECTOR FRONTIER  /  ACTIVE WORLD GEOMETRY"
-                     : "NEON CITADEL  /  ORIGINAL CITY GEOMETRY")
+                .frame(width: 220)
+                Text({
+                    switch session.battlefieldEnvironment {
+                    case .alpine: return "ALPINE FRONTIER  /  SCENEKIT 3D"
+                    case .city: return "NEON CITADEL  /  SCENEKIT 3D"
+                    case .ruins: return "FALLEN GRID  /  SCENEKIT 3D"
+                    case .coast: return "OCEANIC GRID  /  SCENEKIT 3D"
+                    }
+                }())
                     .font(.system(size: 10, weight: .medium, design: .monospaced))
                     .foregroundStyle(.white.opacity(0.53))
                 Spacer(minLength: 4)

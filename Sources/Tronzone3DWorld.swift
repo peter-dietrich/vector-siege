@@ -24,6 +24,7 @@ final class Tronzone3DWorld {
 
     let renderView: SCNView
     private let scene = SCNScene()
+    private var environment: BattlefieldEnvironment = .alpine
     private let cameraNode = SCNNode()
     private let terrainRoot = SCNNode()
     private let structureRoot = SCNNode()
@@ -36,6 +37,7 @@ final class Tronzone3DWorld {
     private let starRoot = SCNNode()
     private var lightingHour: Double = 12
     private var lightingConfigured = false
+    private var isUnderwater = false
     private var contactNodes: [Int: SCNNode] = [:]
     private var contactKinds: [Int: Int] = [:]
     private var terrainTexture: CGImage?
@@ -92,7 +94,7 @@ final class Tronzone3DWorld {
         scene.rootNode.addChildNode(backdropRoot)
         scene.rootNode.addChildNode(terrainRoot)
         scene.rootNode.addChildNode(structureRoot)
-        buildMountainBackdrop()
+        buildEnvironmentBackdrop()
         scene.rootNode.addChildNode(actorRoot)
         let camera = SCNCamera()
         camera.zNear = 0.4
@@ -213,6 +215,25 @@ final class Tronzone3DWorld {
         starRoot.opacity = CGFloat(pow(night,1.6)*0.82)
         sunDisc.isHidden = day < 0.035
         moonDisc.isHidden = day >= 0.035
+        if isUnderwater {
+            // Strong underwater absorption with a blue-green light field,
+            // close visibility falloff and no celestial disks/stars.
+            scene.fogColor = NSColor(calibratedRed:0.015,green:0.17,
+                                     blue:0.23,alpha:1)
+            scene.fogStartDistance = 2.0
+            scene.fogEndDistance = 36.0
+            scene.background.contents = NSColor(
+                calibratedRed:0.012,green:0.14,blue:0.20,alpha:1)
+            ambientNode.light?.intensity = CGFloat(190 + day*280)
+            ambientNode.light?.color = NSColor(
+                calibratedRed:0.15,green:0.52,blue:0.65,alpha:1)
+            sun.light?.intensity = CGFloat(100 + day*320)
+            sun.light?.color = NSColor(
+                calibratedRed:0.28,green:0.68,blue:0.80,alpha:1)
+            starRoot.opacity = 0
+            sunDisc.isHidden = true
+            moonDisc.isHidden = true
+        }
         positionCelestialObjects(cameraX:Double(cameraNode.position.x),
                                   cameraZ:-Double(cameraNode.position.z))
     }
@@ -326,6 +347,101 @@ final class Tronzone3DWorld {
     }
 
 
+    func setEnvironment(_ value: BattlefieldEnvironment) {
+        guard environment != value else { return }
+        environment = value
+        terrainOrigin = (Int.min, Int.min)
+        terrainRoot.childNodes.forEach { $0.removeFromParentNode() }
+        backdropRoot.childNodes.forEach { $0.removeFromParentNode() }
+        contactNodes.values.forEach { $0.removeFromParentNode() }
+        contactNodes.removeAll()
+        contactKinds.removeAll()
+        // The previous biome may have applied a different sky/fog palette.
+        lightingConfigured = false
+        isUnderwater = false
+        buildEnvironmentBackdrop()
+        applyTimeOfDay(lightingHour)
+    }
+
+    private func buildEnvironmentBackdrop() {
+        switch environment {
+        case .alpine:
+            buildMountainBackdrop()
+        case .city, .ruins:
+            let ruined = environment == .ruins
+            let concrete = Self.material(
+                ruined ? 0.19 : 0.12, ruined ? 0.14 : 0.24,
+                ruined ? 0.13 : 0.32, roughness:0.82)
+            // Wide road corridors remain readable between city blocks.
+            // These have no collision bodies: combat obstacles continue to
+            // come exclusively from the shared deterministic site list.
+            let asphalt = Self.material(
+                ruined ? 0.08 : 0.075, ruined ? 0.065 : 0.10,
+                ruined ? 0.062 : 0.13, roughness:0.92)
+            for axis in -3...3 {
+                let coordinate = CGFloat(axis) * 60
+                let northSouth = box(13,0.10,420,material:asphalt,chamfer:0)
+                northSouth.position = SCNVector3(coordinate,0.18,0)
+                backdropRoot.addChildNode(northSouth)
+                let eastWest = box(420,0.10,13,material:asphalt,chamfer:0)
+                eastWest.position = SCNVector3(0,0.19,coordinate)
+                backdropRoot.addChildNode(eastWest)
+            }
+            for i in 0..<92 {
+                let angle = Double(i)*2.399963229728653
+                let radius = 223.0 + Double(i%4)*17
+                let x = cos(angle)*radius
+                let z = sin(angle)*radius
+                let width = CGFloat(7+i%5*3)
+                let height = CGFloat(ruined ? 7+i%9*3 : 21+i%10*7)
+                let tower = box(width,height,width*0.72,material:concrete,chamfer:0)
+                tower.position = SCNVector3(Float(x),Float(height*0.5),Float(-z))
+                tower.eulerAngles.y = CGFloat(Double(i)*0.37)
+                backdropRoot.addChildNode(tower)
+            }
+        case .coast:
+            // Continuous sea surface crosses the sloping seabed just
+            // beyond the beach. Both directions remain drivable and share
+            // the same terrain elevation used by physics and radar.
+            let water = Self.material(0.018,0.21,0.29,roughness:0.14,glow:0.05)
+            water.transparency = 0.78
+            water.writesToDepthBuffer = false
+            // The old sea slab started precisely at |z|=109, one unit
+            // beyond the nominal shoreline. That hard end cap caused the
+            // visible dark slit and intermittent clipping at grazing angles.
+            // Begin the ocean beneath the sand instead, with a thin low-alpha
+            // surf band overlapping the main surface. Both are world-fixed,
+            // not attached to a streaming terrain chunk.
+            let shallows = Self.material(0.10,0.36,0.39,roughness:0.32,glow:0.025)
+            shallows.transparency = 0.22
+            shallows.writesToDepthBuffer = false
+            for sign in [-1.0,1.0] {
+                // The top of both slabs is y=0.35, matching immersion logic.
+                let sea = box(760,0.06,545,material:water,chamfer:0)
+                sea.position = SCNVector3(0,0.32,CGFloat(sign*365))
+                backdropRoot.addChildNode(sea)
+                let surf = box(760,0.015,38,material:shallows,chamfer:0)
+                surf.position = SCNVector3(0,0.3375,CGFloat(sign*93))
+                backdropRoot.addChildNode(surf)
+            }
+            // Low coastal cliffs frame the scene without enclosing the sea
+            // behind Alpine mountain walls.
+            for sign in [-1.0,1.0] {
+                for ridge in 0..<14 {
+                    let size = CGFloat(8 + (ridge*7)%21)
+                    let rock = box(size*1.7,size,size*1.4,
+                        material:rockMaterial,chamfer:2)
+                    rock.position = SCNVector3(
+                        CGFloat(sign*Double(195 + ridge%3*12)),
+                        size*0.25,
+                        CGFloat((ridge-7)*29))
+                    rock.eulerAngles.y = CGFloat(Double(ridge)*0.41)
+                    backdropRoot.addChildNode(rock)
+                }
+            }
+        }
+    }
+
     private func buildMountainBackdrop() {
         // World-anchored physical terrain, not a static panoramic screenshot.
         // Two depth-sorted ridge walls give the fog and directional lighting
@@ -372,7 +488,7 @@ final class Tronzone3DWorld {
     }
 
     private func level(_ x: Double, _ z: Double) -> Float {
-        Float(TronzoneBiome.mountainHeight(GroundPoint(x, z)))
+        Float(LandscapeTopology.height(GroundPoint(x, z)))
     }
 
     /// Chunked real terrain triangles with SceneKit PBR shading and depth.
@@ -411,7 +527,13 @@ final class Tronzone3DWorld {
         let triangles = SCNGeometryElement(indices: indices, primitiveType: .triangles)
         let texcoords = SCNGeometrySource(textureCoordinates:uv)
         let geometry = SCNGeometry(sources: [source,texcoords], elements: [triangles])
-        geometry.firstMaterial = groundMaterial
+        geometry.firstMaterial = environment == .city
+            ? Self.material(0.12,0.16,0.20,roughness:0.82)
+            : environment == .ruins
+                ? Self.material(0.17,0.12,0.10,roughness:0.91)
+                : environment == .coast
+                    ? Self.material(0.17,0.20,0.17,roughness:0.88)
+                    : groundMaterial
         let node = SCNNode(geometry: geometry)
         node.castsShadow = false
         terrainRoot.addChildNode(node)
@@ -436,7 +558,11 @@ final class Tronzone3DWorld {
         let gridElement = SCNGeometryElement(indices:gridIndices,
                                              primitiveType:.line)
         let gridGeometry = SCNGeometry(sources:[source],elements:[gridElement])
-        gridGeometry.firstMaterial = trim
+        gridGeometry.firstMaterial = environment == .ruins
+            ? Self.material(0.66,0.30,0.14,roughness:0.45,glow:0.18)
+            : environment == .coast
+                ? Self.material(0.10,0.66,0.88,roughness:0.22,glow:0.28)
+                : trim
         let gridNode = SCNNode(geometry:gridGeometry)
         gridNode.position.y = 0.045
         gridNode.castsShadow = false
@@ -451,7 +577,44 @@ final class Tronzone3DWorld {
             node.position = SCNVector3(Float(site.x), level(site.x, site.z),
                                        Float(-site.z))
             let s = CGFloat(site.size)
-            if site.kind == 0 {
+            if environment == .city || environment == .ruins {
+                let ruined = environment == .ruins
+                let height = s * (site.kind == 3 ? 6.8 : site.kind == 0 ? 4.2 : 2.4)
+                let building = box(s*1.8,height,s*1.8,
+                    material:ruined
+                        ? Self.material(0.26,0.16,0.13,roughness:0.94)
+                        : Self.material(0.15,0.27,0.31,roughness:0.36),
+                    chamfer:0)
+                building.position.y = height * 0.5
+                if ruined {
+                    building.eulerAngles.z = CGFloat(sin(Double(idx)*2.3)*0.095)
+                    let rubble = box(s*2.3,s*0.30,s*2.2,material:rockMaterial)
+                    rubble.position.y = s*0.12
+                    node.addChildNode(rubble)
+                } else {
+                    for floor in 1..<max(2,Int(height/2.8)) {
+                        let ribbon = box(s*1.82,0.07,s*1.82,material:trim,chamfer:0)
+                        ribbon.position.y = CGFloat(floor)*2.8
+                        node.addChildNode(ribbon)
+                    }
+                }
+                node.addChildNode(building)
+            } else if environment == .coast && site.kind == 0 {
+                let trunk = SCNCylinder(radius:s*0.18,height:s*3.8)
+                trunk.firstMaterial = bunkerMaterial
+                let stem = SCNNode(geometry:trunk)
+                stem.position.y = s*1.9
+                node.addChildNode(stem)
+                for arm in 0..<6 {
+                    let leaf = SCNCone(topRadius:0,bottomRadius:s*0.55,height:s*2.5)
+                    leaf.radialSegmentCount = 5
+                    leaf.firstMaterial = pineMaterial
+                    let frond = SCNNode(geometry:leaf)
+                    frond.eulerAngles.z = CGFloat(Double(arm)*Double.pi/3)
+                    frond.position.y = s*3.9
+                    node.addChildNode(frond)
+                }
+            } else if site.kind == 0 {
                 let trunk = SCNCylinder(radius: s * 0.13, height: s * 2.3)
                 trunk.firstMaterial = rockMaterial
                 let trunkNode = SCNNode(geometry: trunk)
@@ -476,17 +639,17 @@ final class Tronzone3DWorld {
                 rockNode.eulerAngles.y = CGFloat(Double(idx) * 0.73)
                 node.addChildNode(rockNode)
             } else if site.kind == 2 {
-                let body = box(s*1.9,s*1.25,s*1.9,material:bunkerMaterial,chamfer:s*0.08)
+                let body = box(s*1.9,s*1.25,s*1.9,material:bunkerMaterial,chamfer:0)
                 body.position.y = (s*0.625)
                 node.addChildNode(body)
-                let roof = box(s*2.3,s*0.18,s*2.3,material:hullMaterial)
+                let roof = box(s*2.3,s*0.18,s*2.3,material:hullMaterial,chamfer:0)
                 roof.position.y = (s*1.32)
                 node.addChildNode(roof)
                 let beam = box(s*1.2,s*0.04,s*0.08,material:trim,chamfer:0)
                 beam.position = SCNVector3(0,Float(s*0.85),Float(-s*0.98))
                 node.addChildNode(beam)
             } else {
-                let tower = box(s*0.72,s*5,s*0.72,material:bunkerMaterial)
+                let tower = box(s*0.72,s*5,s*0.72,material:bunkerMaterial,chamfer:0)
                 tower.position.y = (s*2.5)
                 node.addChildNode(tower)
                 let beacon = box(s*1.6,s*0.12,s*1.6,material:trim)
@@ -655,6 +818,14 @@ final class Tronzone3DWorld {
                       eyeHeight: Double, viewportSize: CGSize,
                       pitchPoints: Double) {
         buildTerrain(aroundX:x,z:z)
+        // Update water immersion from actual camera elevation, not world
+        // position alone. The transition is reversible on returning to shore.
+        let submerged = environment == .coast && eyeHeight < 0.32
+        if submerged != isUnderwater {
+            isUnderwater = submerged
+            lightingConfigured = false
+            applyTimeOfDay(lightingHour)
+        }
         positionCelestialObjects(cameraX:x,cameraZ:z)
         // The host NSView controls the SCNView's actual framebuffer size.
         // Updating projection here changes only the 3D camera, never depth
