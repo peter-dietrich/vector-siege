@@ -3545,7 +3545,8 @@ final class BattlefieldScene: SKScene {
             if battlefieldEnvironment == .alpine {
                 drawAlpineObstacle(o, outline: alpineOutline,
                                    surfaces: alpineFill, camera: c)
-                facets.append(contentsOf: tronzoneObstacleFaces(o, camera: c))
+                // Alpine modern scenery is exclusively SceneKit; Classic uses
+                // its historical vector outlines. No duplicate SpriteKit mesh.
                 continue
             }
             switch o.kind {
@@ -3639,72 +3640,14 @@ final class BattlefieldScene: SKScene {
     }
 
 
-    // Solid world-space mesh for Tronzone. Unlike the former wireframe or
-    // alpha-tinted polygons, every visible surface is fully opaque. A single
-    // sorted face pool shades buildings, vegetation, and enemy armor together.
+    // Legacy 2D mesh helper retained for Futuristic City only.
+    // Alpine modern environments render exclusively through SceneKit.
     private func tronzoneFace(_ vertices: [WorldPoint], tint: Int,
                               camera c: CameraProjection) -> GlassFace {
         let depth = vertices.reduce(0.0) { $0 + c.local($1).forward } /
             Double(max(1, vertices.count))
         return GlassFace(vertices: vertices, depth: depth,
                          tint: tint, solid: true)
-    }
-
-    private func tronzoneObstacleFaces(_ o: Obstacle,
-                                       camera c: CameraProjection) -> [GlassFace] {
-        let p = o.center
-        let size = o.size
-        func v(_ x: Double, _ y: Double, _ z: Double) -> WorldPoint {
-            WorldPoint(p.x+x, y, p.z+z)
-        }
-        var faces: [GlassFace] = []
-        func add(_ vertices: [WorldPoint], _ tint: Int) {
-            faces.append(tronzoneFace(vertices, tint: tint, camera: c))
-        }
-        switch o.kind {
-        case .tower:
-            // Four-sided, overlapping opaque pine canopies; each height band
-            // is deep enough to read as a tree, not a floating triangle.
-            for level in 0..<3 {
-                let rise = Double(level)*size*0.87
-                let spread = size*(1.42-Double(level)*0.22)
-                let base = rise+size*0.45
-                let apex = rise+size*2.35
-                let n = v(0,base,spread)
-                let e = v(spread,base,0)
-                let south = v(0,base,-spread)
-                let west = v(-spread,base,0)
-                let top = v(0,apex,0)
-                add([n,e,top],20+level%3)
-                add([e,south,top],21+level%3)
-                add([south,west,top],22+level%3)
-                add([west,n,top],20+level%3)
-                add([n,west,south,e],20)
-            }
-            add([v(-size*0.14,0,-size*0.14),
-                 v(size*0.14,0,-size*0.14),
-                 v(size*0.14,size*1.3,-size*0.14),
-                 v(-size*0.14,size*1.3,-size*0.14)],24)
-        case .pyramid:
-            let a = v(-size,0,-size*0.8), b = v(size,0,-size*0.8)
-            let d = v(-size,0,size*0.8), e = v(size,0,size*0.8)
-            let apex = v(-size*0.12,size*1.2,0)
-            add([a,b,apex],26);add([b,e,apex],24)
-            add([e,d,apex],25);add([d,a,apex],27)
-        case .block, .monolith, .building:
-            let sx = o.kind == .monolith ? size*0.55 : size
-            let sz = o.kind == .monolith ? size*0.55 : size
-            let height = o.kind == .monolith ? size*5 : size*1.35
-            let lo = [v(-sx,0,-sz),v(sx,0,-sz),v(sx,0,sz),v(-sx,0,sz)]
-            let hi = [v(-sx,height,-sz),v(sx,height,-sz),
-                      v(sx,height,sz),v(-sx,height,sz)]
-            for i in 0..<4 {
-                add([lo[i],lo[(i+1)%4],hi[(i+1)%4],hi[i]],
-                    i.isMultiple(of: 2) ? 23 : 24)
-            }
-            add(hi,25)
-        }
-        return faces
     }
 
     private func tronzoneEnemyFaces(_ enemy: Foe,
