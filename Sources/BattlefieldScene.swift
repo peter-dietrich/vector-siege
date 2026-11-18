@@ -4585,14 +4585,31 @@ final class BattlefieldScene: SKScene {
             let farX = width / 2 + t * width * 0.07
             segment(gridPath, point(farX, horizon), point(nearX, 0))
         }
-        // The mountains continue to respond to rear-facing tank heading.
-        var previous = point(0, horizon)
-        for i in 0...40 {
-            let x = Double(i) * width / 40
-            let bearing = backHeading + atan2((x - width / 2) / backCamera.focal, 1)
-            let top = point(x, horizon + ridge(bearing, multiplier: 0.30))
-            if i > 0 { segment(gridPath, previous, top) }
-            previous = top
+        // A genuine rearward terrain sample replaces the fake Alpine
+        // silhouette. It uses precisely the same height map as the SceneKit
+        // terrain, collision model and forward topography gauge.
+        let behind = facing(backHeading)
+        let lateral = GroundPoint(behind.z, -behind.x)
+        for distance in [28.0, 58.0, 102.0] {
+            var previous: WorldPoint?
+            for step in 0...36 {
+                let sideways = (Double(step)/36.0-0.5)*distance*2.3
+                let position = tankPosition + behind*distance + lateral*sideways
+                let here = WorldPoint(position,
+                    height: LandscapeTopology.height(position)+0.08)
+                if let last = previous {
+                    line(gridPath,last,here,backCamera)
+                }
+                previous = here
+            }
+        }
+        // The physical coastal sea datum appears on rear optics as a
+        // reference, including when the player is descending underwater.
+        if battlefieldEnvironment == .coast {
+            let surface = CGMutablePath()
+            let lineY = horizon + (LandscapeTopology.height(tankPosition)+1.65 < 0.35 ? 17.0 : 0)
+            segment(surface,point(0,lineY),point(width,lineY))
+            gridPath.addPath(surface)
         }
         rearGround.path = gridPath
 
