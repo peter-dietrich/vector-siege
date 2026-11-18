@@ -5424,7 +5424,10 @@ final class BattlefieldScene: SKScene {
             label.fontSize = CGFloat(max(7.4, min(9.5, unit.1 / 27)))
             label.fontColor = cyan.withAlphaComponent(0.77)
             label.horizontalAlignmentMode = .left
-            label.isHidden = false
+            // These legends belong to the old Modern command deck only.
+            // Never leak their projected positions into the approved v5.3
+            // cockpit or the visible SceneKit battlefield.
+            label.isHidden = displayMode != .modern
         }
         for index in 4..<8 {
             commandShellLabels[index].isHidden = true
