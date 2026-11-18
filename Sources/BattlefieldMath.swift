@@ -71,13 +71,14 @@ enum TronzoneBiome {
     nonisolated(unsafe) static var active: BattlefieldEnvironment = .alpine
 
     static func oceanHeight(_ p: GroundPoint) -> Double {
-        // A broad, traversable coastal plateau and coastal dunes. The ocean
-        // itself begins outside the playable encounter area, avoiding
-        // invisible underwater cover or inaccessible enemy spawns.
+        // Shared terrain/collision height drops continuously beneath the
+        // sea surface at y=0.35. The tank can drive through the surf and onto
+        // the seabed; there is no independent visual-only water elevation.
         let dunes = 0.26*sin(p.x/25)*cos(p.z/34) +
                     0.19*sin(p.z/14 + p.x/38)
-        let shore = max(0, (abs(p.z)-115)/85)
-        return dunes + shore*0.75*sin(p.x/30)
+        let shoreline = max(0.0, min(1.0, (abs(p.z)-108.0)/58.0))
+        let eased = shoreline*shoreline*(3.0-2.0*shoreline)
+        return dunes*(1.0-eased*0.4) - 7.0*eased
     }
 
     static func mountainHeight(_ p: GroundPoint) -> Double {
