@@ -20,6 +20,7 @@ final class CockpitV53LowerDeck {
     private let compassTicks = SKShapeNode()
     private let compassNumbers = SKNode()
     private let terrainTrace = SKShapeNode()
+    private let terrainWaterline = SKShapeNode()
     private let terrainFill = SKShapeNode()
     private let readinessBar = SKShapeNode()
     private var installed = false
@@ -189,6 +190,11 @@ final class CockpitV53LowerDeck {
         terrainTrace.fillColor = .clear
         terrainTrace.zPosition = 4
         dataRoot.addChild(terrainTrace)
+        terrainWaterline.strokeColor = cyan.withAlphaComponent(0.86)
+        terrainWaterline.lineWidth = 1.5
+        terrainWaterline.zPosition = 4.5
+        terrainWaterline.isHidden = true
+        dataRoot.addChild(terrainWaterline)
         label("range", "AHEAD 480 FT", x: 1060, y: 179, size: 9, color: cyan)
         label("elevRange", "LIVE TOPOGRAPHY", x: 1060, y: 76, size: 8.5, color: muted)
 
