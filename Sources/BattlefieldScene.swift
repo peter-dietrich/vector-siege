@@ -1391,7 +1391,9 @@ final class BattlefieldScene: SKScene {
                     radius: shell.payload == "bomb" ? 5.0 :
                         shell.payload == "droneCharge" ? 2.7 : 2.0)
             } else {
-                for idx in enemies.indices where !casualties.contains(idx) {
+                for idx in enemies.indices where !casualties.contains(idx) &&
+                    enemies[idx].kind != .drone &&
+                    (enemies[idx].kind != .saucer || saucerIsVulnerable(enemies[idx])) {
                     let radius: Double
                     switch enemies[idx].kind {
                     case .fighter: radius = 5.5
@@ -1406,6 +1408,36 @@ final class BattlefieldScene: SKScene {
                         hit < (targetTime ?? .infinity) {
                         targetTime = hit
                         targetIndex = idx
+                    }
+                }
+            }
+
+            // Cannon pierces every light drone before the first solid
+            // obstruction or armored target, retaining its trajectory.
+            if !shell.hostile {
+                let blockingTime = min(terrainTime ?? .infinity,
+                                       wallTime ?? .infinity,
+                                       targetTime ?? .infinity)
+                var droneContacts: [(index: Int, time: Double)] = []
+                for index in enemies.indices where !casualties.contains(index) &&
+                    enemies[index].kind == .drone {
+                    if let contact = ObstacleCollision.firstCircleImpact(
+                        from: old, to: shell.center, center: enemies[index].center,
+                        radius: 1.8), contact < blockingTime {
+                        droneContacts.append((index, contact))
+                    }
+                }
+                for contact in droneContacts.sorted(by: { $0.time < $1.time }) {
+                    let index = contact.index
+                    shotTally.hit()
+                    enemies[index].hitPoints -= 1
+                    let position = old + (shell.center - old) * contact.time
+                    burst(at: WorldPoint(position, height: enemies[index].droneAltitude), count: 12)
+                    registerImpact(at: position, kind: .aircraft)
+                    if enemies[index].hitPoints <= 0 {
+                        casualties.insert(index)
+                        addPoints(225)
+                        sound("impact.wav")
                     }
                 }
             }
@@ -1790,7 +1822,7 @@ final class BattlefieldScene: SKScene {
         mgBarrel = 1 - mgBarrel
         mgAmmo -= 1
         mgFired += 1
-        if mgFired.isMultiple(of: 3) { sound("shot.wav") }
+        combatAudio.play(.machineGun, enabled: soundOn)
         mgShotCooldown = 0.095
         mgHeat = min(110, mgHeat + 3.8)
         if mgHeat >= 100 { mgOverheatLock = true }
@@ -3164,7 +3196,7 @@ final class BattlefieldScene: SKScene {
             case .drone:
                 kind = 1; altitude = enemy.droneAltitude
             case .saucer:
-                kind = 2; altitude = 7.5 + sin(gameClock*2.4+enemy.phase)*0.55
+                kind = 2; altitude = saucerAltitude(enemy)
             case .fighter:
                 kind = 3; altitude = 3.9 + 0.4*sin(enemy.phase*0.9)
             default:
@@ -4303,12 +4335,23 @@ final class BattlefieldScene: SKScene {
         line(path, v(-1.0, 0, 0.2), v(1.0, 0, 0.2), c)
     }
 
+    // Canonical saucer altitude drives SceneKit, Classic art and collision.
+    // Patrols make independent high passes then dip into vulnerable range.
+    private func saucerAltitude(_ e: Foe) -> Double {
+        6.0 + 3.2 * sin(e.phase * 0.72 + e.center.x * 0.013) +
+            0.65 * sin(e.phase * 1.83 + e.center.z * 0.021)
+    }
+
+    private func saucerIsVulnerable(_ e: Foe) -> Bool {
+        saucerAltitude(e) <= 5.1
+    }
+
     private func drawSaucer(_ e: Foe, on path: CGMutablePath, camera c: CameraProjection) {
         // Animated rotating wireframe disk: moving facets and radial spokes make
         // the spin obvious in both Classic and Modern display modes.
         let n = displayMode != .classic ? 18 : 12
         let spin = gameClock * 2.9 + e.phase
-        let hover = 7.5 + sin(gameClock * 2.4 + e.phase) * 0.55
+        let hover = saucerAltitude(e)
         let radius = displayMode != .classic ? 3.7 : 3.1
         func ring(_ angle: Double, radius r: Double, elevation: Double) -> WorldPoint {
             WorldPoint(e.center.x + cos(angle) * r, elevation,
@@ -4475,14 +4518,19 @@ final class BattlefieldScene: SKScene {
         flashLines.path = flarePath
         let mgPath = CGMutablePath()
         for round in mgRounds {
-            let back = round.center - round.direction * 3.5
-            line(mgPath, WorldPoint(round.center, height: 3.2),
+            let length = 4.2 + Double(round.barrel) * 1.3
+            let back = round.center - round.direction * length
+            line(mgPath, WorldPoint(round.center + round.direction * 0.8, height: 3.2),
                  WorldPoint(back, height: 3.2), c)
+            let mid = round.center - round.direction * 0.55
+            line(mgPath, WorldPoint(round.center + round.direction * 0.5, height: 3.2),
+                 WorldPoint(mid, height: 3.2), c)
         }
         machineGunLines.path = mgPath
         machineGunLines.strokeColor = NSColor(calibratedRed: 1,
             green: 0.83, blue: 0.37, alpha: 0.95)
-        machineGunLines.lineWidth = 1.3
+        machineGunLines.lineWidth = 2.0
+        machineGunLines.glowWidth = 3.2
         let bouncePath = CGMutablePath()
         for spark in mgRicochets {
             let fraction = spark.timeLeft / 0.23
@@ -6058,15 +6106,15 @@ final class BattlefieldScene: SKScene {
 /// Deep procedural combat transients with short noise attacks and low-frequency
 /// body. Generated in memory to avoid packaging or changing existing sounds.
 private final class TankCombatAudio {
-    enum Kind: Int { case cannon = 0, impact = 1, explosion = 2 }
-    private var players: [AVAudioPlayer?] = [nil, nil, nil]
+    enum Kind: Int { case cannon = 0, impact = 1, explosion = 2, machineGun = 3 }
+    private var players: [AVAudioPlayer?] = [nil, nil, nil, nil]
 
     init() {
-        for type in [Kind.cannon, .impact, .explosion] {
+        for type in [Kind.cannon, .impact, .explosion, .machineGun] {
             let index = type.rawValue
             players[index] = try? AVAudioPlayer(data: Self.makeWAV(type))
             players[index]?.prepareToPlay()
-            players[index]?.volume = type == .impact ? 0.48 : 0.72
+            players[index]?.volume = type == .impact ? 0.48 : (type == .machineGun ? 0.52 : 0.72)
         }
     }
 
@@ -6080,7 +6128,7 @@ private final class TankCombatAudio {
     private static func makeWAV(_ kind: Kind) -> Data {
         let rate = 22_050
         let duration: Double = kind == .cannon ? 0.48 :
-            (kind == .impact ? 0.26 : 0.88)
+            (kind == .impact ? 0.26 : kind == .machineGun ? 0.085 : 0.88)
         let count = Int(Double(rate) * duration)
         var data = Data(capacity: 44 + count * 2)
         func put16(_ n: UInt16) {
@@ -6125,6 +6173,10 @@ private final class TankCombatAudio {
                 frequency = 142 - 66 * progress
                 noiseWeight = 0.68
                 decay = exp(-t * 14)
+            case .machineGun:
+                frequency = 245 - 100 * progress
+                noiseWeight = 0.82
+                decay = exp(-t * 23)
             case .explosion:
                 frequency = 78 - 44 * progress
                 noiseWeight = 0.75
