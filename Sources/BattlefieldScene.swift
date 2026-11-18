@@ -118,7 +118,10 @@ final class BattlefieldScene: SKScene {
     var onDisplayModeChange: ((DisplayMode) -> Void)?
     var displayMode: DisplayMode = .cockpitV53 { didSet {
         configurePalette()
-        if oldValue != displayMode { onDisplayModeChange?(displayMode) }
+        if oldValue != displayMode {
+            selectSolidBuildings()
+            onDisplayModeChange?(displayMode)
+        }
     } }
     var threatLevel: ThreatLevel = .veteran
     var soundOn = true
@@ -959,7 +962,8 @@ final class BattlefieldScene: SKScene {
                             CockpitV53LiveRenderer.MapBuilding(
                                 x: $0.center.x, z: $0.center.z,
                                 size: $0.size,
-                                isSolid: (battlefieldEnvironment == .alpine || battlefieldEnvironment == .coast) ||
+                                isSolid: displayMode != .classic ||
+                                    battlefieldEnvironment != .city ||
                                     $0.kind == .building || $0.kind == .block)
                         }, mgAmmo: mgAmmo, mgHeat: mgHeat,
                         mgLocked: mgOverheatLock)
@@ -2085,7 +2089,9 @@ final class BattlefieldScene: SKScene {
     }
 
     private func selectSolidBuildings() {
-        if (battlefieldEnvironment == .alpine || battlefieldEnvironment == .coast) {
+        if battlefieldEnvironment != .city || displayMode != .classic {
+            // All modern 3D structures must be real collision and cover geometry;
+            // Classic City alone retains its historical partial-cover rules.
             // Every visible alpine obstacle uses the same collision body for
             // driving, cannon interception, AI routing and line-of-sight.
             solidBuildingIndices = Set(obstacles.indices)
@@ -3172,8 +3178,8 @@ final class BattlefieldScene: SKScene {
     private func renderTrue3D(_ camera: CameraProjection) {
         let show = displayMode != .classic
         true3DWorld?.renderView.isHidden = !show
-        // A transparent SKView overlays the native SCNView for the approved
-        // cockpit and weapon FX. City and Classic retain opaque black canvas.
+        // A transparent SKView overlays SceneKit for live cockpit and weapon
+        // FX. Only the deliberate Classic presentation uses the 2D world.
         backgroundColor = show ? .clear : .black
         // These are only the legacy projected WORLD graphics. The cockpit,
         // rear optics, radar, reticle, projectiles, and effects remain intact.
@@ -3243,7 +3249,7 @@ final class BattlefieldScene: SKScene {
         let threeDimensionalBattlefield = displayMode != .classic
         // Do not spend CPU every frame building the obsolete projected
         // mountain/ground/vehicle scene only to hide it behind SceneKit.
-        // The legacy renderer still operates unchanged in Classic/city.
+        // The legacy projected renderer is only used in Classic mode.
         if !threeDimensionalBattlefield {
             renderMountains(worldCamera)
             renderGround(worldCamera)
@@ -3601,8 +3607,10 @@ final class BattlefieldScene: SKScene {
                 }
             }
         }
-        structures.path = battlefieldEnvironment == .alpine ? alpineOutline : structurePath
-        alpineSurfaces.path = battlefieldEnvironment == .alpine ? alpineFill : nil
+        structures.path = (battlefieldEnvironment == .alpine || battlefieldEnvironment == .coast)
+            ? alpineOutline : structurePath
+        alpineSurfaces.path = (battlefieldEnvironment == .alpine || battlefieldEnvironment == .coast)
+            ? alpineFill : nil
         alpineSurfaces.fillColor = .clear
         // Solid polygons are owned by the same sorted face pool as tank armor,
         // not a translucent overlay painted over the entire forest.
