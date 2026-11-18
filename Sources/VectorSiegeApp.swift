@@ -4,6 +4,7 @@ import AppKit
 
 @main
 struct VectorSiegeApp: App {
+    @NSApplicationDelegateAdaptor(ArcadeIconAppDelegate.self) private var iconDelegate
     var body: some Scene {
         WindowGroup("Vector Siege") {
             SiegeWindow()
