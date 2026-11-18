@@ -213,7 +213,7 @@ final class CockpitV53LiveRenderer {
         text("fireHeadingLabel", "HEADING", x: 248, y: 900-78-263+194, size: 8, color: muted)
         text("fireHeading", "000°", x: 248, y: 900-78-263+172, size: 18, color: cyan)
         text("fireSpeedLabel", "SPEED MPH", x: 248, y: 900-78-263+153, size: 8, color: muted)
-        text("fireSpeed", "0.0", x: 248, y: 900-78-263+134, size: 14)
+        text("fireSpeed", "0.0", x: 248, y: 900-78-263+134, size: 17)
         text("fireRange", "RNG ----", x: 248, y: 900-78-263+110, size: 9, color: amber)
         text("fireBearing", "BRG ----", x: 248, y: 900-78-263+95, size: 8.5)
         text("fireAim", "AIM ----", x: 248, y: 900-78-263+81, size: 8.5)
@@ -278,8 +278,8 @@ final class CockpitV53LiveRenderer {
         text("opticsTitle", "REAR OPTICS", x: rearX+31, y: rearY+223, size: 12)
         text("opticsSubtitle", "EO / LIVE REAR CAMERA", x: rearX+175, y: rearY+223, size: 8, color: mint)
         text("opticsMode", "REAR / 1.0X", x: rearX+33, y: rearY+40, size: 9, color: mint)
-        text("opticsBearing", "AZ 180°", x: rearX+178, y: rearY+40, size: 9)
-        text("opticsThreat", "NO TRACK", x: rearX+254, y: rearY+40, size: 8, color: amber)
+        text("opticsBearing", "AZ 180°", x: rearX+178, y: rearY+40, size: 10)
+        text("opticsThreat", "NO TRACK", x: rearX+254, y: rearY+40, size: 10, color: amber)
 
         let systemsX: CGFloat = 1137
         let systemsY: CGFloat = 900-78-263
@@ -313,9 +313,9 @@ final class CockpitV53LiveRenderer {
         bar(fuelBar, frame: CGRect(x: groupX[2], y: systemsY+138,
                                    width: 110, height: 5), color: mint)
         // Smaller supporting diagnostics are grouped below the three gauges.
-        text("coolantTemp", "COOLANT —", x: groupX[0], y: systemsY+111, size: 9.5)
-        text("oilPressure", "OIL PSI —", x: groupX[1], y: systemsY+111, size: 9.5)
-        text("voltage", "BUS —", x: groupX[2], y: systemsY+111, size: 9.5)
+        text("coolantTemp", "COOLANT —", x: groupX[0], y: systemsY+111, size: 10.5)
+        text("oilPressure", "OIL PSI —", x: groupX[1], y: systemsY+111, size: 10.5)
+        text("voltage", "BUS —", x: groupX[2], y: systemsY+111, size: 10.5)
         text("engineLoad", "LOAD —", x: groupX[0], y: systemsY+89,
              size: 9.5, color: cyan)
         text("oilTemperature", "OIL TEMP —", x: groupX[1], y: systemsY+89,
