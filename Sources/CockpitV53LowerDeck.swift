@@ -200,7 +200,7 @@ final class CockpitV53LowerDeck {
         label("positionZ", "Z +0", x: 1550, y: 96, size: 10, color: mint, alignment: .right)
     }
 
-    func update(_ snapshot: CockpitV5Snapshot, terrain: [Double]) {
+    func update(_ snapshot: CockpitV5Snapshot, terrain: [Double], waterline: Double? = nil) {
         guard installed, snapshot.validate() else { return }
         // The game currently has lives, not a canonical 0-100 hull-health
         // variable. Never represent lives as a fabricated integrity sensor.
@@ -281,8 +281,23 @@ final class CockpitV53LowerDeck {
             fill.closeSubpath()
             terrainTrace.path = path
             terrainFill.path = fill
-            set("elevRange", String(format: "LOW %+.0f / HIGH %+.0f FT",
-                    low*3.28084, high*3.28084))
+            if let waterline {
+                // The topography gauge shares the SceneKit sea-surface datum.
+                // Use a single persistent trace rather than another HUD layer.
+                let surfaceY = 95 + CGFloat((waterline-low)/span)*60
+                let sea = CGMutablePath()
+                sea.move(to: CGPoint(x:1060,y:surfaceY))
+                sea.addLine(to: CGPoint(x:1313,y:surfaceY))
+                terrainWaterline.path = sea
+                terrainWaterline.isHidden = false
+                set("elevRange", String(format:"WATER %.0fFT  /  DEPTH %.0fFT",
+                    waterline*3.28084,
+                    max(0,waterline-snapshot.terrainElevationWorldUnits)*3.28084))
+            } else {
+                terrainWaterline.isHidden = true
+                set("elevRange", String(format: "LOW %+.0f / HIGH %+.0f FT",
+                        low*3.28084, high*3.28084))
+            }
         }
         set("sector", snapshot.sector)
         set("elevation", String(format: "ELEV %+.0f FT",
