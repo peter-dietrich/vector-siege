@@ -37,6 +37,7 @@ final class Tronzone3DWorld {
     private let starRoot = SCNNode()
     private var lightingHour: Double = 12
     private var lightingConfigured = false
+    private var isUnderwater = false
     private var contactNodes: [Int: SCNNode] = [:]
     private var contactKinds: [Int: Int] = [:]
     private var terrainTexture: CGImage?
@@ -214,6 +215,25 @@ final class Tronzone3DWorld {
         starRoot.opacity = CGFloat(pow(night,1.6)*0.82)
         sunDisc.isHidden = day < 0.035
         moonDisc.isHidden = day >= 0.035
+        if isUnderwater {
+            // Strong underwater absorption with a blue-green light field,
+            // close visibility falloff and no celestial disks/stars.
+            scene.fogColor = NSColor(calibratedRed:0.015,green:0.17,
+                                     blue:0.23,alpha:1)
+            scene.fogStartDistance = 2.0
+            scene.fogEndDistance = 36.0
+            scene.background.contents = NSColor(
+                calibratedRed:0.012,green:0.14,blue:0.20,alpha:1)
+            ambientNode.light?.intensity = CGFloat(190 + day*280)
+            ambientNode.light?.color = NSColor(
+                calibratedRed:0.15,green:0.52,blue:0.65,alpha:1)
+            sun.light?.intensity = CGFloat(100 + day*320)
+            sun.light?.color = NSColor(
+                calibratedRed:0.28,green:0.68,blue:0.80,alpha:1)
+            starRoot.opacity = 0
+            sunDisc.isHidden = true
+            moonDisc.isHidden = true
+        }
         positionCelestialObjects(cameraX:Double(cameraNode.position.x),
                                   cameraZ:-Double(cameraNode.position.z))
     }
@@ -338,6 +358,7 @@ final class Tronzone3DWorld {
         contactKinds.removeAll()
         // The previous biome may have applied a different sky/fog palette.
         lightingConfigured = false
+        isUnderwater = false
         buildEnvironmentBackdrop()
         applyTimeOfDay(lightingHour)
     }
@@ -373,18 +394,21 @@ final class Tronzone3DWorld {
                 let z = sin(angle)*radius
                 let width = CGFloat(7+i%5*3)
                 let height = CGFloat(ruined ? 7+i%9*3 : 21+i%10*7)
-                let tower = box(width,height,width*0.72,material:concrete,chamfer:ruined ? 0.0 : 0.7)
+                let tower = box(width,height,width*0.72,material:concrete,chamfer:0)
                 tower.position = SCNVector3(Float(x),Float(height*0.5),Float(-z))
                 tower.eulerAngles.y = CGFloat(Double(i)*0.37)
                 backdropRoot.addChildNode(tower)
             }
         case .coast:
-            // Water begins beyond the traversable battlefield and is a true
-            // depth-tested reflective plane, not a background photograph.
-            let water = Self.material(0.015,0.16,0.24,roughness:0.17,glow:0.07)
+            // Continuous sea surface crosses the sloping seabed just
+            // beyond the beach. Both directions remain drivable and share
+            // the same terrain elevation used by physics and radar.
+            let water = Self.material(0.018,0.21,0.29,roughness:0.14,glow:0.05)
+            water.transparency = 0.78
+            water.writesToDepthBuffer = false
             for sign in [-1.0,1.0] {
-                let sea = box(600,0.14,190,material:water,chamfer:0)
-                sea.position = SCNVector3(0,-0.7,CGFloat(sign*245))
+                let sea = box(700,0.06,520,material:water,chamfer:0)
+                sea.position = SCNVector3(0,0.32,CGFloat(sign*369))
                 backdropRoot.addChildNode(sea)
             }
             // Low coastal cliffs frame the scene without enclosing the sea
@@ -547,7 +571,7 @@ final class Tronzone3DWorld {
                     material:ruined
                         ? Self.material(0.26,0.16,0.13,roughness:0.94)
                         : Self.material(0.15,0.27,0.31,roughness:0.36),
-                    chamfer:ruined ? 0.0 : 0.35)
+                    chamfer:0)
                 building.position.y = height * 0.5
                 if ruined {
                     building.eulerAngles.z = CGFloat(sin(Double(idx)*2.3)*0.095)
@@ -602,17 +626,17 @@ final class Tronzone3DWorld {
                 rockNode.eulerAngles.y = CGFloat(Double(idx) * 0.73)
                 node.addChildNode(rockNode)
             } else if site.kind == 2 {
-                let body = box(s*1.9,s*1.25,s*1.9,material:bunkerMaterial,chamfer:s*0.08)
+                let body = box(s*1.9,s*1.25,s*1.9,material:bunkerMaterial,chamfer:0)
                 body.position.y = (s*0.625)
                 node.addChildNode(body)
-                let roof = box(s*2.3,s*0.18,s*2.3,material:hullMaterial)
+                let roof = box(s*2.3,s*0.18,s*2.3,material:hullMaterial,chamfer:0)
                 roof.position.y = (s*1.32)
                 node.addChildNode(roof)
                 let beam = box(s*1.2,s*0.04,s*0.08,material:trim,chamfer:0)
                 beam.position = SCNVector3(0,Float(s*0.85),Float(-s*0.98))
                 node.addChildNode(beam)
             } else {
-                let tower = box(s*0.72,s*5,s*0.72,material:bunkerMaterial)
+                let tower = box(s*0.72,s*5,s*0.72,material:bunkerMaterial,chamfer:0)
                 tower.position.y = (s*2.5)
                 node.addChildNode(tower)
                 let beacon = box(s*1.6,s*0.12,s*1.6,material:trim)
@@ -781,6 +805,14 @@ final class Tronzone3DWorld {
                       eyeHeight: Double, viewportSize: CGSize,
                       pitchPoints: Double) {
         buildTerrain(aroundX:x,z:z)
+        // Update water immersion from actual camera elevation, not world
+        // position alone. The transition is reversible on returning to shore.
+        let submerged = environment == .coast && eyeHeight < 0.32
+        if submerged != isUnderwater {
+            isUnderwater = submerged
+            lightingConfigured = false
+            applyTimeOfDay(lightingHour)
+        }
         positionCelestialObjects(cameraX:x,cameraZ:z)
         // The host NSView controls the SCNView's actual framebuffer size.
         // Updating projection here changes only the 3D camera, never depth
