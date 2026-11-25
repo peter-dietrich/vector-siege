@@ -4,7 +4,6 @@ import AppKit
 
 @main
 struct VectorSiegeApp: App {
-    @NSApplicationDelegateAdaptor(ArcadeIconAppDelegate.self) private var iconDelegate
     var body: some Scene {
         WindowGroup("Vector Siege") {
             SiegeWindow()
@@ -14,7 +13,6 @@ struct VectorSiegeApp: App {
         .defaultSize(width: 1240, height: 790)
         .commands {
             CommandGroup(replacing: .newItem) { }
-            GameHelpCommands()
         }
     }
 }
@@ -44,9 +42,12 @@ enum ThreatLevel: String, CaseIterable, Identifiable {
 }
 
 final class SiegeSession: ObservableObject {
-    @Published var displayMode: DisplayMode = .classic
+    @Published var displayMode: DisplayMode = .cockpitV53
     @Published var threatLevel: ThreatLevel = .veteran
     @Published var battlefieldEnvironment: BattlefieldEnvironment = .alpine
+    @Published var startTime: SiegeStartTime = .day
+    @Published var hoursPerWave: Double = 2.75
+    @Published var timeDisplay = "12:00 / DAY"
     @Published var soundOn = true
     let scene = BattlefieldScene(size: CGSize(width: 1180, height: 690))
 
@@ -54,11 +55,15 @@ final class SiegeSession: ObservableObject {
         scene.onDisplayModeChange = { [weak self] mode in
             self?.displayMode = mode
         }
+        scene.onTimeOfDayChange = { [weak self] hour in
+            self?.timeDisplay = "\(SiegeDaylight.clock(at:hour)) / \(SiegeDaylight.period(at:hour))"
+        }
     }
 
     func apply() {
         scene.displayMode = displayMode
         scene.battlefieldEnvironment = battlefieldEnvironment
+        scene.setTimeOfDay(startTime, hoursPerWave:hoursPerWave, preview:false)
         scene.threatLevel = threatLevel
         scene.soundOn = soundOn
     }
@@ -75,6 +80,9 @@ final class SiegeSession: ObservableObject {
         guard scene.restore(snapshot) else { return false }
         displayMode = scene.displayMode
         battlefieldEnvironment = scene.battlefieldEnvironment
+        startTime = scene.startTime
+        hoursPerWave = scene.hoursPerWave
+        timeDisplay = "\(SiegeDaylight.clock(at:scene.timeOfDayHour)) / \(SiegeDaylight.period(at:scene.timeOfDayHour))"
         threatLevel = scene.threatLevel
         soundOn = scene.soundOn
         return true
@@ -94,10 +102,10 @@ struct SiegeWindow: View {
                 Text("VECTOR SIEGE")
                     .font(.system(size: 15, weight: .bold, design: .monospaced))
                     .tracking(1.5)
-                Text("v2026.11.17d")
+                Text("v2026.11.17j")
                     .font(.system(size: 10, weight: .medium, design: .monospaced))
                     .foregroundStyle(.gray)
-                    .help("Source build identifier: v2026.11.17d")
+                    .help("Source build identifier: v2026.11.17j — canonical SceneKit 3D battlefield and weapons cleanup")
                 Spacer(minLength: 4)
                 Picker("Display", selection: $session.displayMode) {
                     ForEach(DisplayMode.allCases) { Text($0.rawValue).tag($0) }
@@ -159,13 +167,43 @@ struct SiegeWindow: View {
                     }
                 }
                 .labelsHidden()
-                .frame(width: 203)
-                Text(session.battlefieldEnvironment == .alpine
-                     ? "ALPINE VECTOR FRONTIER  /  ACTIVE WORLD GEOMETRY"
-                     : "NEON CITADEL  /  ORIGINAL CITY GEOMETRY")
+                .frame(width: 220)
+                Text({
+                    switch session.battlefieldEnvironment {
+                    case .alpine: return "ALPINE FRONTIER  /  SCENEKIT 3D"
+                    case .city: return "NEON CITADEL  /  SCENEKIT 3D"
+                    case .ruins: return "FALLEN GRID  /  SCENEKIT 3D"
+                    case .coast: return "OCEANIC GRID  /  SCENEKIT 3D"
+                    }
+                }())
                     .font(.system(size: 10, weight: .medium, design: .monospaced))
                     .foregroundStyle(.white.opacity(0.53))
-                Spacer()
+                Spacer(minLength: 4)
+                Text("TIME")
+                    .font(.system(size:10,weight:.bold,design:.monospaced))
+                    .foregroundStyle(.orange.opacity(0.9))
+                Picker("Starting time",selection:$session.startTime) {
+                    ForEach(SiegeStartTime.allCases) { value in
+                        Text(value.rawValue).tag(value)
+                    }
+                }
+                .labelsHidden()
+                .frame(width:105)
+                Text(session.timeDisplay)
+                    .font(.system(size:10,weight:.bold,design:.monospaced))
+                    .monospacedDigit()
+                    .foregroundStyle(.orange.opacity(0.92))
+                    .frame(width:112,alignment:.leading)
+                Text("WAVE +")
+                    .font(.system(size:9,weight:.medium,design:.monospaced))
+                    .foregroundStyle(.white.opacity(0.60))
+                Picker("Hours per wave",selection:$session.hoursPerWave) {
+                    ForEach([0.0,0.5,1.0,1.5,2.0,2.75,3.0,4.0,6.0,12.0],id:\.self) { hours in
+                        Text(String(format:"%g h",hours)).tag(hours)
+                    }
+                }
+                .labelsHidden()
+                .frame(width:88)
             }
             .padding(.horizontal, 16)
             .frame(height: 34)
@@ -191,6 +229,18 @@ struct SiegeWindow: View {
         .onAppear { session.apply() }
         .onChange(of: session.displayMode) { _ in session.apply() }
         .onChange(of: session.threatLevel) { _ in session.apply() }
+        .onChange(of: session.startTime) { preset in
+            // A restored save already set the exact clock; changing the
+            // SwiftUI picker model during resume must NOT reset that clock.
+            if session.scene.startTime != preset {
+                session.scene.setTimeOfDay(preset,
+                                           hoursPerWave:session.hoursPerWave)
+            }
+        }
+        .onChange(of: session.hoursPerWave) { amount in
+            session.scene.setTimeOfDay(session.startTime,
+                                      hoursPerWave:amount,preview:false)
+        }
         .onChange(of: session.battlefieldEnvironment) { environment in
             if session.scene.battlefieldEnvironment != environment {
                 session.scene.battlefieldEnvironment = environment
@@ -264,21 +314,44 @@ struct SiegeWindow: View {
 struct BattlefieldView: NSViewRepresentable {
     let scene: BattlefieldScene
 
-    func makeNSView(context: Context) -> TankKeyView {
-        let view = TankKeyView()
-        view.allowsTransparency = false
-        view.ignoresSiblingOrder = true
-        view.preferredFramesPerSecond = 60
-        view.presentScene(scene)
-        view.sceneRef = scene
-        DispatchQueue.main.async {
-            view.window?.makeFirstResponder(view)
+    func makeNSView(context: Context) -> NSView {
+        // Two native sibling renderers, not SceneKit inside SK3DNode.
+        // SceneKit renders opaque 3D terrain with its own depth-stencil buffer;
+        // transparent SpriteKit draws the approved cockpit, HUD and effects.
+        let container = NSView(frame: CGRect(origin: .zero, size: scene.size))
+        container.wantsLayer = true
+        container.layer?.backgroundColor = NSColor.black.cgColor
+        if let world = scene.tronzoneRenderView {
+            world.frame = container.bounds
+            world.autoresizingMask = [.width, .height]
+            container.addSubview(world)
         }
-        return view
+        let overlay = TankKeyView(frame: container.bounds)
+        overlay.allowsTransparency = true
+        overlay.ignoresSiblingOrder = true
+        overlay.preferredFramesPerSecond = 60
+        overlay.autoresizingMask = [.width, .height]
+        overlay.presentScene(scene)
+        overlay.sceneRef = scene
+        container.addSubview(overlay)
+        DispatchQueue.main.async {
+            overlay.window?.makeFirstResponder(overlay)
+        }
+        return container
     }
 
-    func updateNSView(_ nsView: TankKeyView, context: Context) {
-        if nsView.scene !== scene { nsView.presentScene(scene) }
+    func updateNSView(_ nsView: NSView, context: Context) {
+        guard let overlay = nsView.subviews.compactMap({ $0 as? TankKeyView }).first else { return }
+        if overlay.scene !== scene {
+            overlay.presentScene(scene)
+            overlay.sceneRef = scene
+        }
+        if let world = scene.tronzoneRenderView, world.superview !== nsView {
+            world.removeFromSuperview()
+            world.frame = nsView.bounds
+            world.autoresizingMask = [.width, .height]
+            nsView.addSubview(world, positioned: .below, relativeTo: overlay)
+        }
     }
 }
 

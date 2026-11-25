@@ -5,6 +5,21 @@ struct GeometrySmoke {
     static func main() {
         // Legacy geometry assumptions are explicitly urban; the playable
         // Mountain Wilderness uses a distinct terrain profile.
+        precondition(BattlefieldEnvironment.allCases.count == 4,
+                     "All four playable landscape selectors must exist")
+        for environment in BattlefieldEnvironment.allCases {
+            let raw = environment.rawValue
+            precondition(BattlefieldEnvironment(rawValue:raw) == environment,
+                         "Environment must remain save-game round-trippable")
+        }
+        TronzoneBiome.active = .coast
+        let coastHeight = LandscapeTopology.height(GroundPoint(55,80))
+        precondition(coastHeight.isFinite && abs(coastHeight) < 3,
+                     "Coastal combat terrain must be smooth and traversable")
+        TronzoneBiome.active = .alpine
+        let mountainHeight = LandscapeTopology.height(GroundPoint(55,80))
+        precondition(abs(coastHeight-mountainHeight) > 0.1,
+                     "Coast and mountain topography must differ")
         TronzoneBiome.active = .city
         let c = CameraProjection(position: GroundPoint(0,0), yaw: 0,
                                  viewportWidth: 1200, viewportHeight: 700)
@@ -775,6 +790,20 @@ struct GeometrySmoke {
         TronzoneBiome.active = .city
         let cityHeight = LandscapeTopology.height(GroundPoint(103, -48))
         precondition(abs(cityHeight - alpineHeight) > 0.001)
+        // Vector Barrage-style sunlight mapping and clock wraparound.
+        precondition(SiegeDaylight.strength(at:12) > 0.99)
+        precondition(SiegeDaylight.strength(at:0) == 0)
+        precondition(SiegeDaylight.strength(at:22) == 0)
+        precondition(SiegeDaylight.twilight(at:6) > 0.99)
+        precondition(SiegeDaylight.period(at:6.5) == "DAWN")
+        precondition(SiegeDaylight.period(at:12) == "DAY")
+        precondition(SiegeDaylight.period(at:18.5) == "DUSK")
+        precondition(SiegeDaylight.period(at:22) == "NIGHT")
+        precondition(SiegeDaylight.clock(at:25.5) == "01:30")
+        precondition(SiegeDaylight.clock(at:-0.5) == "23:30")
+        precondition(abs(SiegeDaylight.hour(23.0+2.75) - 1.75) < 0.001)
+        precondition(SiegeStartTime.day.fixedHour == 12)
+        precondition(SiegeStartTime.random.fixedHour == nil)
         print("Perspective, combat, AI detours and Tronzone mountain geometry passed.")
     }
 }

@@ -116,9 +116,12 @@ private struct Vegetation {
 
 final class BattlefieldScene: SKScene {
     var onDisplayModeChange: ((DisplayMode) -> Void)?
-    var displayMode: DisplayMode = .classic { didSet {
+    var displayMode: DisplayMode = .cockpitV53 { didSet {
         configurePalette()
-        if oldValue != displayMode { onDisplayModeChange?(displayMode) }
+        if oldValue != displayMode {
+            selectSolidBuildings()
+            onDisplayModeChange?(displayMode)
+        }
     } }
     var threatLevel: ThreatLevel = .veteran
     var soundOn = true
@@ -153,6 +156,30 @@ final class BattlefieldScene: SKScene {
     var onCockpitV5Snapshot: ((CockpitV5Snapshot) -> Void)?
     private var cockpitV5Clock = 0.0
     private var approvedCockpit: CockpitV53LiveRenderer?
+    private var true3DWorld: Tronzone3DWorld?
+    var startTime: SiegeStartTime = .day
+    var hoursPerWave: Double = 2.75
+    private(set) var timeOfDayHour: Double = 12
+    var onTimeOfDayChange: ((Double) -> Void)?
+
+    func setTimeOfDay(_ preset: SiegeStartTime, hoursPerWave advance: Double,
+                      preview: Bool = true) {
+        startTime = preset
+        hoursPerWave = max(0, min(12, advance))
+        if preview {
+            timeOfDayHour = preset.fixedHour ?? Double.random(in: 0..<24)
+            refreshTimeOfDay()
+        }
+    }
+
+    private func refreshTimeOfDay() {
+        true3DWorld?.applyTimeOfDay(timeOfDayHour)
+        onTimeOfDayChange?(timeOfDayHour)
+    }
+
+    // Exposed only to the native host container: SceneKit owns its own
+    // render pass and framebuffer, independent of transparent SpriteKit.
+    var tronzoneRenderView: NSView? { true3DWorld?.renderView }
     private var approvedCockpitMissingAssets = false
     private var steerHoldSeconds: Double = 0
     private var previousSteerDirection: Double = 0
@@ -228,9 +255,6 @@ final class BattlefieldScene: SKScene {
     private let skyline = SKShapeNode()
     private let farSkyline = SKShapeNode()
     private let skyBands = (0..<10).map { _ in SKShapeNode() }
-    private let celestialDetails = SKShapeNode()
-    private let skyClouds = SKShapeNode()
-    private let skyBirds = SKShapeNode()
     private let distantMountains = SKShapeNode()
     private let middleMountains = SKShapeNode()
     private let nearMountains = SKShapeNode()
@@ -398,11 +422,6 @@ final class BattlefieldScene: SKScene {
             band.strokeColor = .clear
             addChild(band)
         }
-        for (node, depth) in [(celestialDetails, 0.25), (skyClouds, 0.35), (skyBirds, 0.45)] {
-            node.zPosition = depth
-            node.strokeColor = .clear
-            addChild(node)
-        }
         for (layer, z) in [
             (distantMountains, 0.8), (middleMountains, 1.25),
             (nearMountains, 1.8), (horizonMist, 2.3)
@@ -411,9 +430,7 @@ final class BattlefieldScene: SKScene {
             layer.strokeColor = .clear
             addChild(layer)
         }
-        // Solid world polygons must draw over legacy structure/foliage strokes,
-        // but below enemy sprites and live weapon effects.
-        glassLayer.zPosition = 4.45
+        glassLayer.zPosition = 3.7
         addChild(glassLayer)
         for (node, layer) in [(radarEnemyContacts, 13.3), (radarHunterContacts, 13.4),
                                (radarSaucerContacts, 13.45), (radarDroneContacts, 13.47),
@@ -738,6 +755,7 @@ final class BattlefieldScene: SKScene {
         makeVegetation()
         selectSolidBuildings()
         spawnWave()
+        setupTrue3DWorld()
     }
 
     required init?(coder: NSCoder) { fatalError("Use init(size:)") }
@@ -872,6 +890,9 @@ final class BattlefieldScene: SKScene {
         makeVegetation()
         selectSolidBuildings()
         spawnWave()
+        setupTrue3DWorld()
+        timeOfDayHour = startTime.fixedHour ?? Double.random(in: 0..<24)
+        refreshTimeOfDay()
         round = .levelReady
         lastUpdateTime = 0
     }
@@ -941,10 +962,12 @@ final class BattlefieldScene: SKScene {
                             CockpitV53LiveRenderer.MapBuilding(
                                 x: $0.center.x, z: $0.center.z,
                                 size: $0.size,
-                                isSolid: battlefieldEnvironment == .alpine ||
+                                isSolid: displayMode != .classic ||
+                                    battlefieldEnvironment != .city ||
                                     $0.kind == .building || $0.kind == .block)
                         }, mgAmmo: mgAmmo, mgHeat: mgHeat,
-                        mgLocked: mgOverheatLock)
+                        mgLocked: mgOverheatLock,
+                        environment: battlefieldEnvironment)
                 }
             }
         }
@@ -1394,8 +1417,8 @@ final class BattlefieldScene: SKScene {
                 }
             }
 
-            // One cannon round can shred several light drones on the swept
-            // path, but never travels through terrain, structures or armor.
+            // Cannon pierces every light drone before the first solid
+            // obstruction or armored target, retaining its trajectory.
             if !shell.hostile {
                 let blockingTime = min(terrainTime ?? .infinity,
                                        wallTime ?? .infinity,
@@ -1549,6 +1572,10 @@ final class BattlefieldScene: SKScene {
                 mgRounds.removeAll()
                 mgRicochets.removeAll()
                 wave += 1
+                // Vector Barrage rule: the sun moves between waves, without
+                // changing lighting abruptly during combat.
+                timeOfDayHour = SiegeDaylight.hour(timeOfDayHour + hoursPerWave)
+                refreshTimeOfDay()
                 spawnWave()
                 for shell in shells where !shell.hostile { shotTally.miss() }
                 shells.removeAll()
@@ -2016,7 +2043,7 @@ final class BattlefieldScene: SKScene {
 
     private func makeObstacles() {
         obstacles.removeAll()
-        if battlefieldEnvironment == .alpine {
+        if (battlefieldEnvironment == .alpine || battlefieldEnvironment == .coast) {
             let seed = UInt64.random(in: 1...UInt64.max)
             for site in TronzoneBiome.mountainSites(count: rules.obstacleCount, seed: seed) {
                 let kind: Obstacle.Kind
@@ -2063,7 +2090,9 @@ final class BattlefieldScene: SKScene {
     }
 
     private func selectSolidBuildings() {
-        if battlefieldEnvironment == .alpine {
+        if battlefieldEnvironment != .city || displayMode != .classic {
+            // All modern 3D structures must be real collision and cover geometry;
+            // Classic City alone retains its historical partial-cover rules.
             // Every visible alpine obstacle uses the same collision body for
             // driving, cannon interception, AI routing and line-of-sight.
             solidBuildingIndices = Set(obstacles.indices)
@@ -2088,7 +2117,7 @@ final class BattlefieldScene: SKScene {
 
     private func makeVegetation() {
         vegetation.removeAll()
-        if battlefieldEnvironment == .alpine {
+        if (battlefieldEnvironment == .alpine || battlefieldEnvironment == .coast) {
             // Small soft ground cover only; all full-sized pines are already
             // obstacle bodies and therefore genuinely collision-aware.
             for index in 0..<120 {
@@ -2540,7 +2569,10 @@ final class BattlefieldScene: SKScene {
             directorWaveStartHits: directorWaveStartHits,
             machineGunAmmo: mgAmmo, machineGunHeat: mgHeat,
             machineGunFired: mgFired, machineGunHits: mgHits,
-            battlefieldEnvironment: battlefieldEnvironment.rawValue
+            battlefieldEnvironment: battlefieldEnvironment.rawValue,
+            timeOfDayHour: timeOfDayHour,
+            timeOfDayPreset: startTime.rawValue,
+            hoursPerWave: hoursPerWave
         )
     }
 
@@ -2565,6 +2597,9 @@ final class BattlefieldScene: SKScene {
         lives = saved.lives
         wave = saved.wave
         gameClock = saved.gameClock
+        startTime = saved.timeOfDayPreset.flatMap(SiegeStartTime.init(rawValue:)) ?? .day
+        hoursPerWave = max(0, min(12, saved.hoursPerWave ?? 2.75))
+        timeOfDayHour = SiegeDaylight.hour(saved.timeOfDayHour ?? 12)
         heading = wrapAngle(saved.heading)
         driveSpeed = saved.driveSpeed.isFinite ? saved.driveSpeed : 0
         tankPosition = saved.tankPosition
@@ -2660,6 +2695,8 @@ final class BattlefieldScene: SKScene {
         bestScore = max(bestScore, score)
         UserDefaults.standard.set(bestScore, forKey: "VectorSiegeHighScore")
         round = saved.awaitingLevelStart == true ? .levelReady : .paused
+        setupTrue3DWorld()
+        refreshTimeOfDay()
         // Older saves continue paused and require P; a saved level-intro
         // remains on its any-key start screen.
         return true
@@ -2893,10 +2930,10 @@ final class BattlefieldScene: SKScene {
         for layer in [distantMountains, middleMountains, nearMountains, horizonMist] {
             layer.isHidden = !modern
         }
-        if battlefieldEnvironment == .alpine {
-            distantMountains.fillColor = NSColor(calibratedRed: 0.14, green: 0.30, blue: 0.25, alpha: 1)
-            middleMountains.fillColor = NSColor(calibratedRed: 0.09, green: 0.22, blue: 0.19, alpha: 1)
-            nearMountains.fillColor = NSColor(calibratedRed: 0.045, green: 0.15, blue: 0.12, alpha: 1)
+        if (battlefieldEnvironment == .alpine || battlefieldEnvironment == .coast) {
+            distantMountains.fillColor = NSColor(calibratedRed: 0.04, green: 0.17, blue: 0.085, alpha: 0.92)
+            middleMountains.fillColor = NSColor(calibratedRed: 0.027, green: 0.12, blue: 0.064, alpha: 0.97)
+            nearMountains.fillColor = NSColor(calibratedRed: 0.013, green: 0.072, blue: 0.038, alpha: 1)
             horizonMist.fillColor = NSColor(calibratedRed: 0.17, green: 0.97, blue: 0.38, alpha: 0.075)
             mountainFacetLines.strokeColor = NSColor(calibratedRed: 0.18, green: 0.87, blue: 0.36, alpha: 0.48)
             mountainFacetLines.lineWidth = 0.8
@@ -2904,14 +2941,11 @@ final class BattlefieldScene: SKScene {
             groundMesh.strokeColor = NSColor(calibratedRed: 0.10, green: 0.93, blue: 0.30, alpha: 0.48)
             groundMesh.glowWidth = 0.8
             // Neon trim is a detail over fully shaded bodies, not the body.
-            // Modern opaque geometry must lead; contour lines are subdued
-            // edge highlights, not the old all-wireframe presentation.
-            structures.strokeColor = NSColor(calibratedRed: 0.18, green: 0.61,
-                                              blue: 0.30, alpha: modern ? 0.22 : 0.72)
-            structures.lineWidth = modern ? 0.62 : 1.15
-            structures.glowWidth = modern ? 0 : 0.85
-            foliageLines.strokeColor = NSColor(calibratedRed: 0.11, green: 0.55,
-                                                blue: 0.25, alpha: modern ? 0.20 : 0.75)
+            structures.strokeColor = NSColor(calibratedRed: 0.28, green: 1.0,
+                                              blue: 0.40, alpha: 0.64)
+            structures.lineWidth = 1.15
+            structures.glowWidth = 0.85
+            foliageLines.strokeColor = NSColor(calibratedRed: 0.11, green: 0.67, blue: 0.26, alpha: 0.75)
         } else {
             distantMountains.fillColor = NSColor(calibratedRed: 0.10, green: 0.16, blue: 0.22, alpha: 0.92)
             middleMountains.fillColor = NSColor(calibratedRed: 0.085, green: 0.18, blue: 0.21, alpha: 0.94)
@@ -3119,6 +3153,69 @@ final class BattlefieldScene: SKScene {
         stagePanel.strokeColor = amber.withAlphaComponent(0.55)
     }
 
+
+    private func setupTrue3DWorld() {
+        if true3DWorld == nil {
+            let world = Tronzone3DWorld(viewportSize:size)
+            true3DWorld = world
+        }
+        // All modern environments use SceneKit; Classic keeps its own renderer.
+        let sites = obstacles.map { o -> Tronzone3DWorld.Site in
+            let kind: Int
+            switch o.kind {
+            case .tower: kind = 0
+            case .pyramid: kind = 1
+            case .block: kind = 2
+            case .monolith, .building: kind = 3
+            }
+            return Tronzone3DWorld.Site(x:o.center.x,z:o.center.z,
+                                        size:o.size,kind:kind)
+        }
+        true3DWorld?.setEnvironment(battlefieldEnvironment)
+        true3DWorld?.load(sites)
+        refreshTimeOfDay()
+    }
+
+    private func renderTrue3D(_ camera: CameraProjection) {
+        let show = displayMode != .classic
+        true3DWorld?.renderView.isHidden = !show
+        // A transparent SKView overlays SceneKit for live cockpit and weapon
+        // FX. Only the deliberate Classic presentation uses the 2D world.
+        backgroundColor = show ? .clear : .black
+        // These are only the legacy projected WORLD graphics. The cockpit,
+        // rear optics, radar, reticle, projectiles, and effects remain intact.
+        for layer in [ground,groundMesh,streetMarks,structures,
+                      alpineSurfaces,mountainFacetLines,foliageLines,
+                      distantMountains,middleMountains,nearMountains,
+                      farSkyline,skyline,horizonMist,opponentLines,armoredLines,
+                      droneLines,fighterLines,opponentSaucerLines] {
+            layer.isHidden = show
+        }
+        for layer in skyBands { layer.isHidden = show }
+        glassLayer.isHidden = show
+        guard show, let world = true3DWorld else { return }
+        world.updateCamera(x:tankPosition.x,z:tankPosition.z,heading:heading,
+                           eyeHeight:camera.eyeHeight,
+                           viewportSize:size,pitchPoints:camera.pitchPoints)
+        world.updateContacts(enemies.enumerated().map { index, enemy in
+            let kind: Int
+            let altitude: Double
+            switch enemy.kind {
+            case .drone:
+                kind = 1; altitude = enemy.droneAltitude
+            case .saucer:
+                kind = 2; altitude = saucerAltitude(enemy)
+            case .fighter:
+                kind = 3; altitude = 3.9 + 0.4*sin(enemy.phase*0.9)
+            default:
+                kind = 0; altitude = 0
+            }
+            return Tronzone3DWorld.Contact(id:index,x:enemy.center.x,
+                                          z:enemy.center.z,heading:enemy.heading,
+                                          kind:kind,altitude:altitude)
+        })
+    }
+
     private func render() {
         // Each frame computes the expensive cover-aware target solution only
         // once, shared by radar, both HUD layouts, and warning telemetry.
@@ -3150,11 +3247,18 @@ final class BattlefieldScene: SKScene {
                                   + recoil * (displayMode != .classic ? 9 : 5)
                                   + kick * 3.0 * sin(gameClock * 77)
         worldCamera.cameraLateral += kick * 0.028 * sin(gameClock * 63)
-        renderMountains(worldCamera)
-        renderGround(worldCamera)
-        renderObjects(worldCamera)
+        let threeDimensionalBattlefield = displayMode != .classic
+        // Do not spend CPU every frame building the obsolete projected
+        // mountain/ground/vehicle scene only to hide it behind SceneKit.
+        // The legacy projected renderer is only used in Classic mode.
+        if !threeDimensionalBattlefield {
+            renderMountains(worldCamera)
+            renderGround(worldCamera)
+            renderObjects(worldCamera)
+        }
         renderProjectiles(worldCamera)
         renderWorldCombatEffects(worldCamera)
+        renderTrue3D(worldCamera)
         renderHUD(camera)
         renderCombatEffects(camera)
         if displayMode == .cockpitV53 {
@@ -3286,7 +3390,7 @@ final class BattlefieldScene: SKScene {
     }
 
     private func ridge(_ azimuth: Double, multiplier: Double) -> Double {
-        if battlefieldEnvironment == .alpine {
+        if (battlefieldEnvironment == .alpine || battlefieldEnvironment == .coast) {
             // Broad continental ridgelines plus pronounced angular alpine
             // summits. Three depth layers share the camera's actual heading.
             let shoulders = 18 + 28*abs(sin(azimuth*3.1+0.7))
@@ -3298,85 +3402,6 @@ final class BattlefieldScene: SKScene {
         let b = abs(sin(azimuth * 15.4 - 0.8))
         let c = abs(sin(azimuth * 25.0 + 2.3))
         return multiplier * (7 + 56 * pow(a, 5.2) + 26 * pow(b, 9) + 7 * pow(c, 3))
-    }
-
-
-    // Procedural sky: sun/moon, altitude haze, drifting layered clouds,
-    // birds and an anchored night star field. No image assets or frame-random
-    // flicker; everything remains stable under camera motion.
-    private func renderSkyDetails(camera c: CameraProjection) {
-        guard displayMode != .classic else {
-            celestialDetails.path = nil
-            skyClouds.path = nil
-            skyBirds.path = nil
-            return
-        }
-        let width = c.viewportWidth
-        let top = c.viewportHeight
-        let horizon = c.horizon
-        // Start in a brighter afternoon phase; then transition to dusk/night.
-        let cycle = ((gameClock / 240) + 0.35).truncatingRemainder(dividingBy: 1)
-        let night = cycle >= 0.70 || cycle < 0.12
-        let phase = 2 * Double.pi * cycle
-        let disk = CGMutablePath()
-        let clouds = CGMutablePath()
-        let birds = CGMutablePath()
-        let celestialX = width * (0.5 + 0.38 * cos(phase - 0.6))
-        let celestialY = horizon + (top - horizon) * (0.28 + 0.55 * abs(sin(phase)))
-        disk.addEllipse(in: CGRect(x: celestialX - (night ? 9 : 16),
-                                   y: celestialY - (night ? 9 : 16),
-                                   width: night ? 18 : 32, height: night ? 18 : 32))
-        // Deterministic stars, scaled by the phase of the day.
-        if night {
-            for i in 0..<105 {
-                let seed = Double(i)
-                let x = (sin(seed * 127.1 + heading * 0.9) * 43758.5453)
-                let y = (sin(seed * 311.7 + 0.34) * 18542.143)
-                let px = (x - floor(x)) * width
-                let py = horizon + 22 + (y - floor(y)) * max(1, top - horizon - 35)
-                let radius = i.isMultiple(of: 11) ? 1.5 : 0.65
-                disk.addEllipse(in: CGRect(x: px, y: py, width: radius * 2,
-                                            height: radius * 2))
-            }
-        }
-        for i in 0..<8 {
-            let seed = Double(i)
-            let drift = gameClock * (1.2 + seed * 0.18)
-            let centerX = (seed * 137 + drift - heading * 68)
-                .truncatingRemainder(dividingBy: width + 220) - 100
-            let centerY = horizon + 28 + seed.truncatingRemainder(dividingBy: 4) * 31
-            let span = 65 + seed.truncatingRemainder(dividingBy: 3) * 27
-            for layer in 0..<4 {
-                let dx = Double(layer) * 21
-                clouds.addEllipse(in: CGRect(x: centerX + dx - span * 0.5,
-                    y: centerY + sin(seed * 2 + Double(layer)) * 7,
-                    width: span, height: 13 + Double(layer % 2) * 7))
-            }
-        }
-        if !night {
-            for i in 0..<6 {
-                let seed = Double(i)
-                let bx = (seed * 173 + gameClock * (6 + seed) - heading * 80)
-                    .truncatingRemainder(dividingBy: width + 120) - 60
-                let by = horizon + 40 + seed.truncatingRemainder(dividingBy: 3) * 22
-                let wing = 3.0 + 1.2 * sin(gameClock * 7 + seed)
-                birds.move(to: CGPoint(x: bx - wing * 2, y: by + wing))
-                birds.addLine(to: CGPoint(x: bx, y: by))
-                birds.addLine(to: CGPoint(x: bx + wing * 2, y: by + wing))
-            }
-        }
-        celestialDetails.path = disk
-        celestialDetails.fillColor = night
-            ? NSColor(calibratedRed: 0.71, green: 0.84, blue: 0.98, alpha: 0.86)
-            : NSColor(calibratedRed: 1, green: 0.83, blue: 0.40, alpha: 0.95)
-        celestialDetails.glowWidth = night ? 5 : 11
-        skyClouds.path = clouds
-        skyClouds.fillColor = NSColor(calibratedRed: 0.30, green: 0.53,
-                                      blue: 0.48, alpha: night ? 0.12 : 0.28)
-        skyBirds.path = birds
-        skyBirds.strokeColor = NSColor(calibratedRed: 0.31, green: 0.67,
-                                        blue: 0.51, alpha: 0.62)
-        skyBirds.lineWidth = 1.0
     }
 
     private func renderMountains(_ c: CameraProjection) {
@@ -3400,20 +3425,15 @@ final class BattlefieldScene: SKScene {
                 skyBands[i].path = CGPath(rect: CGRect(x: 0, y: y, width: width + 1,
                                                         height: bandHeight + 1), transform: nil)
                 let t = Double(i) / Double(max(1, skyBands.count - 1))
-                let cycle = ((gameClock / 240) + 0.35).truncatingRemainder(dividingBy: 1)
-                let daylight = max(0.04, sin(Double.pi * cycle))
-                let brightness = 0.38 + 1.65 * daylight
-                let red = battlefieldEnvironment == .alpine ? 0.025 : 0.045
-                let green = battlefieldEnvironment == .alpine ? 0.102 : 0.105
-                let blue = battlefieldEnvironment == .alpine ? 0.055 : 0.16
-                skyBands[i].fillColor = NSColor(
-                    calibratedRed: CGFloat(min(0.35, (red - t * 0.012) * brightness)),
-                    green: CGFloat(min(0.45, (green - t * 0.078) * brightness)),
-                    blue: CGFloat(min(0.50, (blue - t * 0.033) * brightness)),
-                    alpha: 1)
+                skyBands[i].fillColor = battlefieldEnvironment == .alpine
+                    ? NSColor(calibratedRed: CGFloat(0.018 - t*0.012),
+                              green: CGFloat(0.102 - t*0.078),
+                              blue: CGFloat(0.046 - t*0.033), alpha: 1)
+                    : NSColor(calibratedRed: CGFloat(0.045 - t * 0.027),
+                              green: CGFloat(0.105 - t * 0.072),
+                              blue: CGFloat(0.16 - t * 0.083), alpha: 1)
             }
         }
-        renderSkyDetails(camera: c)
         for i in 0...samples {
             let x = min(width + 10, Double(i) * step - 10)
             let azimuth = heading + atan2((x - width / 2) / c.focal, 1)
@@ -3453,8 +3473,8 @@ final class BattlefieldScene: SKScene {
         }
         farSkyline.path = farPath
         skyline.path = nearPath
-        mountainFacetLines.path = battlefieldEnvironment == .alpine &&
-            displayMode == .classic ? alpineFacets : nil
+        mountainFacetLines.path = battlefieldEnvironment == .alpine
+            ? alpineFacets : nil
         if displayMode != .classic {
             distantMountains.path = distantFill
             middleMountains.path = middleFill
@@ -3491,7 +3511,7 @@ final class BattlefieldScene: SKScene {
                      WorldPoint(anchorX + b, 0.018, z), c)
             }
         }
-        if battlefieldEnvironment == .alpine {
+        if (battlefieldEnvironment == .alpine || battlefieldEnvironment == .coast) {
             // A filled dark terrain plane provides material beneath the
             // phosphor grid (not transparent floating vector lines).
             ground.path = CGPath(rect: CGRect(x: 0, y: 0,
@@ -3561,12 +3581,11 @@ final class BattlefieldScene: SKScene {
                 !BattlefieldRenderLOD.isVisible(
                     depth: view.forward, lateral: view.right,
                     margin: max(20, o.size * 2.5)) { continue }
-            if battlefieldEnvironment == .alpine {
+            if (battlefieldEnvironment == .alpine || battlefieldEnvironment == .coast) {
                 drawAlpineObstacle(o, outline: alpineOutline,
                                    surfaces: alpineFill, camera: c)
-                if displayMode != .classic {
-                    facets.append(contentsOf: tronzoneObstacleFaces(o, camera: c))
-                }
+                // Alpine modern scenery is exclusively SceneKit; Classic uses
+                // its historical vector outlines. No duplicate SpriteKit mesh.
                 continue
             }
             switch o.kind {
@@ -3589,20 +3608,15 @@ final class BattlefieldScene: SKScene {
                 }
             }
         }
-        // Classic retains the vintage outlines; modern uses opaque shaded mesh
-        // faces and leaves just subtle controlled edge definition on each face.
-        structures.path = displayMode == .classic
-            ? (battlefieldEnvironment == .alpine ? alpineOutline : structurePath)
-            : nil
-        alpineSurfaces.path = battlefieldEnvironment == .alpine ? alpineFill : nil
+        structures.path = (battlefieldEnvironment == .alpine || battlefieldEnvironment == .coast)
+            ? alpineOutline : structurePath
+        alpineSurfaces.path = (battlefieldEnvironment == .alpine || battlefieldEnvironment == .coast)
+            ? alpineFill : nil
         alpineSurfaces.fillColor = .clear
         // Solid polygons are owned by the same sorted face pool as tank armor,
         // not a translucent overlay painted over the entire forest.
         alpineSurfaces.strokeColor = .clear
         renderVegetation(c)
-        if displayMode != .classic && battlefieldEnvironment == .alpine {
-            foliageLines.path = nil
-        }
         // The face pool is updated after ground vehicles are appended so
         // solid armor and architectural faces share one depth ordering.
 
@@ -3667,72 +3681,14 @@ final class BattlefieldScene: SKScene {
     }
 
 
-    // Solid world-space mesh for Tronzone. Unlike the former wireframe or
-    // alpha-tinted polygons, every visible surface is fully opaque. A single
-    // sorted face pool shades buildings, vegetation, and enemy armor together.
+    // Legacy 2D mesh helper retained for Futuristic City only.
+    // Alpine modern environments render exclusively through SceneKit.
     private func tronzoneFace(_ vertices: [WorldPoint], tint: Int,
                               camera c: CameraProjection) -> GlassFace {
         let depth = vertices.reduce(0.0) { $0 + c.local($1).forward } /
             Double(max(1, vertices.count))
         return GlassFace(vertices: vertices, depth: depth,
                          tint: tint, solid: true)
-    }
-
-    private func tronzoneObstacleFaces(_ o: Obstacle,
-                                       camera c: CameraProjection) -> [GlassFace] {
-        let p = o.center
-        let size = o.size
-        func v(_ x: Double, _ y: Double, _ z: Double) -> WorldPoint {
-            WorldPoint(p.x+x, y, p.z+z)
-        }
-        var faces: [GlassFace] = []
-        func add(_ vertices: [WorldPoint], _ tint: Int) {
-            faces.append(tronzoneFace(vertices, tint: tint, camera: c))
-        }
-        switch o.kind {
-        case .tower:
-            // Four-sided, overlapping opaque pine canopies; each height band
-            // is deep enough to read as a tree, not a floating triangle.
-            for level in 0..<3 {
-                let rise = Double(level)*size*0.87
-                let spread = size*(1.42-Double(level)*0.22)
-                let base = rise+size*0.45
-                let apex = rise+size*2.35
-                let n = v(0,base,spread)
-                let e = v(spread,base,0)
-                let south = v(0,base,-spread)
-                let west = v(-spread,base,0)
-                let top = v(0,apex,0)
-                add([n,e,top],20+level%3)
-                add([e,south,top],21+level%3)
-                add([south,west,top],22+level%3)
-                add([west,n,top],20+level%3)
-                add([n,west,south,e],20)
-            }
-            add([v(-size*0.14,0,-size*0.14),
-                 v(size*0.14,0,-size*0.14),
-                 v(size*0.14,size*1.3,-size*0.14),
-                 v(-size*0.14,size*1.3,-size*0.14)],24)
-        case .pyramid:
-            let a = v(-size,0,-size*0.8), b = v(size,0,-size*0.8)
-            let d = v(-size,0,size*0.8), e = v(size,0,size*0.8)
-            let apex = v(-size*0.12,size*1.2,0)
-            add([a,b,apex],26);add([b,e,apex],24)
-            add([e,d,apex],25);add([d,a,apex],27)
-        case .block, .monolith, .building:
-            let sx = o.kind == .monolith ? size*0.55 : size
-            let sz = o.kind == .monolith ? size*0.55 : size
-            let height = o.kind == .monolith ? size*5 : size*1.35
-            let lo = [v(-sx,0,-sz),v(sx,0,-sz),v(sx,0,sz),v(-sx,0,sz)]
-            let hi = [v(-sx,height,-sz),v(sx,height,-sz),
-                      v(sx,height,sz),v(-sx,height,sz)]
-            for i in 0..<4 {
-                add([lo[i],lo[(i+1)%4],hi[(i+1)%4],hi[i]],
-                    i.isMultiple(of: 2) ? 23 : 24)
-            }
-            add(hi,25)
-        }
-        return faces
     }
 
     private func tronzoneEnemyFaces(_ enemy: Foe,
@@ -3976,29 +3932,19 @@ final class BattlefieldScene: SKScene {
             face.isHidden = false
             face.path = path
             if facet.solid && facet.tint >= 20 {
-                // Distinct light-facing planes create visible 3D volume.
-                // Surface values deliberately span more than the legacy
-                // near-black palette: the neon belongs on edges, not faces.
                 let base: [NSColor] = [
-                    NSColor(calibratedRed: 0.055, green: 0.19, blue: 0.13, alpha: 1),
-                    NSColor(calibratedRed: 0.12, green: 0.34, blue: 0.19, alpha: 1),
-                    NSColor(calibratedRed: 0.21, green: 0.43, blue: 0.25, alpha: 1),
-                    NSColor(calibratedRed: 0.075, green: 0.24, blue: 0.19, alpha: 1),
-                    NSColor(calibratedRed: 0.16, green: 0.28, blue: 0.23, alpha: 1),
-                    NSColor(calibratedRed: 0.24, green: 0.40, blue: 0.29, alpha: 1),
-                    NSColor(calibratedRed: 0.13, green: 0.19, blue: 0.24, alpha: 1),
-                    NSColor(calibratedRed: 0.29, green: 0.23, blue: 0.20, alpha: 1),
-                    NSColor(calibratedRed: 0.39, green: 0.26, blue: 0.18, alpha: 1),
-                    NSColor(calibratedRed: 0.15, green: 0.34, blue: 0.28, alpha: 1)
+                    NSColor(calibratedRed: 0.016, green: 0.065, blue: 0.046, alpha: 1),
+                    NSColor(calibratedRed: 0.035, green: 0.13, blue: 0.075, alpha: 1),
+                    NSColor(calibratedRed: 0.075, green: 0.21, blue: 0.12, alpha: 1),
+                    NSColor(calibratedRed: 0.028, green: 0.11, blue: 0.085, alpha: 1),
+                    NSColor(calibratedRed: 0.072, green: 0.12, blue: 0.095, alpha: 1),
+                    NSColor(calibratedRed: 0.13, green: 0.24, blue: 0.16, alpha: 1),
+                    NSColor(calibratedRed: 0.08, green: 0.10, blue: 0.13, alpha: 1),
+                    NSColor(calibratedRed: 0.20, green: 0.14, blue: 0.12, alpha: 1),
+                    NSColor(calibratedRed: 0.25, green: 0.13, blue: 0.095, alpha: 1),
+                    NSColor(calibratedRed: 0.08, green: 0.20, blue: 0.17, alpha: 1)
                 ]
-                let cycle = ((gameClock / 240) + 0.35).truncatingRemainder(dividingBy: 1)
-                let lighting = 0.48 + 0.52 * max(0, sin(Double.pi * cycle))
-                let material = base[(facet.tint - 20) % base.count]
-                face.fillColor = NSColor(
-                    calibratedRed: material.redComponent * lighting,
-                    green: material.greenComponent * lighting,
-                    blue: material.blueComponent * lighting,
-                    alpha: 1)
+                face.fillColor = base[(facet.tint - 20) % base.count]
             } else {
                 face.fillColor = facet.solid
                     ? NSColor(calibratedRed: 0.025, green: 0.095, blue: 0.105, alpha: 1)
@@ -4009,11 +3955,11 @@ final class BattlefieldScene: SKScene {
             // treatment, so they read as genuine non-transparent walls.
             face.strokeColor = facet.solid
                 ? (facet.tint >= 20
-                    ? NSColor(calibratedRed: 0.26, green: 0.60, blue: 0.35, alpha: 0.40)
-                    : NSColor(calibratedRed: 0.13, green: 0.42, blue: 0.34, alpha: 0.38))
+                    ? NSColor(calibratedRed: 0.28, green: 0.92, blue: 0.40, alpha: 0.75)
+                    : NSColor(calibratedRed: 0.13, green: 0.42, blue: 0.34, alpha: 0.8))
                 : NSColor(calibratedRed: 0.71, green: 0.98,
                           blue: 0.97, alpha: 0.25)
-            face.lineWidth = facet.solid ? 0.55 : 0.5
+            face.lineWidth = facet.solid ? 1.0 : 0.5
             visible += 1
         }
         for i in visible..<glassFacePool.count { glassFacePool[i].isHidden = true }
@@ -4398,8 +4344,8 @@ final class BattlefieldScene: SKScene {
         line(path, v(-1.0, 0, 0.2), v(1.0, 0, 0.2), c)
     }
 
-    // Saucer patrols bob at different phases. A low attack pass creates a
-    // real opportunity to shoot; high-altitude flyovers cannot be hit.
+    // Canonical saucer altitude drives SceneKit, Classic art and collision.
+    // Patrols make independent high passes then dip into vulnerable range.
     private func saucerAltitude(_ e: Foe) -> Double {
         6.0 + 3.2 * sin(e.phase * 0.72 + e.center.x * 0.013) +
             0.65 * sin(e.phase * 1.83 + e.center.z * 0.021)
@@ -4581,8 +4527,6 @@ final class BattlefieldScene: SKScene {
         flashLines.path = flarePath
         let mgPath = CGMutablePath()
         for round in mgRounds {
-            // Staggered tracer lengths and a hot core give each twin-barrel
-            // round an unmistakable high-velocity streak.
             let length = 4.2 + Double(round.barrel) * 1.3
             let back = round.center - round.direction * length
             line(mgPath, WorldPoint(round.center + round.direction * 0.8, height: 3.2),
@@ -4641,14 +4585,31 @@ final class BattlefieldScene: SKScene {
             let farX = width / 2 + t * width * 0.07
             segment(gridPath, point(farX, horizon), point(nearX, 0))
         }
-        // The mountains continue to respond to rear-facing tank heading.
-        var previous = point(0, horizon)
-        for i in 0...40 {
-            let x = Double(i) * width / 40
-            let bearing = backHeading + atan2((x - width / 2) / backCamera.focal, 1)
-            let top = point(x, horizon + ridge(bearing, multiplier: 0.30))
-            if i > 0 { segment(gridPath, previous, top) }
-            previous = top
+        // A genuine rearward terrain sample replaces the fake Alpine
+        // silhouette. It uses precisely the same height map as the SceneKit
+        // terrain, collision model and forward topography gauge.
+        let behind = facing(backHeading)
+        let lateral = GroundPoint(behind.z, -behind.x)
+        for distance in [28.0, 58.0, 102.0] {
+            var previous: WorldPoint?
+            for step in 0...36 {
+                let sideways = (Double(step)/36.0-0.5)*distance*2.3
+                let position = tankPosition + behind*distance + lateral*sideways
+                let here = WorldPoint(position,
+                    height: LandscapeTopology.height(position)+0.08)
+                if let last = previous {
+                    line(gridPath,last,here,backCamera)
+                }
+                previous = here
+            }
+        }
+        // The physical coastal sea datum appears on rear optics as a
+        // reference, including when the player is descending underwater.
+        if battlefieldEnvironment == .coast {
+            let surface = CGMutablePath()
+            let lineY = horizon + (LandscapeTopology.height(tankPosition)+1.65 < 0.35 ? 17.0 : 0)
+            segment(surface,point(0,lineY),point(width,lineY))
+            gridPath.addPath(surface)
         }
         rearGround.path = gridPath
 
@@ -5481,7 +5442,10 @@ final class BattlefieldScene: SKScene {
             label.fontSize = CGFloat(max(7.4, min(9.5, unit.1 / 27)))
             label.fontColor = cyan.withAlphaComponent(0.77)
             label.horizontalAlignmentMode = .left
-            label.isHidden = false
+            // These legends belong to the old Modern command deck only.
+            // Never leak their projected positions into the approved v5.3
+            // cockpit or the visible SceneKit battlefield.
+            label.isHidden = displayMode != .modern
         }
         for index in 4..<8 {
             commandShellLabels[index].isHidden = true
@@ -6179,8 +6143,7 @@ private final class TankCombatAudio {
             let index = type.rawValue
             players[index] = try? AVAudioPlayer(data: Self.makeWAV(type))
             players[index]?.prepareToPlay()
-            players[index]?.volume = type == .impact ? 0.48 :
-                (type == .machineGun ? 0.52 : 0.72)
+            players[index]?.volume = type == .impact ? 0.48 : (type == .machineGun ? 0.52 : 0.72)
         }
     }
 
